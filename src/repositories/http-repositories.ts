@@ -263,6 +263,7 @@ type CollectorDto = {
       asOf: string;
       dataStatus: "DEMO" | "DELAYED" | "LIVE" | "UNAVAILABLE";
     } | null;
+    preSale?: import("@/domain").PreSaleProjection | null;
   }>;
   publishedListingCount?: number;
   publishedListings?: Array<{
@@ -280,6 +281,7 @@ type CollectorDto = {
       asOf: string;
       dataStatus: "DEMO" | "DELAYED" | "LIVE" | "UNAVAILABLE";
     } | null;
+    preSale?: import("@/domain").PreSaleProjection | null;
   }>;
 };
 const mapCollector = (value: CollectorDto): CollectorProfile => ({
@@ -308,6 +310,7 @@ const mapCollector = (value: CollectorDto): CollectorProfile => ({
       : undefined,
     asOf: listing.market?.asOf,
     dataStatus: listing.market?.dataStatus,
+    preSale: listing.preSale ?? null,
   })),
   publishedListingCount: value.publishedListingCount ?? 0,
   publishedListings: (value.publishedListings ?? []).map((listing) => ({
@@ -324,6 +327,7 @@ const mapCollector = (value: CollectorDto): CollectorProfile => ({
       : undefined,
     asOf: listing.market?.asOf,
     dataStatus: listing.market?.dataStatus,
+    preSale: listing.preSale ?? null,
   })),
 });
 
@@ -2721,8 +2725,14 @@ const mapAdminIntakeDetail = (raw: unknown): AdminIntakeDetail => {
               ),
               primaryBlocker: blocker
                 ? {
-                    label: stringField(blocker.label, "admin intake detail.projection.blocker.label"),
-                    reason: stringField(blocker.reason, "admin intake detail.projection.blocker.reason"),
+                    label: stringField(
+                      blocker.label,
+                      "admin intake detail.projection.blocker.label",
+                    ),
+                    reason: stringField(
+                      blocker.reason,
+                      "admin intake detail.projection.blocker.reason",
+                    ),
                     severity: stringField(
                       blocker.severity,
                       "admin intake detail.projection.blocker.severity",
@@ -2754,10 +2764,7 @@ const mapAdminIntakeDetail = (raw: unknown): AdminIntakeDetail => {
                   ];
                 }),
               ),
-              revision: stringField(
-                projection.revision,
-                "admin intake detail.projection.revision",
-              ),
+              revision: stringField(projection.revision, "admin intake detail.projection.revision"),
               deepLinks: (() => {
                 const links = objectField(
                   projection.deepLinks,
@@ -2986,17 +2993,40 @@ const mapAdminIntakeLocation = (raw: unknown): AdminIntakeLocation => {
     city: nullableString(value.city, "admin intake location.city"),
     internalName: nullableString(value.internalName, "admin intake location.internalName"),
     activeIntakes: Number(value.activeIntakes ?? 0),
-    availability: ["ACCEPTING", "PAUSED", "AT_CAPACITY", "UNAVAILABLE"].includes(String(value.availability))
+    availability: ["ACCEPTING", "PAUSED", "AT_CAPACITY", "UNAVAILABLE"].includes(
+      String(value.availability),
+    )
       ? (String(value.availability) as AdminIntakeLocation["availability"])
       : "UNAVAILABLE",
-    availabilityLabel: stringField(value.availabilityLabel ?? "Unavailable", "admin intake location.availabilityLabel"),
-    availabilityReason: nullableString(value.availabilityReason, "admin intake location.availabilityReason"),
-    warnings: Array.isArray(value.warnings) ? value.warnings.filter((item): item is string => typeof item === "string") : [],
-    capacity: value.capacity === null || value.capacity === undefined ? null : (() => {
-      const capacity = objectField(value.capacity, "admin intake location.capacity");
-      return { active: Number(capacity.active ?? 0), maximum: Number(capacity.maximum ?? 0), warningThreshold: capacity.warningThreshold === null || capacity.warningThreshold === undefined ? null : Number(capacity.warningThreshold) };
-    })(),
-    lastActivityAt: stringField(value.lastActivityAt ?? value.updatedAt, "admin intake location.lastActivityAt"),
+    availabilityLabel: stringField(
+      value.availabilityLabel ?? "Unavailable",
+      "admin intake location.availabilityLabel",
+    ),
+    availabilityReason: nullableString(
+      value.availabilityReason,
+      "admin intake location.availabilityReason",
+    ),
+    warnings: Array.isArray(value.warnings)
+      ? value.warnings.filter((item): item is string => typeof item === "string")
+      : [],
+    capacity:
+      value.capacity === null || value.capacity === undefined
+        ? null
+        : (() => {
+            const capacity = objectField(value.capacity, "admin intake location.capacity");
+            return {
+              active: Number(capacity.active ?? 0),
+              maximum: Number(capacity.maximum ?? 0),
+              warningThreshold:
+                capacity.warningThreshold === null || capacity.warningThreshold === undefined
+                  ? null
+                  : Number(capacity.warningThreshold),
+            };
+          })(),
+    lastActivityAt: stringField(
+      value.lastActivityAt ?? value.updatedAt,
+      "admin intake location.lastActivityAt",
+    ),
     updatedAt: stringField(value.updatedAt, "admin intake location.updatedAt"),
   };
 };
@@ -3019,19 +3049,43 @@ const mapAdminIntakeLocationDetail = (raw: unknown): AdminIntakeLocationDetail =
       "intake location.inPersonInstructions",
     ),
     internalName: nullableString(locationRaw.internalName, "intake location.internalName"),
-    operationalNotes: nullableString(locationRaw.operationalNotes, "intake location.operationalNotes"),
+    operationalNotes: nullableString(
+      locationRaw.operationalNotes,
+      "intake location.operationalNotes",
+    ),
     internalContact: nullableString(locationRaw.internalContact, "intake location.internalContact"),
     openingHours: nullableString(locationRaw.openingHours, "intake location.openingHours"),
     appointmentRequired: Boolean(locationRaw.appointmentRequired),
     walkInsAllowed: Boolean(locationRaw.walkInsAllowed),
-    publicContactInstructions: nullableString(locationRaw.publicContactInstructions, "intake location.publicContactInstructions"),
-    packageLabelInstructions: nullableString(locationRaw.packageLabelInstructions, "intake location.packageLabelInstructions"),
-    specialHandlingInstructions: nullableString(locationRaw.specialHandlingInstructions, "intake location.specialHandlingInstructions"),
-    maximumActiveIntakes: locationRaw.maximumActiveIntakes === null || locationRaw.maximumActiveIntakes === undefined ? null : Number(locationRaw.maximumActiveIntakes),
-    warningThreshold: locationRaw.warningThreshold === null || locationRaw.warningThreshold === undefined ? null : Number(locationRaw.warningThreshold),
+    publicContactInstructions: nullableString(
+      locationRaw.publicContactInstructions,
+      "intake location.publicContactInstructions",
+    ),
+    packageLabelInstructions: nullableString(
+      locationRaw.packageLabelInstructions,
+      "intake location.packageLabelInstructions",
+    ),
+    specialHandlingInstructions: nullableString(
+      locationRaw.specialHandlingInstructions,
+      "intake location.specialHandlingInstructions",
+    ),
+    maximumActiveIntakes:
+      locationRaw.maximumActiveIntakes === null || locationRaw.maximumActiveIntakes === undefined
+        ? null
+        : Number(locationRaw.maximumActiveIntakes),
+    warningThreshold:
+      locationRaw.warningThreshold === null || locationRaw.warningThreshold === undefined
+        ? null
+        : Number(locationRaw.warningThreshold),
     pauseReason: nullableString(locationRaw.pauseReason, "intake location.pauseReason"),
-    pauseEffectiveAt: nullableString(locationRaw.pauseEffectiveAt, "intake location.pauseEffectiveAt"),
-    expectedResumeAt: nullableString(locationRaw.expectedResumeAt, "intake location.expectedResumeAt"),
+    pauseEffectiveAt: nullableString(
+      locationRaw.pauseEffectiveAt,
+      "intake location.pauseEffectiveAt",
+    ),
+    expectedResumeAt: nullableString(
+      locationRaw.expectedResumeAt,
+      "intake location.expectedResumeAt",
+    ),
     customerSafeAddress: stringField(
       locationRaw.customerSafeAddress,
       "intake location.customerSafeAddress",
@@ -3046,16 +3100,36 @@ const mapAdminIntakeLocationDetail = (raw: unknown): AdminIntakeLocationDetail =
         })
       : [],
     createdAt: stringField(locationRaw.createdAt, "intake location.createdAt"),
-    availability: ["ACCEPTING", "PAUSED", "AT_CAPACITY", "UNAVAILABLE"].includes(String(locationRaw.availability))
+    availability: ["ACCEPTING", "PAUSED", "AT_CAPACITY", "UNAVAILABLE"].includes(
+      String(locationRaw.availability),
+    )
       ? (String(locationRaw.availability) as AdminIntakeLocation["availability"])
       : "UNAVAILABLE",
-    availabilityLabel: stringField(locationRaw.availabilityLabel ?? "Unavailable", "intake location.availabilityLabel"),
-    availabilityReason: nullableString(locationRaw.availabilityReason, "intake location.availabilityReason"),
-    warnings: Array.isArray(locationRaw.warnings) ? locationRaw.warnings.filter((item): item is string => typeof item === "string") : [],
-    capacity: locationRaw.capacity === null || locationRaw.capacity === undefined ? null : (() => {
-      const capacity = objectField(locationRaw.capacity, "intake location.capacity");
-      return { active: Number(capacity.active ?? 0), maximum: Number(capacity.maximum ?? 0), warningThreshold: capacity.warningThreshold === null || capacity.warningThreshold === undefined ? null : Number(capacity.warningThreshold) };
-    })(),
+    availabilityLabel: stringField(
+      locationRaw.availabilityLabel ?? "Unavailable",
+      "intake location.availabilityLabel",
+    ),
+    availabilityReason: nullableString(
+      locationRaw.availabilityReason,
+      "intake location.availabilityReason",
+    ),
+    warnings: Array.isArray(locationRaw.warnings)
+      ? locationRaw.warnings.filter((item): item is string => typeof item === "string")
+      : [],
+    capacity:
+      locationRaw.capacity === null || locationRaw.capacity === undefined
+        ? null
+        : (() => {
+            const capacity = objectField(locationRaw.capacity, "intake location.capacity");
+            return {
+              active: Number(capacity.active ?? 0),
+              maximum: Number(capacity.maximum ?? 0),
+              warningThreshold:
+                capacity.warningThreshold === null || capacity.warningThreshold === undefined
+                  ? null
+                  : Number(capacity.warningThreshold),
+            };
+          })(),
   };
   return {
     location,
@@ -3070,7 +3144,10 @@ const mapAdminIntakeLocationDetail = (raw: unknown): AdminIntakeLocationDetail =
             collector: stringField(intake.collector, "intake location intake.collector"),
             deliveryMethod: intake.deliveryMethod === "IN_PERSON" ? "IN_PERSON" : "SHIPMENT",
             stage: stringField(intake.stage, "intake location intake.stage"),
-            assignedStaff: nullableString(intake.assignedStaff, "intake location intake.assignedStaff"),
+            assignedStaff: nullableString(
+              intake.assignedStaff,
+              "intake location intake.assignedStaff",
+            ),
             nextAction: stringField(intake.nextAction, "intake location intake.nextAction"),
             updatedAt: stringField(intake.updatedAt, "intake location intake.updatedAt"),
             issue:
@@ -3116,23 +3193,39 @@ const mapAdminIntakeLocationDetail = (raw: unknown): AdminIntakeLocationDetail =
         })
       : [],
     availableCommands:
-      value.availableCommands && typeof value.availableCommands === "object" && !Array.isArray(value.availableCommands)
+      value.availableCommands &&
+      typeof value.availableCommands === "object" &&
+      !Array.isArray(value.availableCommands)
         ? Object.fromEntries(
-            Object.entries(value.availableCommands as Record<string, unknown>).map(([key, rawCommand]) => {
-              const command = objectField(rawCommand, `intake location command ${key}`);
-              return [key, { allowed: Boolean(command.allowed), ...(command.reason ? { reason: String(command.reason) } : {}) }];
-            }),
+            Object.entries(value.availableCommands as Record<string, unknown>).map(
+              ([key, rawCommand]) => {
+                const command = objectField(rawCommand, `intake location command ${key}`);
+                return [
+                  key,
+                  {
+                    allowed: Boolean(command.allowed),
+                    ...(command.reason ? { reason: String(command.reason) } : {}),
+                  },
+                ];
+              },
+            ),
           )
         : {},
     collectorVisibility: (() => {
-      const visibility = objectField(value.collectorVisibility ?? {}, "intake location collectorVisibility");
+      const visibility = objectField(
+        value.collectorVisibility ?? {},
+        "intake location collectorVisibility",
+      );
       return {
         visibleInProduction: Boolean(visibility.visibleInProduction),
         visibleInDemoQA: Boolean(visibility.visibleInDemoQA),
         shipping: Boolean(visibility.shipping),
         inPerson: Boolean(visibility.inPerson),
         eligibleForNewAssignment: Boolean(visibility.eligibleForNewAssignment),
-        eligibilityReason: nullableString(visibility.eligibilityReason, "intake location collectorVisibility.eligibilityReason"),
+        eligibilityReason: nullableString(
+          visibility.eligibilityReason,
+          "intake location collectorVisibility.eligibilityReason",
+        ),
       };
     })(),
     revision: stringField(value.revision ?? location.updatedAt, "intake location.revision"),
@@ -4154,7 +4247,12 @@ const preSaleRepository = (client: ApiClient): import("@/data/repositories").Pre
   const key = () => crypto.randomUUID();
   return {
     getPublicDetail: (slug) => client.get(`/market/assets/${encodeURIComponent(slug)}/pre-sale`),
-    reserve: (slug, units) => client.request(`/market/assets/${encodeURIComponent(slug)}/pre-sale/reservations`, { method: "POST", body: { units }, headers: { "Idempotency-Key": key() } }),
+    reserve: (slug, units) =>
+      client.request(`/market/assets/${encodeURIComponent(slug)}/pre-sale/reservations`, {
+        method: "POST",
+        body: { units },
+        headers: { "Idempotency-Key": key() },
+      }),
     listReservations: () => client.get("/me/pre-sale-reservations"),
     getReservation: (id) => client.get(`/me/pre-sale-reservations/${encodeURIComponent(id)}`),
   };
@@ -4167,25 +4265,51 @@ const adminRepository = (client: ApiClient): AdminRepository => {
       return client.get(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale`);
     },
     async configurePreSale(assetId, input) {
-      return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/configure`, { method: "POST", body: input, headers: { "Idempotency-Key": idempotencyKey() } });
+      return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/configure`, {
+        method: "POST",
+        body: input,
+        headers: { "Idempotency-Key": idempotencyKey() },
+      });
     },
     async openPreSale(assetId) {
-      return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/open`, { method: "POST", headers: { "Idempotency-Key": idempotencyKey() } });
+      return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/open`, {
+        method: "POST",
+        headers: { "Idempotency-Key": idempotencyKey() },
+      });
     },
     async pausePreSale(assetId, reason) {
-      return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/pause`, { method: "POST", body: { reason }, headers: { "Idempotency-Key": idempotencyKey() } });
+      return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/pause`, {
+        method: "POST",
+        body: { reason },
+        headers: { "Idempotency-Key": idempotencyKey() },
+      });
     },
     async resumePreSale(assetId, reason) {
-      return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/resume`, { method: "POST", body: { reason }, headers: { "Idempotency-Key": idempotencyKey() } });
+      return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/resume`, {
+        method: "POST",
+        body: { reason },
+        headers: { "Idempotency-Key": idempotencyKey() },
+      });
     },
     async extendPreSale(assetId, input) {
-      return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/extend`, { method: "POST", body: input, headers: { "Idempotency-Key": idempotencyKey() } });
+      return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/extend`, {
+        method: "POST",
+        body: input,
+        headers: { "Idempotency-Key": idempotencyKey() },
+      });
     },
     async cancelPreSale(assetId, reason) {
-      return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/cancel`, { method: "POST", body: { reason }, headers: { "Idempotency-Key": idempotencyKey() } });
+      return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/cancel`, {
+        method: "POST",
+        body: { reason },
+        headers: { "Idempotency-Key": idempotencyKey() },
+      });
     },
     async finalizePreSale(assetId) {
-      return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/finalize`, { method: "POST", headers: { "Idempotency-Key": idempotencyKey() } });
+      return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/finalize`, {
+        method: "POST",
+        headers: { "Idempotency-Key": idempotencyKey() },
+      });
     },
     async getOverview() {
       const value = objectField(await client.get<unknown>("/admin/overview"), "admin overview");
@@ -4908,20 +5032,50 @@ const adminRepository = (client: ApiClient): AdminRepository => {
           atCapacity: Number(summary.atCapacity ?? 0),
           unavailable: Number(summary.unavailable ?? 0),
           health: {
-            healthy: Number(objectField(summary.health ?? {}, "admin intake locations.summary.health").healthy ?? 0),
-            degraded: Number(objectField(summary.health ?? {}, "admin intake locations.summary.health").degraded ?? 0),
-            critical: Number(objectField(summary.health ?? {}, "admin intake locations.summary.health").critical ?? 0),
-            percentage: Number(objectField(summary.health ?? {}, "admin intake locations.summary.health").percentage ?? 0),
+            healthy: Number(
+              objectField(summary.health ?? {}, "admin intake locations.summary.health").healthy ??
+                0,
+            ),
+            degraded: Number(
+              objectField(summary.health ?? {}, "admin intake locations.summary.health").degraded ??
+                0,
+            ),
+            critical: Number(
+              objectField(summary.health ?? {}, "admin intake locations.summary.health").critical ??
+                0,
+            ),
+            percentage: Number(
+              objectField(summary.health ?? {}, "admin intake locations.summary.health")
+                .percentage ?? 0,
+            ),
           },
           exceptions: {
-            totalActive: Number(objectField(summary.exceptions ?? {}, "admin intake locations.summary.exceptions").totalActive ?? 0),
-            atCapacity: Number(objectField(summary.exceptions ?? {}, "admin intake locations.summary.exceptions").atCapacity ?? 0),
-            paused: Number(objectField(summary.exceptions ?? {}, "admin intake locations.summary.exceptions").paused ?? 0),
+            totalActive: Number(
+              objectField(summary.exceptions ?? {}, "admin intake locations.summary.exceptions")
+                .totalActive ?? 0,
+            ),
+            atCapacity: Number(
+              objectField(summary.exceptions ?? {}, "admin intake locations.summary.exceptions")
+                .atCapacity ?? 0,
+            ),
+            paused: Number(
+              objectField(summary.exceptions ?? {}, "admin intake locations.summary.exceptions")
+                .paused ?? 0,
+            ),
           },
           attention: {
-            requiresReview: Number(objectField(summary.attention ?? {}, "admin intake locations.summary.attention").requiresReview ?? 0),
-            lowCapacity: Number(objectField(summary.attention ?? {}, "admin intake locations.summary.attention").lowCapacity ?? 0),
-            infoUpdates: Number(objectField(summary.attention ?? {}, "admin intake locations.summary.attention").infoUpdates ?? 0),
+            requiresReview: Number(
+              objectField(summary.attention ?? {}, "admin intake locations.summary.attention")
+                .requiresReview ?? 0,
+            ),
+            lowCapacity: Number(
+              objectField(summary.attention ?? {}, "admin intake locations.summary.attention")
+                .lowCapacity ?? 0,
+            ),
+            infoUpdates: Number(
+              objectField(summary.attention ?? {}, "admin intake locations.summary.attention")
+                .infoUpdates ?? 0,
+            ),
           },
         },
         items: Array.isArray(value.items) ? value.items.map(mapAdminIntakeLocation) : [],
@@ -5498,11 +5652,14 @@ const adminRepository = (client: ApiClient): AdminRepository => {
       });
     },
     async forceLinkMarketReference(id, input) {
-      return client.request(`/admin/assets/${encodeURIComponent(id)}/market-references/force-link`, {
-        method: "POST",
-        body: input,
-        headers: { "Idempotency-Key": idempotencyKey() },
-      });
+      return client.request(
+        `/admin/assets/${encodeURIComponent(id)}/market-references/force-link`,
+        {
+          method: "POST",
+          body: input,
+          headers: { "Idempotency-Key": idempotencyKey() },
+        },
+      );
     },
     async rerunMarketReference(id) {
       return client.request(`/admin/assets/${encodeURIComponent(id)}/market-references/rerun`, {
@@ -5511,18 +5668,24 @@ const adminRepository = (client: ApiClient): AdminRepository => {
       });
     },
     async removePreferredMarketReference(id, reason) {
-      return client.request(`/admin/assets/${encodeURIComponent(id)}/market-references/remove-preferred`, {
-        method: "POST",
-        body: { reason },
-        headers: { "Idempotency-Key": idempotencyKey() },
-      });
+      return client.request(
+        `/admin/assets/${encodeURIComponent(id)}/market-references/remove-preferred`,
+        {
+          method: "POST",
+          body: { reason },
+          headers: { "Idempotency-Key": idempotencyKey() },
+        },
+      );
     },
     async markMarketReferenceReview(id, reason) {
-      return client.request(`/admin/assets/${encodeURIComponent(id)}/market-references/mark-review`, {
-        method: "POST",
-        body: { reason },
-        headers: { "Idempotency-Key": idempotencyKey() },
-      });
+      return client.request(
+        `/admin/assets/${encodeURIComponent(id)}/market-references/mark-review`,
+        {
+          method: "POST",
+          body: { reason },
+          headers: { "Idempotency-Key": idempotencyKey() },
+        },
+      );
     },
     async proposeOwnershipSupply(id, input) {
       return client.request<{
@@ -5949,21 +6112,42 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
     },
     reviews: {
       async getQualificationPolicy() {
-        return objectField(await client.get<unknown>("/admin/auto-review-policy"), "qualification policy") as unknown as Awaited<ReturnType<SubmissionReviewRepository["getQualificationPolicy"]>>;
+        return objectField(
+          await client.get<unknown>("/admin/auto-review-policy"),
+          "qualification policy",
+        ) as unknown as Awaited<ReturnType<SubmissionReviewRepository["getQualificationPolicy"]>>;
       },
       async updateQualificationPolicy(input) {
-        return objectField(await client.request<unknown>("/admin/auto-review-policy", { method: "PATCH", body: input, headers: { "Idempotency-Key": idempotencyKey() } }), "qualification policy") as unknown as Awaited<ReturnType<SubmissionReviewRepository["updateQualificationPolicy"]>>;
+        return objectField(
+          await client.request<unknown>("/admin/auto-review-policy", {
+            method: "PATCH",
+            body: input,
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
+          "qualification policy",
+        ) as unknown as Awaited<
+          ReturnType<SubmissionReviewRepository["updateQualificationPolicy"]>
+        >;
       },
-  async listQueue(input) {
+      async listQueue(input) {
         return mapReviewQueue(await client.get<unknown>("/reviews/submissions", input));
       },
       async listQualification(tab) {
-        const value = objectField(await client.get<unknown>("/reviews/qualification", tab ? { tab } : undefined), "qualification queue");
-        const items = Array.isArray(value.items) ? value.items as QualificationQueueItem[] : [];
+        const value = objectField(
+          await client.get<unknown>("/reviews/qualification", tab ? { tab } : undefined),
+          "qualification queue",
+        );
+        const items = Array.isArray(value.items) ? (value.items as QualificationQueueItem[]) : [];
         return { items, total: Number(value.total ?? items.length) };
       },
       async rerunQualification(id) {
-        return objectField(await client.request<unknown>(`/reviews/submissions/${id}/qualification/rerun`, { method: "POST", headers: { "Idempotency-Key": idempotencyKey() } }), "qualification rerun") as unknown as QualificationQueueItem;
+        return objectField(
+          await client.request<unknown>(`/reviews/submissions/${id}/qualification/rerun`, {
+            method: "POST",
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
+          "qualification rerun",
+        ) as unknown as QualificationQueueItem;
       },
       async getDetail(id) {
         return mapReviewDetail(await client.get<unknown>(`/reviews/submissions/${id}`));

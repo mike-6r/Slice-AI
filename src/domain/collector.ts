@@ -1,4 +1,4 @@
-import type { AssetId } from "./asset";
+import type { AssetId, PreSaleProjection } from "./asset";
 import type { Money, Percentage } from "./common";
 import type { UserId } from "./user";
 export type CollectorCategory = "tcg" | "sports" | "comics" | "memorabilia" | "mixed";
@@ -26,6 +26,7 @@ export interface CollectorPublishedListing {
   estimatedMarketValue?: Money;
   asOf?: string;
   dataStatus?: "DEMO" | "DELAYED" | "LIVE" | "UNAVAILABLE";
+  preSale?: PreSaleProjection | null;
 }
 export interface CollectorSpecialtyOption {
   name: string;

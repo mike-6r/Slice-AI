@@ -94,7 +94,22 @@ describe('ReadsController public collectors', () => {
         accountStatus: 'ACTIVE',
         publicCollectorProfile: { is: { isPublic: true } },
         submissions: {
-          some: { status: 'APPROVED', asset: { is: { status: 'PUBLISHED' } } },
+          some: {
+            status: 'APPROVED',
+            asset: {
+              is: expect.objectContaining({
+                status: 'PUBLISHED',
+                AND: expect.arrayContaining([
+                  expect.objectContaining({
+                    OR: expect.arrayContaining([
+                      { preSale: { is: { status: 'ACTIVE' } } },
+                      { publication: { is: { status: 'PUBLISHED' } } },
+                    ]),
+                  }),
+                ]),
+              }),
+            },
+          },
         },
       }),
     });

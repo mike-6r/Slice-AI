@@ -25,6 +25,7 @@ import {
   OBJECT_STORAGE,
   type ObjectStoragePort,
 } from '../submissions/ports/submission-storage.ports';
+import { publicDiscoverableAssetWhere } from '../public-discovery/public-asset-visibility';
 @Controller()
 export class ReadsController {
   constructor(
@@ -45,6 +46,7 @@ export class ReadsController {
     const size = parseCollectorPageSize(pageSize ?? limit);
     const currentPage = parseCollectorPage(page);
     const order = parseCollectorSort(sort);
+    const publicAssetWhere = publicDiscoverableAssetWhere(this.config.isBeta);
     const publicWhere: Prisma.UserWhereInput = {
       accountStatus: 'ACTIVE',
       roleAssignments: { some: { role: 'COLLECTOR', revokedAt: null } },
@@ -52,7 +54,7 @@ export class ReadsController {
       submissions: {
         some: {
           status: 'APPROVED',
-          asset: { is: { status: 'PUBLISHED' } },
+          asset: { is: publicAssetWhere },
         },
       },
     };
@@ -125,7 +127,7 @@ export class ReadsController {
                     status: 'APPROVED',
                     asset: {
                       is: {
-                        status: 'PUBLISHED',
+                        ...publicAssetWhere,
                         OR: [
                           {
                             title: {
@@ -177,7 +179,7 @@ export class ReadsController {
                     status: 'APPROVED',
                     asset: {
                       is: {
-                        status: 'PUBLISHED',
+                        ...publicAssetWhere,
                         category: {
                           name: {
                             contains: specialty.trim(),
@@ -229,7 +231,7 @@ export class ReadsController {
       this.db.user.count({ where: { ...publicWhere, ...nonDemoWhere } }),
       this.db.user.findMany({
         where: baseWhere,
-        include: publicCollectorUserInclude(),
+        include: publicCollectorUserInclude(publicAssetWhere),
         orderBy,
         skip: (currentPage - 1) * size,
         take: size,
@@ -240,7 +242,7 @@ export class ReadsController {
           ...nonDemoWhere,
           publicCollectorProfile: { is: { isFeatured: true } },
         },
-        include: publicCollectorUserInclude(),
+        include: publicCollectorUserInclude(publicAssetWhere),
         orderBy: [
           { publicCollectorProfile: { featurePriority: 'asc' } },
           { publicCollectorProfile: { featuredAt: 'asc' } },
@@ -259,7 +261,7 @@ export class ReadsController {
       }),
       this.db.asset.findMany({
         where: {
-          status: 'PUBLISHED',
+          ...publicAssetWhere,
           submissions: {
             some: {
               status: 'APPROVED',
@@ -273,7 +275,7 @@ export class ReadsController {
       this.db.assetSubmission.count({
         where: {
           status: 'APPROVED',
-          asset: { is: { status: 'PUBLISHED' } },
+          asset: { is: publicAssetWhere },
           owner: { ...publicWhere, ...nonDemoWhere },
         },
       }),
@@ -333,6 +335,7 @@ export class ReadsController {
   ) {
     const assetPage = parseCollectorPage(page);
     const assetPageSize = parseCollectorPageSize(pageSize ?? '8');
+    const publicAssetWhere = publicDiscoverableAssetWhere(this.config.isBeta);
     const fallbackUserId = slug.startsWith('collector-')
       ? slug.slice('collector-'.length)
       : null;
@@ -344,7 +347,7 @@ export class ReadsController {
         submissions: {
           some: {
             status: 'APPROVED',
-            asset: { is: { status: 'PUBLISHED' } },
+            asset: { is: publicAssetWhere },
           },
         },
         AND: [
@@ -371,6 +374,7 @@ export class ReadsController {
         ],
       },
       include: publicCollectorUserInclude(
+        publicAssetWhere,
         (assetPage - 1) * assetPageSize,
         assetPageSize,
       ),
@@ -380,7 +384,7 @@ export class ReadsController {
           where: {
             ownerUserId: x.id,
             status: 'APPROVED',
-            asset: { is: { status: 'PUBLISHED' } },
+            asset: { is: publicAssetWhere },
           },
         })
       : 0;
@@ -741,7 +745,11 @@ export class ReadsController {
   }
 }
 
-const publicCollectorUserInclude = (submissionSkip = 0, submissionTake = 8) =>
+const publicCollectorUserInclude = (
+  assetWhere: Prisma.AssetWhereInput = { status: 'PUBLISHED' },
+  submissionSkip = 0,
+  submissionTake = 8,
+) =>
   ({
     profile: {
       select: {
@@ -768,11 +776,7 @@ const publicCollectorUserInclude = (submissionSkip = 0, submissionTake = 8) =>
         submissions: {
           where: {
             status: 'APPROVED',
-            asset: {
-              is: {
-                status: 'PUBLISHED',
-              },
-            },
+            asset: { is: assetWhere },
           },
         },
       },
@@ -780,11 +784,7 @@ const publicCollectorUserInclude = (submissionSkip = 0, submissionTake = 8) =>
     submissions: {
       where: {
         status: 'APPROVED',
-        asset: {
-          is: {
-            status: 'PUBLISHED',
-          },
-        },
+        asset: { is: assetWhere },
       },
       include: {
         asset: {
@@ -800,6 +800,25 @@ const publicCollectorUserInclude = (submissionSkip = 0, submissionTake = 8) =>
               select: {
                 label: true,
                 company: { select: { displayName: true, name: true } },
+              },
+            },
+            preSale: {
+              select: {
+                status: true,
+                openedAt: true,
+                deadlineAt: true,
+                physicalStatus: true,
+                initialOffering: {
+                  select: {
+                    offeredUnits: true,
+                    pricePerUnitMinor: true,
+                    currency: true,
+                  },
+                },
+                reservations: {
+                  where: { status: 'ACTIVE' },
+                  select: { units: true },
+                },
               },
             },
             marketSnapshots: {
@@ -861,6 +880,18 @@ async function publicCollectorView(
           label: string;
           company: { displayName: string; name: string };
         } | null;
+        preSale: {
+          status: string;
+          openedAt: Date | null;
+          deadlineAt: Date | null;
+          physicalStatus: string;
+          initialOffering: {
+            offeredUnits: bigint;
+            pricePerUnitMinor: bigint;
+            currency: string;
+          };
+          reservations: Array<{ units: bigint }>;
+        } | null;
         marketSnapshots: Array<{
           estimatedMarketValueMinor: bigint;
           currency: string;
@@ -905,6 +936,31 @@ async function publicCollectorView(
         grade: asset.gradeScaleEntry
           ? `${asset.gradeScaleEntry.company.displayName || asset.gradeScaleEntry.company.name} ${asset.gradeScaleEntry.label}`
           : null,
+        preSale:
+          asset.preSale?.status === 'ACTIVE'
+            ? (() => {
+                const reservedUnits = asset.preSale.reservations.reduce(
+                  (sum, row) => sum + row.units,
+                  0n,
+                );
+                const offeredUnits = asset.preSale.initialOffering.offeredUnits;
+                return {
+                  status: asset.preSale.status,
+                  openedAt: asset.preSale.openedAt?.toISOString() ?? null,
+                  deadlineAt: asset.preSale.deadlineAt?.toISOString() ?? null,
+                  physicalStatus: asset.preSale.physicalStatus,
+                  pricePerUnitMinor:
+                    asset.preSale.initialOffering.pricePerUnitMinor.toString(),
+                  currency: asset.preSale.initialOffering.currency,
+                  offeredUnits: offeredUnits.toString(),
+                  reservedUnits: reservedUnits.toString(),
+                  availableUnits: (offeredUnits - reservedUnits).toString(),
+                  reservedPercentageBps: offeredUnits
+                    ? Number((reservedUnits * 10_000n) / offeredUnits)
+                    : 0,
+                };
+              })()
+            : null,
         listedAt: asset.publishedAt?.toISOString() ?? null,
         media: (
           await Promise.all(

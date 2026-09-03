@@ -31,6 +31,7 @@ import {
   deriveMarketSnapshotStatus,
   marketSnapshotPriority,
 } from './market-snapshot';
+import { publicDiscoverableAssetWhere } from '../public-discovery/public-asset-visibility';
 
 const ranges = {
   '24H': 1,
@@ -97,8 +98,7 @@ export class MarketService {
     const cursor = decodeCursor(query.cursor);
     const rows = await this.db.asset.findMany({
       where: {
-        status: 'PUBLISHED',
-        ...publicBetaAssetWhere(this.config.isBeta),
+        ...publicDiscoverableAssetWhere(this.config.isBeta),
         ...(query.category ? { category: { slug: query.category } } : {}),
         ...(query.set ? { collectibleSet: { slug: query.set } } : {}),
         ...(query.gradingCompany
@@ -139,8 +139,17 @@ export class MarketService {
         },
         preSale: {
           include: {
-            initialOffering: { select: { offeredUnits: true, pricePerUnitMinor: true, currency: true } },
-            reservations: { where: { status: 'ACTIVE' }, select: { units: true } },
+            initialOffering: {
+              select: {
+                offeredUnits: true,
+                pricePerUnitMinor: true,
+                currency: true,
+              },
+            },
+            reservations: {
+              where: { status: 'ACTIVE' },
+              select: { units: true },
+            },
           },
         },
         tradingMarket: {
@@ -488,11 +497,7 @@ export class MarketService {
     const asset = await this.asset(slug);
     return assetView(asset, this.storage);
   }
-  async history(
-    slug: string,
-    range: Range,
-    requestedSeries?: ReferenceSeries,
-  ) {
+  async history(slug: string, range: Range, requestedSeries?: ReferenceSeries) {
     const asset = await this.asset(slug);
     const now = new Date();
     const mapping = asset.marketProviderMappings?.[0] ?? null;
@@ -505,19 +510,21 @@ export class MarketService {
     const providerRows = mapping
       ? (
           await this.db.marketObservation.findMany({
-          where: {
-            assetId: asset.id,
-            providerCode: 'PRICECHARTING',
-            providerExternalId: mapping.providerExternalId,
-            observationType: 'PRICE_GUIDE',
-            included: true,
-            observedAt: { lte: now },
-            matchQuality: { in: ['EXACT', 'STRONG'] },
-          },
-          orderBy: [{ observedAt: 'desc' }, { id: 'desc' }],
-          take: 10_000,
+            where: {
+              assetId: asset.id,
+              providerCode: 'PRICECHARTING',
+              providerExternalId: mapping.providerExternalId,
+              observationType: 'PRICE_GUIDE',
+              included: true,
+              observedAt: { lte: now },
+              matchQuality: { in: ['EXACT', 'STRONG'] },
+            },
+            orderBy: [{ observedAt: 'desc' }, { id: 'desc' }],
+            take: 10_000,
           })
-        ).filter((point) => point.providerExternalId === mapping.providerExternalId)
+        ).filter(
+          (point) => point.providerExternalId === mapping.providerExternalId,
+        )
       : [];
     const availableSeries = REFERENCE_SERIES.filter((series) =>
       providerRows.some(
@@ -612,7 +619,8 @@ export class MarketService {
     const startingSource = metrics.startingPoint
       ? currencyHistory.find((point) => point.id === metrics.startingPoint!.id)
       : undefined;
-    const lastRefreshedAt = mapping?.lastSuccessAt ?? latest?.observedAt ?? null;
+    const lastRefreshedAt =
+      mapping?.lastSuccessAt ?? latest?.observedAt ?? null;
     const movementUnavailableReason = referenceHistory.length
       ? metrics.movementUnavailableReason
       : availableSeries.length
@@ -1058,10 +1066,8 @@ export class MarketService {
   private async asset(slug: string) {
     const asset = await this.db.asset.findFirst({
       where: {
-        status: 'PUBLISHED',
-        slug: this.config.isBeta
-          ? { equals: slug, not: { startsWith: 'slice-demo-' } }
-          : slug,
+        ...publicDiscoverableAssetWhere(this.config.isBeta),
+        slug,
       },
       include: {
         category: true,
@@ -1076,8 +1082,17 @@ export class MarketService {
         },
         preSale: {
           include: {
-            initialOffering: { select: { offeredUnits: true, pricePerUnitMinor: true, currency: true } },
-            reservations: { where: { status: 'ACTIVE' }, select: { units: true } },
+            initialOffering: {
+              select: {
+                offeredUnits: true,
+                pricePerUnitMinor: true,
+                currency: true,
+              },
+            },
+            reservations: {
+              where: { status: 'ACTIVE' },
+              select: { units: true },
+            },
           },
         },
         publication: { select: { status: true, publishedAt: true } },
@@ -1310,7 +1325,11 @@ type PublicAssetRow = {
     openedAt: Date | null;
     deadlineAt: Date | null;
     physicalStatus: string;
-    initialOffering: { offeredUnits: bigint; pricePerUnitMinor: bigint; currency: string };
+    initialOffering: {
+      offeredUnits: bigint;
+      pricePerUnitMinor: bigint;
+      currency: string;
+    };
     reservations: Array<{ units: bigint }>;
   } | null;
   tradingMarket: { status: string; tradingEnabled: boolean } | null;
@@ -1582,21 +1601,28 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
           }
         : null,
     preSale:
-      asset.preSale && ['ACTIVE', 'PAUSED', 'FINALIZING'].includes(asset.preSale.status)
+      asset.preSale &&
+      ['ACTIVE', 'PAUSED', 'FINALIZING'].includes(asset.preSale.status)
         ? (() => {
-            const reservedUnits = asset.preSale.reservations.reduce((sum, row) => sum + row.units, 0n);
+            const reservedUnits = asset.preSale.reservations.reduce(
+              (sum, row) => sum + row.units,
+              0n,
+            );
             const offeredUnits = asset.preSale.initialOffering.offeredUnits;
             return {
               status: asset.preSale.status,
               openedAt: asset.preSale.openedAt?.toISOString() ?? null,
               deadlineAt: asset.preSale.deadlineAt?.toISOString() ?? null,
               physicalStatus: asset.preSale.physicalStatus,
-              pricePerUnitMinor: asset.preSale.initialOffering.pricePerUnitMinor.toString(),
+              pricePerUnitMinor:
+                asset.preSale.initialOffering.pricePerUnitMinor.toString(),
               currency: asset.preSale.initialOffering.currency,
               offeredUnits: offeredUnits.toString(),
               reservedUnits: reservedUnits.toString(),
               availableUnits: (offeredUnits - reservedUnits).toString(),
-              reservedPercentageBps: offeredUnits ? Number((reservedUnits * 10_000n) / offeredUnits) : 0,
+              reservedPercentageBps: offeredUnits
+                ? Number((reservedUnits * 10_000n) / offeredUnits)
+                : 0,
             };
           })()
         : null,
@@ -1942,7 +1968,10 @@ export function referenceSeriesForObservation(
 }
 
 function normalizeSeriesText(value: string | null | undefined) {
-  return (value ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return (value ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
 }
 
 function normalizeGrade(value: string | null | undefined) {

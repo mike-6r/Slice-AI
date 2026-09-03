@@ -11,6 +11,13 @@ import { resolveMarketplaceMedia, resolveMarketplaceMediaGallery } from "./marke
 import { PreSaleDisclosure } from "./PreSaleDisclosure";
 
 function marketStatusPresentation(asset: MarketplaceAsset) {
+  if (asset.preSale) {
+    return {
+      label: "Pre-Sale",
+      detail: "Conditional reservations open",
+      isOpen: true,
+    };
+  }
   if (asset.marketLifecycle) {
     return {
       label: asset.marketLifecycle.phase === "LIVE" ? "Market Open" : asset.marketLifecycle.badge,
@@ -317,7 +324,9 @@ export function MarketDetailedRow({ asset }: { asset: MarketplaceAsset }) {
     <article className="market-detailed-row">
       <AssetVisual asset={asset} />
       <div className="market-detailed-identity">
-        <span className="market-status-badge">{lifecycle?.badge ?? "Market status"}</span>
+        <span className="market-status-badge">
+          {asset.preSale ? "Pre-Sale" : (lifecycle?.badge ?? "Market status")}
+        </span>
         <h2>
           <Link to="/asset/$id" params={{ id: asset.slug }}>
             {asset.title}

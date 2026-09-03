@@ -79,7 +79,7 @@ export function CollectorAssetPreview({
                   )
                 : collectorCategoryLabel(listing.category)}
             </small>
-            <em>Listed</em>
+            <em>{listing.preSale ? "Pre-Sale" : "Listed"}</em>
           </span>
         </>
       ) : (
@@ -99,7 +99,13 @@ export function CollectorAssetPreview({
                     )
                   : "Value unavailable"}
               </strong>
-              <span>{listing.dataStatus === "LIVE" ? "Valuation" : "Public listing"}</span>
+              <span>
+                {listing.preSale
+                  ? "Pre-Sale"
+                  : listing.dataStatus === "LIVE"
+                    ? "Valuation"
+                    : "Public listing"}
+              </span>
             </div>
           </div>
         </>
@@ -309,7 +315,7 @@ export function PublicCollectorAssetCard({ listing }: { listing: CollectorPublis
         <AssetMedia listing={listing} />
       </div>
       <div>
-        <p>{collectorCategoryLabel(listing.category)}</p>
+        <p>{listing.preSale ? "Pre-Sale" : collectorCategoryLabel(listing.category)}</p>
         <h3>{listing.title}</h3>
         <strong>
           {listing.estimatedMarketValue
