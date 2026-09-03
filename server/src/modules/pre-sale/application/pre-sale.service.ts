@@ -46,14 +46,31 @@ export class PreSaleService {
         },
       });
       if (!offering) throw notFound('INITIAL_OFFERING_NOT_FOUND', 'Configure the provisional Pre-Sale terms before launching.');
-      if (offering.preSale) return this.projectionForId(offering.preSale.id, db);
+      // A configured Pre-Sale is created in DRAFT. It still needs to move to
+      // ACTIVE when the admin launches it; returning the draft here made the
+      // request look successful while leaving the authoritative record closed.
+      if (offering.preSale && offering.preSale.status !== 'DRAFT')
+        return this.projectionForId(offering.preSale.id, db);
       if (offering.status === 'DRAFT' && !offering.valuationDecisionId && !offering.ownershipSupplyPolicyId) {
         if (offering.asset.operationalControl?.status === 'FROZEN') fail('ASSET_OPERATIONS_FROZEN', 'Asset operations are frozen.');
         if (!offering.asset.submissions[0]) fail('APPROVED_SUBMISSION_REQUIRED', 'An approved submission is required before Pre-Sale.');
         if (!offering.asset.submissions[0].intake) fail('INTAKE_PATH_REQUIRED', 'A physical intake path must be selected before Pre-Sale.');
         const now = new Date();
-        const row = await db.preSale.create({ data: { id: randomUUID(), assetId: offering.assetId, initialOfferingId: offering.id, status: 'ACTIVE', openedAt: now, deadlineAt: new Date(now.getTime() + this.deadlineDays() * DAY), physicalStatus: this.physicalStatus(offering.asset), openedByUserId: actor.userId } });
-        await this.audit(db, row, 'PRE_SALE_OPENED', 'ADMIN', actor.userId, 'Launched configured provisional Pre-Sale', null, { status: row.status, openedAt: now.toISOString(), deadlineAt: row.deadlineAt!.toISOString() }, key);
+        const deadlineAt = new Date(now.getTime() + this.deadlineDays() * DAY);
+        const row = offering.preSale
+          ? await db.preSale.update({
+              where: { id: offering.preSale.id },
+              data: {
+                status: 'ACTIVE',
+                openedAt: now,
+                deadlineAt,
+                physicalStatus: this.physicalStatus(offering.asset),
+                openedByUserId: actor.userId,
+                version: { increment: 1 },
+              },
+            })
+          : await db.preSale.create({ data: { id: randomUUID(), assetId: offering.assetId, initialOfferingId: offering.id, status: 'ACTIVE', openedAt: now, deadlineAt, physicalStatus: this.physicalStatus(offering.asset), openedByUserId: actor.userId } });
+        await this.audit(db, row, 'PRE_SALE_OPENED', 'ADMIN', actor.userId, 'Launched configured provisional Pre-Sale', offering.preSale ? { status: 'DRAFT' } : null, { status: row.status, openedAt: now.toISOString(), deadlineAt: row.deadlineAt!.toISOString() }, key);
         return this.projectionForId(row.id, db);
       }
       if (offering.status !== 'APPROVED') fail('PRESALE_OFFERING_NOT_APPROVED', 'Only an approved Initial Offering can enter Pre-Sale.');
