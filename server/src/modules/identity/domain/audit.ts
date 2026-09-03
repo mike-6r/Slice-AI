@@ -145,6 +145,20 @@ const metadataKeys: Record<string, readonly string[]> = {
     'version',
   ],
   SUBMISSION_REVIEW_PRIMARY_CLEARED: ['previousReviewerId', 'version'],
+  SUBMISSION_REVIEW_EVIDENCE_ACCEPTED: [
+    'submissionId',
+    'reviewId',
+    'note',
+    'version',
+  ],
+  SUBMISSION_REVIEW_EVIDENCE_FLAGGED: [
+    'submissionId',
+    'reviewId',
+    'findingId',
+    'customerAction',
+    'note',
+    'version',
+  ],
   SUBMISSION_STAFF_CONDITION_UPDATED: ['reviewId', 'condition', 'note'],
   SUBMISSION_STAFF_VALUATION_UPDATED: [
     'reviewId',

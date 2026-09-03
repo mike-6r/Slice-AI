@@ -146,6 +146,26 @@ describe('offline identity rules', () => {
       }),
     ).not.toThrow();
   });
+  it('allows reviewer evidence audit metadata', () => {
+    expect(() =>
+      sanitizeAuditMetadata('SUBMISSION_REVIEW_EVIDENCE_ACCEPTED', {
+        submissionId: 'submission-1',
+        reviewId: 'review-1',
+        note: null,
+        version: 3,
+      }),
+    ).not.toThrow();
+    expect(() =>
+      sanitizeAuditMetadata('SUBMISSION_REVIEW_EVIDENCE_FLAGGED', {
+        submissionId: 'submission-1',
+        reviewId: 'review-1',
+        findingId: 'finding-1',
+        customerAction: true,
+        note: 'Needs a clearer front image.',
+        version: 4,
+      }),
+    ).not.toThrow();
+  });
   it('allows provider identity refresh audit metadata', () => {
     expect(() =>
       sanitizeAuditMetadata('IDENTITY_VERIFICATION_UPDATED', {
