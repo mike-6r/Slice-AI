@@ -4146,6 +4146,9 @@ const adminRepository = (client: ApiClient): AdminRepository => {
     async getPreSale(assetId) {
       return client.get(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale`);
     },
+    async configurePreSale(assetId, input) {
+      return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/configure`, { method: "POST", body: input, headers: { "Idempotency-Key": idempotencyKey() } });
+    },
     async openPreSale(assetId) {
       return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/open`, { method: "POST", headers: { "Idempotency-Key": idempotencyKey() } });
     },

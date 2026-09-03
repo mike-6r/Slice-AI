@@ -3304,5 +3304,8 @@
 .admin-presale-status.is-active { color: #b9dfc0; background: rgba(81,159,98,.16); }
 .admin-presale-status.is-paused, .admin-presale-status.is-finalizing { color: #e2b84e; }
 .admin-presale-panel__facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.admin-presale-panel__setup-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.admin-presale-panel__setup-grid input { width: 100%; }
 .admin-presale-panel__actions { justify-content: flex-start; }
-@media (max-width: 900px) { .admin-presale-panel__facts { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+@media (max-width: 900px) { .admin-presale-panel__facts, .admin-presale-panel__setup-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+@media (max-width: 560px) { .admin-presale-panel__facts, .admin-presale-panel__setup-grid { grid-template-columns: 1fr; } }

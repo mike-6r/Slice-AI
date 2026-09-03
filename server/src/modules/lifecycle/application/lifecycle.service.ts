@@ -57,6 +57,7 @@ type OperationsBoardInput = {
   pageSize?: number;
 };
 type OperationsStage =
+  | 'PRE_SALE_SETUP'
   | 'PHYSICAL_PREREQUISITE'
   | 'VALUATION'
   | 'OWNERSHIP_SETUP'
@@ -149,6 +150,7 @@ type BoardAsset = {
       reservedUnits: bigint;
       settledUnits: bigint;
     } | null;
+    preSale: { status: string } | null;
   } | null;
   tradingMarket: { status: string; tradingEnabled: boolean } | null;
   operationalControl: {
@@ -319,7 +321,7 @@ export class LifecycleService {
         publication: true,
         ownershipSupply: true,
         ownershipSupplyPolicy: true,
-        initialOffering: { include: { inventory: true } },
+        initialOffering: { include: { inventory: true, preSale: true } },
         tradingMarket: true,
         operationalControl: true,
         controlledBetaBypass: true,
@@ -578,6 +580,8 @@ export class LifecycleService {
         publish: !frozen && item.launchReadiness.state === 'READY',
         activateMarket: !frozen && issued && !offeringLive,
         openOffering: !frozen && issued && item.offering.state === 'APPROVED',
+        configurePreSale: !frozen && item.currentStage === 'PRE_SALE_SETUP',
+        launchPreSale: !frozen && item.preSale?.status === 'DRAFT',
       },
       controls: {
         version: control?.version ?? 0,
@@ -1768,17 +1772,19 @@ async function operationsItem(asset: BoardAsset, storage: ObjectStoragePort) {
     verificationState,
     custodyState,
   );
-  const eligibleForAssetOperations = physicalBlockers.length === 0;
+  const physicalComplete = physicalBlockers.length === 0;
+  const eligibleForAssetOperations = physicalComplete;
+  const preSaleCandidate = Boolean(intake) && !asset.initialOffering;
   const custodyException = asset.custodyRecord?.status === 'EXCEPTION';
   const intakeException = Boolean(intake?.exceptions.length);
   const marketRestriction = asset.tradingMarket?.status === 'HALTED';
   const operationalFreeze = asset.operationalControl?.status === 'FROZEN';
-  const rawMarket = marketProjection(asset);
+  const rawMarket = marketProjection(asset, preSaleCandidate);
   // A published market record cannot be operationally healthy while the
   // canonical asset is not physically verified and secured. This is a data
   // integrity conflict, not a live-market success state.
   const lifecycleConflict = hasLifecycleMarketConflict(
-    eligibleForAssetOperations,
+    physicalComplete,
     rawMarket.state,
   );
   const entryBlockers = [
@@ -1831,7 +1837,11 @@ async function operationsItem(asset: BoardAsset, storage: ObjectStoragePort) {
       asset.custodyRecord?.updatedAt ??
       asset.updatedAt;
     detailTab = 'intake';
-  } else if (!eligibleForAssetOperations) {
+  } else if (preSaleCandidate) {
+    currentStage = 'PRE_SALE_SETUP';
+    stageSince = asset.updatedAt;
+    detailTab = 'market';
+  } else if (!physicalComplete) {
     currentStage = 'PHYSICAL_PREREQUISITE';
     stageSince = intake?.updatedAt ?? asset.updatedAt;
   } else if (!decision) {
@@ -1991,6 +2001,11 @@ async function operationsItem(asset: BoardAsset, storage: ObjectStoragePort) {
     },
     assignee: null,
     nextAction: operationsNextAction(currentStage, entryBlockers),
+    preSale: asset.initialOffering?.preSale
+      ? { status: asset.initialOffering.preSale.status }
+      : preSaleCandidate
+        ? { status: 'NOT_CONFIGURED' }
+        : null,
     ageDays,
   };
 }
@@ -2047,9 +2062,11 @@ function offeringProjection(asset: BoardAsset) {
   };
 }
 
-function marketProjection(asset: BoardAsset) {
+function marketProjection(asset: BoardAsset, preSaleCandidate = false) {
   const state =
-    asset.publication?.status === 'PUBLISHED'
+    asset.initialOffering?.preSale && ['ACTIVE', 'PAUSED', 'FINALIZING'].includes(asset.initialOffering.preSale.status)
+      ? 'PRE_SALE'
+      : asset.publication?.status === 'PUBLISHED'
       ? 'MARKET_LIVE'
       : asset.tradingMarket?.status === 'HALTED'
         ? 'PAUSED'
@@ -2062,7 +2079,9 @@ function marketProjection(asset: BoardAsset) {
             ? 'READY_FOR_LAUNCH'
             : asset.publication?.status === 'UNPUBLISHED'
               ? 'ARCHIVED'
-              : 'NOT_ELIGIBLE';
+              : preSaleCandidate
+                ? 'PRE_SALE_SETUP'
+                : 'NOT_ELIGIBLE';
   return {
     state,
     publicationStatus: asset.publication?.status ?? null,
@@ -2084,6 +2103,12 @@ function operationsNextAction(stage: OperationsStage, entryBlockers: string[]) {
         : 'Complete physical prerequisites',
       actor: 'STAFF' as const,
       target: 'INTAKE' as const,
+    };
+  if (stage === 'PRE_SALE_SETUP')
+    return {
+      label: 'Configure Pre-Sale terms',
+      actor: 'STAFF' as const,
+      target: 'MARKET' as const,
     };
   if (stage === 'VALUATION')
     return {
@@ -2209,6 +2234,18 @@ function operationEconomicWorkflow(
   ].includes(item.offering.state);
 
   return [
+    {
+      key: 'PRE_SALE' as const,
+      label: 'Pre-Sale',
+      state: item.preSale && ['ACTIVE', 'PAUSED', 'FINALIZING'].includes(item.preSale.status)
+        ? ('COMPLETE' as const)
+        : item.currentStage === 'PRE_SALE_SETUP' || item.preSale?.status === 'DRAFT'
+          ? ('IN_PROGRESS' as const)
+          : ('NOT_STARTED' as const),
+      detail: item.preSale && ['ACTIVE', 'PAUSED', 'FINALIZING'].includes(item.preSale.status)
+        ? 'Conditional reservations are open'
+        : 'Configure provisional terms before physical completion',
+    },
     {
       key: 'VALUATION' as const,
       label: 'Valuation',
@@ -2414,7 +2451,7 @@ function operationLaunchGates(blockers: readonly string[]) {
 function isOperationsQueueMember(
   item: NonNullable<Awaited<ReturnType<typeof operationsItem>>>,
 ) {
-  return item.eligibleForAssetOperations || item.exception !== null;
+  return item.eligibleForAssetOperations || item.currentStage === 'PRE_SALE_SETUP' || item.exception !== null;
 }
 
 function hasLifecycleMarketConflict(

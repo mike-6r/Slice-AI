@@ -349,7 +349,7 @@ export type AssetOperationDetailProjection = {
   };
   /** Server-owned progression; the UI must not infer the economic stage. */
   economicWorkflow: Array<{
-    key: "VALUATION" | "OWNERSHIP" | "INITIAL_OFFERING" | "LAUNCH" | "MARKET";
+    key: "PRE_SALE" | "VALUATION" | "OWNERSHIP" | "INITIAL_OFFERING" | "LAUNCH" | "MARKET";
     label: string;
     state: "COMPLETE" | "IN_PROGRESS" | "READY" | "BLOCKED" | "NOT_STARTED" | "LIVE";
     detail: string;
@@ -380,6 +380,8 @@ export type AssetOperationDetailProjection = {
     publish: boolean;
     activateMarket: boolean;
     openOffering: boolean;
+    configurePreSale: boolean;
+    launchPreSale: boolean;
   };
   controls: {
     version: number;
@@ -1742,9 +1744,11 @@ export type AssetOperationsBoardItem = {
     pricePerUnitMinor: string | null;
     currency: string | null;
   };
+  preSale: { status: string } | null;
   market: { state: string; publicationStatus: string | null; tradingStatus: string | null };
   launchReadiness: { state: "BLOCKED" | "READY"; blockers: string[] };
   currentStage:
+    | "PRE_SALE_SETUP"
     | "PHYSICAL_PREREQUISITE"
     | "VALUATION"
     | "OWNERSHIP_SETUP"
@@ -2120,6 +2124,13 @@ export type AdminCollectibleDetail = {
     valuation: { minor: string; currency: string; asOf: string } | null;
     supplyPolicy: { status: string; units: string; pricePerUnitMinor: string } | null;
   } | null;
+  preSale?: {
+    status: string;
+    openedAt: string | null;
+    deadlineAt: string | null;
+    physicalStatus: string;
+    reservedUnits: string;
+  } | null;
 };
 
 export type AdminCatalogueAsset = {
@@ -2253,6 +2264,7 @@ export type InitialOfferingPreview = Omit<
 
 export interface AdminRepository {
   getPreSale(assetId: string): Promise<PreSaleDetail>;
+  configurePreSale(assetId: string, input: { estimatedValueMinor?: string; offeredPercentageBps?: number; totalUnits?: string; pricePerUnitMinor?: string; currency?: string; reason: string }): Promise<PreSaleDetail>;
   openPreSale(assetId: string): Promise<PreSaleDetail>;
   pausePreSale(assetId: string, reason: string): Promise<PreSaleDetail>;
   resumePreSale(assetId: string, reason: string): Promise<PreSaleDetail>;
@@ -2694,7 +2706,7 @@ export type PreSaleReservationView = {
   disclosure: string;
 };
 export type PreSaleDetail = {
-  id: string;
+  id: string | null;
   asset: { id: string; slug: string; title: string };
   status: string;
   openedAt: string | null;
@@ -2709,6 +2721,13 @@ export type PreSaleDetail = {
   reservationCount: number;
   disclosure: string;
   nextStep: string;
+  collectorEstimateMinor?: string | null;
+  offeredPercentageBps?: number;
+  totalSupply?: string | null;
+  readiness?: { ready: boolean; blockers: string[] };
+  commands?: { canConfigurePreSale: boolean; canLaunchPreSale: boolean; canEditPreSaleTerms: boolean; canPausePreSale: boolean; canResumePreSale: boolean; canCancelPreSale: boolean; canExtendPreSale: boolean; canFinalizePreSale: boolean };
+  reservations?: Array<{ id: string; buyerUserId: string; units: string; grossMinor: string; status: string; createdAt: string }>;
+  history?: Array<{ action: string; source: string; reason: string; actorUserId: string | null; createdAt: string; before: unknown; after: unknown; reference: string | null }>;
 };
 export interface PreSaleRepository {
   getPublicDetail(slug: string): Promise<PreSaleDetail>;

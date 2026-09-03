@@ -10239,6 +10239,7 @@ export class AdminService {
         initialOffering: {
           include: {
             inventory: true,
+            preSale: { include: { reservations: { where: { status: 'ACTIVE' }, select: { units: true } } } },
             originatingCollector: {
               select: {
                 id: true,
@@ -10592,6 +10593,15 @@ export class AdminService {
             : null,
         }
       : null;
+    const preSale = asset.initialOffering?.preSale
+      ? {
+          status: asset.initialOffering.preSale.status,
+          openedAt: asset.initialOffering.preSale.openedAt?.toISOString() ?? null,
+          deadlineAt: asset.initialOffering.preSale.deadlineAt?.toISOString() ?? null,
+          physicalStatus: asset.initialOffering.preSale.physicalStatus,
+          reservedUnits: asset.initialOffering.preSale.reservations.reduce((sum, item) => sum + item.units, 0n).toString(),
+        }
+      : null;
     const saleValues = sales.map((item) => item.valueMinor);
     const avgSale = saleValues.length
       ? saleValues.reduce((sum, value) => sum + value, 0n) /
@@ -10732,6 +10742,7 @@ export class AdminService {
         initialOfferingProceeds: proceedsResult.state,
       },
       initialOffering,
+      preSale,
       lifecycle: {
         current,
         legacy: Boolean(asset.publishedAt && !intake),

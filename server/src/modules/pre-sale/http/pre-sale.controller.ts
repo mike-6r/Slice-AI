@@ -8,6 +8,7 @@ import { PreSaleService } from '../application/pre-sale.service';
 const units = z.object({ units: z.string().regex(/^[1-9]\d*$/).max(32) }).strict();
 const reason = z.object({ reason: z.string().trim().min(8).max(500) }).strict();
 const extend = reason.extend({ deadlineAt: z.string().datetime(), incidentReference: z.string().trim().max(120).optional() }).strict();
+const configure = z.object({ estimatedValueMinor: z.string().regex(/^\d+$/).max(32).optional(), offeredPercentageBps: z.number().int().min(1).max(10_000).optional(), totalUnits: z.string().regex(/^[1-9]\d*$/).max(12).optional(), pricePerUnitMinor: z.string().regex(/^[1-9]\d*$/).max(32).optional(), currency: z.string().regex(/^[A-Z]{3}$/).optional(), reason: z.string().trim().min(8).max(500) }).strict();
 
 @Controller()
 export class PreSaleController {
@@ -40,6 +41,11 @@ export class PreSaleController {
   @UseGuards(AccessTokenGuard, PermissionGuard)
   @RequirePermission('ownership.issue')
   open(@Param('assetId') assetId: string, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { this.requireKey(key); return this.presales.open(req.actor!, assetId, req.requestId ?? 'unknown', key!); }
+
+  @Post('admin/assets/:assetId/pre-sale/configure')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('ownership.issue')
+  configure(@Param('assetId') assetId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { const input = this.parse(configure, body); this.requireKey(key); return this.presales.configure(req.actor!, assetId, input, req.requestId ?? 'unknown', key!); }
 
   @Post('admin/assets/:assetId/pre-sale/pause')
   @UseGuards(AccessTokenGuard, PermissionGuard)

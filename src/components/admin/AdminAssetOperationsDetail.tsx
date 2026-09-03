@@ -15,7 +15,7 @@ import {
   Snowflake,
   TrendingUp,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type {
   AdminCollectibleDetail as Detail,
@@ -90,6 +90,32 @@ export function AdminAssetOperationsDetail({
   const [controlConfirmation, setControlConfirmation] = useState("");
   const [preSaleReason, setPreSaleReason] = useState("");
   const [preSaleDeadline, setPreSaleDeadline] = useState("");
+  const [preSaleEstimate, setPreSaleEstimate] = useState("");
+  const [preSalePercent, setPreSalePercent] = useState("100");
+  const [preSaleUnits, setPreSaleUnits] = useState("1000");
+  const [preSalePrice, setPreSalePrice] = useState("");
+  useEffect(() => {
+    const setup = preSaleDetail.data;
+    if (!setup || setup.status !== "NOT_CONFIGURED") return;
+    if (setup.collectorEstimateMinor) setPreSaleEstimate(minorToPounds(setup.collectorEstimateMinor));
+    if (setup.offeredPercentageBps) setPreSalePercent((setup.offeredPercentageBps / 100).toString());
+    if (setup.totalSupply) setPreSaleUnits(setup.totalSupply);
+    if (setup.pricePerUnitMinor) setPreSalePrice(minorToPounds(setup.pricePerUnitMinor));
+  }, [preSaleDetail.data]);
+  const configurePreSale = useMutation({
+    mutationFn: () => services.repositories.admin.configurePreSale(assetId, {
+      estimatedValueMinor: preSaleEstimate.trim() ? poundsToMinor(preSaleEstimate) : undefined,
+      offeredPercentageBps: Math.round(Number(preSalePercent) * 100),
+      totalUnits: preSaleUnits.trim() || undefined,
+      pricePerUnitMinor: preSalePrice.trim() ? poundsToMinor(preSalePrice) : undefined,
+      reason: preSaleReason,
+    }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["admin", "pre-sale", assetId] });
+      void client.invalidateQueries({ queryKey: ["admin", "asset-operations-detail", assetId] });
+      void client.invalidateQueries({ queryKey: ["admin", "asset-operations-projection", assetId] });
+    },
+  });
   const preSaleCommand = useMutation({
     mutationFn: (input: { action: "open" | "pause" | "resume" | "extend" | "cancel" | "finalize" }) => {
       if (input.action === "open") return services.repositories.admin.openPreSale(assetId);
@@ -245,6 +271,7 @@ export function AdminAssetOperationsDetail({
     publish,
     assetControl,
     preSaleCommand,
+    configurePreSale,
   ].find((mutation) => mutation.isError);
   return (
     <main className="admin-asset-workspace">
@@ -340,13 +367,21 @@ export function AdminAssetOperationsDetail({
       />
       <AdminPreSalePanel
         detail={preSaleDetail.data}
-        missing={preSaleDetail.isError}
         reason={preSaleReason}
         deadline={preSaleDeadline}
         setReason={setPreSaleReason}
         setDeadline={setPreSaleDeadline}
+        estimate={preSaleEstimate}
+        percent={preSalePercent}
+        units={preSaleUnits}
+        price={preSalePrice}
+        setEstimate={setPreSaleEstimate}
+        setPercent={setPreSalePercent}
+        setUnits={setPreSaleUnits}
+        setPrice={setPreSalePrice}
+        configure={() => configurePreSale.mutate()}
         execute={(action) => preSaleCommand.mutate({ action })}
-        pending={preSaleCommand.isPending}
+        pending={preSaleCommand.isPending || configurePreSale.isPending}
       />
       <nav className="admin-operation-detail__tabs" aria-label="Economic operation sections">
         {tabs.map((value) => (
@@ -2171,6 +2206,10 @@ function poundsToMinor(value: string) {
   const [whole = "0", fraction = ""] = value.trim().split(".");
   return `${whole}${fraction.padEnd(2, "0")}`.replace(/^0+(?=\d)/, "");
 }
+function minorToPounds(value: string) {
+  const minor = value.replace(/\D/g, "").padStart(3, "0");
+  return `${minor.slice(0, -2).replace(/^0+(?=\d)/, "")}.${minor.slice(-2)}`;
+}
 function dateTime(value: string) {
   return new Intl.DateTimeFormat(undefined, {
     day: "numeric",
@@ -2192,20 +2231,36 @@ function money(minor: string, currency: string) {
 
 function AdminPreSalePanel({
   detail,
-  missing,
   reason,
   deadline,
   setReason,
   setDeadline,
+  estimate,
+  percent,
+  units,
+  price,
+  setEstimate,
+  setPercent,
+  setUnits,
+  setPrice,
+  configure,
   execute,
   pending,
 }: {
   detail?: PreSaleDetail;
-  missing: boolean;
   reason: string;
   deadline: string;
   setReason: (value: string) => void;
   setDeadline: (value: string) => void;
+  estimate: string;
+  percent: string;
+  units: string;
+  price: string;
+  setEstimate: (value: string) => void;
+  setPercent: (value: string) => void;
+  setUnits: (value: string) => void;
+  setPrice: (value: string) => void;
+  configure: () => void;
   execute: (action: "open" | "pause" | "resume" | "extend" | "cancel" | "finalize") => void;
   pending: boolean;
 }) {
@@ -2216,20 +2271,31 @@ function AdminPreSalePanel({
         <div><span className="admin-operations-eyebrow">Conditional market access</span><h2>Pre-Sale</h2></div>
         <span className={`admin-presale-status is-${status.toLowerCase()}`}>{sentence(status)}</span>
       </div>
-      {detail ? (
+      {detail && status !== "NOT_CONFIGURED" ? (
         <div className="admin-presale-panel__facts">
           <Field label="Physical state" value={sentence(detail.physicalStatus)} />
           <Field label="Reserved" value={`${detail.reservedUnits} / ${detail.offeredUnits} Slices`} />
           <Field label="Deadline" value={detail.deadlineAt ? dateTime(detail.deadlineAt) : "Not set"} />
           <Field label="Next step" value={detail.nextStep} />
         </div>
-      ) : <p className="admin-detail-muted">{missing ? "No Pre-Sale record exists yet. Opening will validate the approved offering, issued supply, market, and intake path." : "Loading Pre-Sale state…"}</p>}
+      ) : (
+        <>
+          <p className="admin-detail-muted">Configure a provisional Pre-Sale from the approved submission. Final valuation, ownership issuance, custody, and a live market are completed later.</p>
+          <div className="admin-presale-panel__setup-grid">
+            <label className="admin-form-field">Collector estimate (GBP)<input type="number" min="0.01" step="0.01" value={estimate} onChange={(event) => setEstimate(event.target.value)} placeholder="e.g. 2500.00" /></label>
+            <label className="admin-form-field">Offer percentage<input type="number" min="0.01" max="100" step="0.01" value={percent} onChange={(event) => setPercent(event.target.value)} /></label>
+            <label className="admin-form-field">Total supply<input type="number" min="1" step="1" value={units} onChange={(event) => setUnits(event.target.value)} /></label>
+            <label className="admin-form-field">Price per Slice (optional)<input type="number" min="0.01" step="0.01" value={price} onChange={(event) => setPrice(event.target.value)} placeholder="Uses estimate ÷ supply" /></label>
+          </div>
+        </>
+      )}
       <label className="admin-form-field">Command reason <textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Record the operational reason (8–500 characters)" /></label>
       {detail && (status === "ACTIVE" || status === "PAUSED") ? (
         <label className="admin-form-field">Extend deadline <input type="datetime-local" value={deadline} onChange={(event) => setDeadline(event.target.value)} /></label>
       ) : null}
       <div className="admin-presale-panel__actions">
-        {!detail ? <button type="button" className="admin-ops-button primary" disabled={pending} onClick={() => execute("open")}>Open Pre-Sale <ArrowRight aria-hidden="true" /></button> : null}
+        {status === "NOT_CONFIGURED" ? <button type="button" className="admin-ops-button primary" disabled={pending || reason.trim().length < 8 || !units.trim() || !percent.trim()} onClick={configure}>Configure Pre-Sale <ArrowRight aria-hidden="true" /></button> : null}
+        {detail?.id && status === "DRAFT" ? <button type="button" className="admin-ops-button primary" disabled={pending} onClick={() => execute("open")}>Launch Pre-Sale <ArrowRight aria-hidden="true" /></button> : null}
         {status === "ACTIVE" ? <button type="button" className="admin-ops-button" disabled={pending || reason.trim().length < 8} onClick={() => execute("pause")}><PauseCircle aria-hidden="true" /> Pause</button> : null}
         {status === "PAUSED" ? <button type="button" className="admin-ops-button" disabled={pending || reason.trim().length < 8} onClick={() => execute("resume")}><PlayCircle aria-hidden="true" /> Resume</button> : null}
         {detail && (status === "ACTIVE" || status === "PAUSED") ? <button type="button" className="admin-ops-button" disabled={pending || reason.trim().length < 8 || !deadline} onClick={() => execute("extend")}>Extend deadline</button> : null}

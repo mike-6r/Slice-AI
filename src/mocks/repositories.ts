@@ -84,6 +84,7 @@ const total = (money: Money, units: number) => gbp((money.amount / 100) * units)
 export const mockRepositories: AppRepositories = {
   admin: {
     async getPreSale() { throw new Error("Pre-Sale requires the API service."); },
+    async configurePreSale() { throw new Error("Pre-Sale requires the API service."); },
     async openPreSale() { throw new Error("Pre-Sale requires the API service."); },
     async pausePreSale() { throw new Error("Pre-Sale requires the API service."); },
     async resumePreSale() { throw new Error("Pre-Sale requires the API service."); },

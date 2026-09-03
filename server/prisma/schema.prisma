@@ -2486,8 +2486,8 @@ model InitialOffering {
   assetId                    String                    @unique
   originatingCollectorUserId String
   beneficiaryUserId          String
-  ownershipSupplyPolicyId    String                    @unique
-  valuationDecisionId        String
+  ownershipSupplyPolicyId    String?                   @unique
+  valuationDecisionId        String?
   currency                   String
   totalUnits                 BigInt
   offeredUnits               BigInt
@@ -2507,8 +2507,8 @@ model InitialOffering {
   asset                      Asset                     @relation(fields: [assetId], references: [id], onDelete: Restrict)
   originatingCollector       User                      @relation("InitialOfferingOriginator", fields: [originatingCollectorUserId], references: [id], onDelete: Restrict)
   beneficiary                User                      @relation("InitialOfferingBeneficiary", fields: [beneficiaryUserId], references: [id], onDelete: Restrict)
-  ownershipSupplyPolicy      OwnershipSupplyPolicy     @relation(fields: [ownershipSupplyPolicyId], references: [id], onDelete: Restrict)
-  valuationDecision          ValuationDecision         @relation(fields: [valuationDecisionId], references: [id], onDelete: Restrict)
+  ownershipSupplyPolicy      OwnershipSupplyPolicy?    @relation(fields: [ownershipSupplyPolicyId], references: [id], onDelete: Restrict)
+  valuationDecision          ValuationDecision?        @relation(fields: [valuationDecisionId], references: [id], onDelete: Restrict)
   inventory                  InitialOfferingInventory?
   orders                     TradingOrder[]
   executions                 TradingExecution[]

@@ -1,6 +1,6 @@
 import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type PreSaleReservationStatus } from '@prisma/client';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../../database/prisma.service';
 import { RecentAuthService } from '../../identity/access/recent-auth.service';
 import type { Actor } from '../../identity/auth/auth.service';
@@ -45,8 +45,17 @@ export class PreSaleService {
           preSale: true,
         },
       });
-      if (!offering) throw notFound('INITIAL_OFFERING_NOT_FOUND', 'An Initial Offering is required before Pre-Sale.');
+      if (!offering) throw notFound('INITIAL_OFFERING_NOT_FOUND', 'Configure the provisional Pre-Sale terms before launching.');
       if (offering.preSale) return this.projectionForId(offering.preSale.id, db);
+      if (offering.status === 'DRAFT' && !offering.valuationDecisionId && !offering.ownershipSupplyPolicyId) {
+        if (offering.asset.operationalControl?.status === 'FROZEN') fail('ASSET_OPERATIONS_FROZEN', 'Asset operations are frozen.');
+        if (!offering.asset.submissions[0]) fail('APPROVED_SUBMISSION_REQUIRED', 'An approved submission is required before Pre-Sale.');
+        if (!offering.asset.submissions[0].intake) fail('INTAKE_PATH_REQUIRED', 'A physical intake path must be selected before Pre-Sale.');
+        const now = new Date();
+        const row = await db.preSale.create({ data: { id: randomUUID(), assetId: offering.assetId, initialOfferingId: offering.id, status: 'ACTIVE', openedAt: now, deadlineAt: new Date(now.getTime() + this.deadlineDays() * DAY), physicalStatus: this.physicalStatus(offering.asset), openedByUserId: actor.userId } });
+        await this.audit(db, row, 'PRE_SALE_OPENED', 'ADMIN', actor.userId, 'Launched configured provisional Pre-Sale', null, { status: row.status, openedAt: now.toISOString(), deadlineAt: row.deadlineAt!.toISOString() }, key);
+        return this.projectionForId(row.id, db);
+      }
       if (offering.status !== 'APPROVED') fail('PRESALE_OFFERING_NOT_APPROVED', 'Only an approved Initial Offering can enter Pre-Sale.');
       if (!offering.asset.ownershipSupply || offering.asset.ownershipSupply.issuedUnits !== offering.totalUnits) fail('OWNERSHIP_NOT_ISSUED', 'Ownership must be issued before Pre-Sale.');
       if (!offering.asset.tradingMarket || offering.asset.tradingMarket.status !== 'OPEN' || !offering.asset.tradingMarket.tradingEnabled) fail('MARKET_NOT_OPEN', 'An open market is required before Pre-Sale.');
@@ -116,8 +125,37 @@ export class PreSaleService {
 
   async adminDetail(assetId: string) {
     const row = await this.db.preSale.findFirst({ where: { asset: { OR: [{ id: assetId }, { publicId: assetId }, { slug: assetId }] } } });
-    if (!row) throw notFound('PRESALE_NOT_FOUND', 'Pre-Sale not found.');
-    return this.projectionForId(row.id, this.db, true);
+    if (row) return this.projectionForId(row.id, this.db, true);
+    return this.setupProjection(assetId);
+  }
+
+  async configure(actor: Actor, assetId: string, input: { estimatedValueMinor?: string; offeredPercentageBps?: number; totalUnits?: string; pricePerUnitMinor?: string; currency?: string; reason: string }, requestId: string, key: string) {
+    this.recentAuth.require(actor);
+    return this.db.$transaction(async (db) => {
+      const asset = await db.asset.findFirst({ where: { OR: [{ id: assetId }, { publicId: assetId }, { slug: assetId }] }, include: { operationalControl: true, ownershipSupplyPolicy: true, valuationDecisions: { where: { status: 'ACTIVE' }, orderBy: { decidedAt: 'desc' }, take: 1 }, initialOffering: { include: { preSale: true } }, submissions: { where: { status: 'APPROVED' }, orderBy: { updatedAt: 'desc' }, take: 1, select: { id: true, ownerUserId: true, declaredMetadata: true, intake: { select: { id: true } } } } } });
+      if (!asset) throw notFound('ASSET_NOT_FOUND', 'Asset not found.');
+      if (!asset.submissions[0]) fail('APPROVED_SUBMISSION_REQUIRED', 'An approved submission is required before configuring Pre-Sale.');
+      if (!asset.submissions[0].intake) fail('INTAKE_PATH_REQUIRED', 'Select a physical intake location before configuring Pre-Sale.');
+      if (asset.operationalControl?.status === 'FROZEN') fail('ASSET_OPERATIONS_FROZEN', 'Asset operations are frozen.');
+      if (asset.initialOffering?.preSale && asset.initialOffering.preSale.status !== 'DRAFT') fail('PRESALE_ALREADY_LAUNCHED', 'Only a draft Pre-Sale can be reconfigured.');
+      if (asset.initialOffering && asset.initialOffering.status !== 'DRAFT') fail('INITIAL_OFFERING_ALREADY_EXISTS', 'An active Initial Offering cannot be replaced by provisional Pre-Sale terms.');
+      const metadata = isRecord(asset.submissions[0].declaredMetadata) ? asset.submissions[0].declaredMetadata : {};
+      const estimate = input.estimatedValueMinor ?? stringValue(metadata.collectorExpectedValueMinor);
+      const totalUnits = parseUnits(input.totalUnits ?? asset.ownershipSupplyPolicy?.proposedUnits.toString() ?? '1000');
+      const currency = input.currency ?? stringValue(metadata.collectorExpectedCurrency) ?? 'GBP';
+      const preference = input.offeredPercentageBps ?? percentageBps(metadata.offerIntentPercent) ?? 10_000;
+      if (!Number.isInteger(preference) || preference < 1 || preference > 10_000) fail('PRESALE_TERMS_INVALID', 'Offered percentage must be between 0.01% and 100%.');
+      const price = input.pricePerUnitMinor ?? (estimate ? (BigInt(estimate) / totalUnits).toString() : null);
+      if (!price || BigInt(price) <= 0n) fail('PRESALE_PRICE_REQUIRED', 'Enter a provisional estimate or price per Slice.');
+      const offeredUnits = (totalUnits * BigInt(preference)) / 10_000n;
+      if (offeredUnits <= 0n) fail('PRESALE_TERMS_INVALID', 'The offered percentage must produce at least one Slice.');
+      const reason = input.reason.trim();
+      const offering = asset.initialOffering ?? await db.initialOffering.create({ data: { id: randomUUID(), assetId: asset.id, originatingCollectorUserId: asset.submissions[0].ownerUserId, beneficiaryUserId: asset.submissions[0].ownerUserId, ownershipSupplyPolicyId: null, valuationDecisionId: null, currency, totalUnits, offeredUnits, retainedUnits: totalUnits - offeredUnits, pricePerUnitMinor: BigInt(price), grossOfferingMinor: offeredUnits * BigInt(price), feeScheduleVersion: 'PROVISIONAL_PRESALE', feeBps: 0, status: 'DRAFT' } });
+      const sale = asset.initialOffering?.preSale ?? await db.preSale.create({ data: { id: randomUUID(), assetId: asset.id, initialOfferingId: offering.id, status: 'DRAFT', physicalStatus: 'AWAITING_INTAKE' } });
+      if (asset.initialOffering) await db.initialOffering.update({ where: { id: offering.id }, data: { currency, totalUnits, offeredUnits, retainedUnits: totalUnits - offeredUnits, pricePerUnitMinor: BigInt(price), grossOfferingMinor: offeredUnits * BigInt(price), feeScheduleVersion: 'PROVISIONAL_PRESALE', feeBps: 0 } });
+      await this.audit(db, sale, 'PRE_SALE_CONFIGURED', 'ADMIN', actor.userId, reason, null, { totalUnits: totalUnits.toString(), offeredUnits: offeredUnits.toString(), offeredPercentageBps: preference, pricePerUnitMinor: price, currency }, key);
+      return this.projectionForId(sale.id, db, true);
+    });
   }
 
   async pause(actor: Actor, assetId: string, reason: string, requestId: string, key: string) { return this.control(actor, assetId, 'PAUSED', reason, requestId, key); }
@@ -247,9 +285,22 @@ export class PreSaleService {
     if (!row) throw notFound('PRESALE_NOT_FOUND', 'Pre-Sale not found.');
     const active = row.reservations.filter((item) => ACTIVE.includes(item.status));
     const reservedUnits = active.reduce((sum, item) => sum + item.units, 0n);
-    const reservedCash = active.reduce((sum, item) => sum + item.grossMinor, 0n);
     const physical = this.physicalStatus(row.asset);
-    return { id: row.id, asset: { id: row.asset.publicId, slug: row.asset.slug, title: row.asset.title }, status: row.status, openedAt: row.openedAt?.toISOString() ?? null, deadlineAt: row.deadlineAt?.toISOString() ?? null, physicalStatus: physical, reservedUnits: reservedUnits.toString(), reservedPercentageBps: row.initialOffering.offeredUnits ? Number((reservedUnits * 10_000n) / row.initialOffering.offeredUnits) : 0, availableUnits: (row.initialOffering.offeredUnits - reservedUnits).toString(), offeredUnits: row.initialOffering.offeredUnits.toString(), pricePerUnitMinor: row.initialOffering.pricePerUnitMinor.toString(), currency: row.initialOffering.currency, reservationCount: active.length, disclosure: 'Slice has not yet physically received and verified this collectible. Your reservation remains conditional until physical intake, verification, and custody are complete. If the deadline is missed, your reserved funds will be released or refunded.', nextStep: physical === 'CUSTODY_ESTABLISHED' ? 'Finalization pending' : 'Awaiting physical intake', reservations: admin ? row.reservations.map((item) => ({ id: item.id, buyerUserId: item.buyerUserId, units: item.units.toString(), grossMinor: item.grossMinor.toString(), status: item.status, createdAt: item.createdAt.toISOString() })) : undefined, history: admin ? row.auditEvents.map((item) => ({ action: item.action, source: item.source, reason: item.reason, actorUserId: item.actorUserId, createdAt: item.createdAt.toISOString(), before: item.beforeState, after: item.afterState, reference: item.reference })) : undefined };
+    const metadata = isRecord(row.asset.submissions[0]?.declaredMetadata) ? row.asset.submissions[0].declaredMetadata : {};
+    const offeredPercentageBps = row.initialOffering.totalUnits ? Number((row.initialOffering.offeredUnits * 10_000n) / row.initialOffering.totalUnits) : 0;
+    return { id: row.id, asset: { id: row.asset.publicId, slug: row.asset.slug, title: row.asset.title }, status: row.status, openedAt: row.openedAt?.toISOString() ?? null, deadlineAt: row.deadlineAt?.toISOString() ?? null, physicalStatus: physical, reservedUnits: reservedUnits.toString(), reservedPercentageBps: row.initialOffering.offeredUnits ? Number((reservedUnits * 10_000n) / row.initialOffering.offeredUnits) : 0, offeredUnits: row.initialOffering.offeredUnits.toString(), availableUnits: (row.initialOffering.offeredUnits - reservedUnits).toString(), pricePerUnitMinor: row.initialOffering.pricePerUnitMinor.toString(), currency: row.initialOffering.currency, reservationCount: active.length, disclosure: 'Slice has not yet physically received and verified this collectible. Your reservation remains conditional until physical intake, verification, and custody are complete. If the deadline is missed, your reserved funds will be released or refunded.', nextStep: physical === 'CUSTODY_ESTABLISHED' ? 'Finalization pending' : 'Awaiting physical intake', collectorEstimateMinor: stringValue(metadata.collectorExpectedValueMinor), offeredPercentageBps, totalSupply: row.initialOffering.totalUnits.toString(), readiness: { ready: row.status !== 'DRAFT' || Boolean(row.initialOffering.pricePerUnitMinor), blockers: [] }, commands: { canConfigurePreSale: row.status === 'DRAFT', canLaunchPreSale: row.status === 'DRAFT', canEditPreSaleTerms: row.status === 'DRAFT', canPausePreSale: row.status === 'ACTIVE', canResumePreSale: row.status === 'PAUSED', canCancelPreSale: !['CANCELLED', 'CONVERTED'].includes(row.status), canExtendPreSale: ['ACTIVE', 'PAUSED'].includes(row.status), canFinalizePreSale: physical === 'CUSTODY_ESTABLISHED' && !['CANCELLED', 'CONVERTED'].includes(row.status) }, reservations: admin ? row.reservations.map((item) => ({ id: item.id, buyerUserId: item.buyerUserId, units: item.units.toString(), grossMinor: item.grossMinor.toString(), status: item.status, createdAt: item.createdAt.toISOString() })) : undefined, history: admin ? row.auditEvents.map((item) => ({ action: item.action, source: item.source, reason: item.reason, actorUserId: item.actorUserId, createdAt: item.createdAt.toISOString(), before: item.beforeState, after: item.afterState, reference: item.reference })) : undefined };
+  }
+
+  private async setupProjection(assetId: string) {
+    const asset = await this.db.asset.findFirst({ where: { OR: [{ id: assetId }, { publicId: assetId }, { slug: assetId }] }, include: { submissions: { where: { status: 'APPROVED' }, orderBy: { updatedAt: 'desc' }, take: 1 }, ownershipSupplyPolicy: true } });
+    if (!asset) throw notFound('ASSET_NOT_FOUND', 'Asset not found.');
+    const submission = asset.submissions[0];
+    const metadata = isRecord(submission?.declaredMetadata) ? submission.declaredMetadata : {};
+    const totalSupply = asset.ownershipSupplyPolicy?.proposedUnits.toString() ?? '1000';
+    const estimate = stringValue(metadata.collectorExpectedValueMinor);
+    const preference = percentageBps(metadata.offerIntentPercent) ?? 10_000;
+    const price = estimate ? (BigInt(estimate) / BigInt(totalSupply)).toString() : null;
+    return { id: null, asset: { id: asset.publicId, slug: asset.slug, title: asset.title }, status: 'NOT_CONFIGURED', openedAt: null, deadlineAt: null, physicalStatus: 'AWAITING_INTAKE', reservedUnits: '0', reservedPercentageBps: 0, offeredUnits: ((BigInt(totalSupply) * BigInt(preference)) / 10_000n).toString(), availableUnits: ((BigInt(totalSupply) * BigInt(preference)) / 10_000n).toString(), pricePerUnitMinor: price, currency: stringValue(metadata.collectorExpectedCurrency) ?? 'GBP', reservationCount: 0, disclosure: 'Configure provisional terms first. Pre-Sale reservations remain conditional until physical intake, verification, and custody are complete.', nextStep: 'Configure provisional Pre-Sale terms', collectorEstimateMinor: estimate, offeredPercentageBps: preference, totalSupply, readiness: { ready: Boolean(submission), blockers: [!submission ? 'APPROVED_SUBMISSION_REQUIRED' : null].filter((value): value is string => Boolean(value)) }, commands: { canConfigurePreSale: Boolean(submission), canLaunchPreSale: false, canEditPreSaleTerms: false, canPausePreSale: false, canResumePreSale: false, canCancelPreSale: false, canExtendPreSale: false, canFinalizePreSale: false } };
   }
 
   private async customerReservation(id: string, userId: string, db: Db | PrismaService) {
@@ -287,5 +338,8 @@ export class PreSaleService {
 }
 
 function parseUnits(value: string) { if (!/^\d+$/.test(value)) fail('UNITS_INVALID', 'Units must be a positive integer.'); const units = BigInt(value); if (units <= 0n) fail('UNITS_INVALID', 'Units must be a positive integer.'); return units; }
+function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
+function stringValue(value: unknown) { return typeof value === 'string' && value.trim() ? value.trim() : null; }
+function percentageBps(value: unknown) { const number = Number(value); return Number.isFinite(number) && number > 0 && number <= 100 ? Math.round(number * 100) : null; }
 function fail(code: string, message: string): never { throw new ConflictException({ code, message }); }
 function notFound(code: string, message: string): never { throw new NotFoundException({ code, message }); }
