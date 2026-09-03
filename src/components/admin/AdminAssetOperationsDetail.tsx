@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { ApiError } from "@/api/http-client";
 import type {
   AdminCollectibleDetail as Detail,
   AssetOperationDetailProjection,
@@ -367,6 +368,12 @@ export function AdminAssetOperationsDetail({
       />
       <AdminPreSalePanel
         detail={preSaleDetail.data}
+        canConfigure={
+          operations.data?.availableCommands.configurePreSale ??
+          preSaleDetail.data?.commands?.canConfigurePreSale ??
+          false
+        }
+        error={configurePreSale.error}
         reason={preSaleReason}
         deadline={preSaleDeadline}
         setReason={setPreSaleReason}
@@ -2272,6 +2279,42 @@ function percent(bps: number) {
 function isValidPounds(value: string) {
   return /^\d+(?:\.\d{1,2})?$/.test(value) && Number(value) > 0;
 }
+export function isPreSaleConfigureFormValid(input: {
+  estimate: string;
+  percent: string;
+  units: string;
+  price: string;
+  reason: string;
+}) {
+  const percentage = Number(input.percent);
+  return (
+    (!input.estimate.trim() || isValidPounds(input.estimate)) &&
+    (!input.price.trim() || isValidPounds(input.price)) &&
+    (Boolean(input.estimate.trim()) || Boolean(input.price.trim())) &&
+    Number.isFinite(percentage) &&
+    percentage > 0 &&
+    percentage <= 100 &&
+    /^\d+$/.test(input.units.trim()) &&
+    Number(input.units) > 0 &&
+    input.reason.trim().length >= 8
+  );
+}
+export function isPreSaleConfigureButtonEnabled(input: {
+  canConfigure: boolean;
+  pending: boolean;
+  estimate: string;
+  percent: string;
+  units: string;
+  price: string;
+  reason: string;
+}) {
+  return input.canConfigure && !input.pending && isPreSaleConfigureFormValid(input);
+}
+function mutationErrorMessage(error: unknown) {
+  if (error instanceof ApiError) return error.message;
+  if (error instanceof Error && error.message) return error.message;
+  return "The server rejected Pre-Sale configuration. Refresh the record and try again.";
+}
 function poundsToMinor(value: string) {
   const [whole = "0", fraction = ""] = value.trim().split(".");
   return `${whole}${fraction.padEnd(2, "0")}`.replace(/^0+(?=\d)/, "");
@@ -2301,6 +2344,8 @@ function money(minor: string, currency: string) {
 
 function AdminPreSalePanel({
   detail,
+  canConfigure,
+  error,
   reason,
   deadline,
   setReason,
@@ -2318,6 +2363,8 @@ function AdminPreSalePanel({
   pending,
 }: {
   detail?: PreSaleDetail;
+  canConfigure: boolean;
+  error?: unknown;
   reason: string;
   deadline: string;
   setReason: (value: string) => void;
@@ -2383,12 +2430,13 @@ function AdminPreSalePanel({
           {estimateMismatch ? <p className="admin-presale-panel__warning">The selected price implies {money(impliedMinor!, detail?.currency ?? "GBP")} across supply versus the estimate of {money(estimateMinor!, detail?.currency ?? "GBP")}. Confirm this provisional basis before saving.</p> : null}
         </>
       )}
+      {error ? <p className="admin-presale-panel__error" role="alert">{mutationErrorMessage(error)}</p> : null}
       <label className="admin-form-field">Reason <textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Confirming provisional Pre-Sale terms from Collector submission." /></label>
       {detail && (status === "ACTIVE" || status === "PAUSED") ? (
         <label className="admin-form-field">Extend deadline <input type="datetime-local" value={deadline} onChange={(event) => setDeadline(event.target.value)} /></label>
       ) : null}
       <div className="admin-presale-panel__actions">
-        {status === "NOT_CONFIGURED" ? <button type="button" className="admin-ops-button primary" disabled={pending || reason.trim().length < 8 || !units.trim() || !percent.trim()} onClick={configure}>Configure Pre-Sale <ArrowRight aria-hidden="true" /></button> : null}
+        {status === "NOT_CONFIGURED" ? <button type="button" className="admin-ops-button primary" disabled={!isPreSaleConfigureButtonEnabled({ canConfigure, pending, estimate, percent, units, price, reason })} onClick={configure}>Configure Pre-Sale <ArrowRight aria-hidden="true" /></button> : null}
         {detail?.id && status === "DRAFT" ? <button type="button" className="admin-ops-button primary" disabled={pending} onClick={() => execute("open")}>Launch Pre-Sale <ArrowRight aria-hidden="true" /></button> : null}
         {status === "ACTIVE" ? <button type="button" className="admin-ops-button" disabled={pending || reason.trim().length < 8} onClick={() => execute("pause")}><PauseCircle aria-hidden="true" /> Pause</button> : null}
         {status === "PAUSED" ? <button type="button" className="admin-ops-button" disabled={pending || reason.trim().length < 8} onClick={() => execute("resume")}><PlayCircle aria-hidden="true" /> Resume</button> : null}

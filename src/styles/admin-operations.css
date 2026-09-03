@@ -3314,6 +3314,7 @@
 .admin-presale-panel__summary span { color: var(--text-muted); font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; }
 .admin-presale-panel__summary strong { color: var(--text); font-size: .92rem; }
 .admin-presale-panel__warning { margin: 0; padding: 10px 12px; border-left: 3px solid #dcae45; border-radius: 8px; color: #f0d58b; background: rgba(218,174,74,.09); font-size: .8rem; line-height: 1.45; }
+.admin-presale-panel__error { margin: 0; padding: 10px 12px; border-left: 3px solid #e97575; border-radius: 8px; color: #ffc1c1; background: rgba(190,68,68,.12); font-size: .8rem; line-height: 1.45; }
 .admin-ops-inline-action { display: block; margin-top: 7px; padding: 0; border: 0; color: #f0c86b; background: transparent; font-size: .72rem; cursor: pointer; }
 .admin-ops-inline-action:hover { color: #fff0bc; text-decoration: underline; }
 .admin-operations-overview__readiness-stack { display: grid; gap: 12px; }

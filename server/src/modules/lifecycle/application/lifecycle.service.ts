@@ -591,10 +591,7 @@ export class LifecycleService {
         publish: !frozen && item.launchReadiness.state === 'READY',
         activateMarket: !frozen && issued && !offeringLive,
         openOffering: !frozen && issued && item.offering.state === 'APPROVED',
-        configurePreSale:
-          !frozen &&
-          Boolean(item.preSale) &&
-          ['NOT_CONFIGURED', 'DRAFT'].includes(item.preSale?.status ?? ''),
+        configurePreSale: canConfigurePreSale(item.currentStage, frozen),
         launchPreSale:
           !frozen &&
           item.preSale?.status === 'DRAFT' &&
@@ -2284,6 +2281,10 @@ function operationsNextAction(
   };
 }
 
+function canConfigurePreSale(stage: OperationsStage, frozen: boolean) {
+  return !frozen && stage === 'PRE_SALE_SETUP';
+}
+
 function operationIntegrityIncidents(
   item: NonNullable<Awaited<ReturnType<typeof operationsItem>>>,
 ) {
@@ -2848,6 +2849,7 @@ export const operationsQueueTestUtils = {
   operationsSearchWhere,
   operationLaunchGates,
   preSaleReadinessProjection,
+  canConfigurePreSale,
   operationIntegrityIncidents,
   authoritativeInvestorOwnedUnits,
 };
