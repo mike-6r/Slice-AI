@@ -15,18 +15,20 @@ import {
   RAW_CARD_PREGRADE_PROVIDER,
   XimilarRawCardPreGradeProvider,
 } from './application/raw-card-pregrade.provider';
+import { QualificationService } from './application/qualification.service';
 
 @Module({
   imports: [AuthModule, AccessControlModule, MarketResearchModule, SubmissionStorageModule, OutboxModule],
   controllers: [SubmissionController],
   providers: [
     SubmissionService,
+    QualificationService,
     RawCardPreGradeService,
     XimilarRawCardPreGradeProvider,
     { provide: RAW_CARD_PREGRADE_PROVIDER, useExisting: XimilarRawCardPreGradeProvider },
     LocalMalwareScanner,
     { provide: MALWARE_SCANNER, useExisting: LocalMalwareScanner },
   ],
-  exports: [RawCardPreGradeService, SubmissionStorageModule],
+  exports: [RawCardPreGradeService, QualificationService, SubmissionStorageModule],
 })
 export class SubmissionsModule {}

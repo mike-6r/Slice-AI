@@ -17,6 +17,11 @@ export interface AssetSubmission {
   decisionCode: string | null;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
+  qualification?: {
+    customerStatus: string;
+    completedAt: ISODateTime | null;
+    reasons: string[];
+  } | null;
 }
 
 /** Owner-safe media state. Storage keys, scanner internals and URLs never enter this model. */
@@ -168,6 +173,18 @@ export interface SubmissionReviewSummary {
   categoryId: string;
   setId: string | null;
   gradeScaleEntryId: string | null;
+}
+
+export interface QualificationQueueItem {
+  runId: string;
+  outcome: "AUTO_QUALIFIED" | "HUMAN_REVIEW_REQUIRED" | "COLLECTOR_ACTION_REQUIRED" | "BLOCKED";
+  customerStatus: string;
+  policyVersion: string;
+  completedAt: ISODateTime | null;
+  reasons: string[];
+  actions: unknown[];
+  checks: Array<{ code: string; result: string; reason: string }>;
+  submission: { id: string; ownerUserId: string; status: string; categoryId: string; submittedAt: ISODateTime | null };
 }
 
 export type ReviewQueueEvidenceStatus = "COMPLETE" | "PARTIAL" | "MISSING_REQUIRED";

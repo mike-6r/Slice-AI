@@ -38,6 +38,7 @@ import type {
   InitialOfferingProjection,
   InitialOfferingPreview,
   SupportedCurrency,
+  SubmissionReviewRepository,
 } from "@/data/repositories";
 import type {
   Asset,
@@ -78,6 +79,7 @@ import type {
   SubmissionReviewDetail,
   SubmissionReviewQueueResponse,
   SubmissionReviewSummary,
+  QualificationQueueItem,
   MarketResearchSnapshot,
   CollectibleReferenceImport,
   PublicationReadiness,
@@ -1327,6 +1329,24 @@ const mapSubmission = (raw: unknown): AssetSubmission => {
     decisionCode: nullableString(value.decisionCode, "submission.decisionCode"),
     createdAt: stringField(value.createdAt, "submission.createdAt") as ISODateTime,
     updatedAt: stringField(value.updatedAt, "submission.updatedAt") as ISODateTime,
+    qualification:
+      value.qualification && typeof value.qualification === "object"
+        ? {
+            customerStatus: stringField(
+              (value.qualification as Record<string, unknown>).customerStatus,
+              "submission.qualification.customerStatus",
+            ),
+            completedAt: nullableString(
+              (value.qualification as Record<string, unknown>).completedAt,
+              "submission.qualification.completedAt",
+            ) as ISODateTime | null,
+            reasons: Array.isArray((value.qualification as Record<string, unknown>).reasons)
+              ? ((value.qualification as Record<string, unknown>).reasons as unknown[]).filter(
+                  (reason): reason is string => typeof reason === "string",
+                )
+              : [],
+          }
+        : null,
   };
 };
 const mapSubmissionMedia = (raw: unknown): SubmissionMedia => {
@@ -5891,8 +5911,22 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       },
     },
     reviews: {
-      async listQueue(input) {
+      async getQualificationPolicy() {
+        return objectField(await client.get<unknown>("/admin/auto-review-policy"), "qualification policy") as unknown as Awaited<ReturnType<SubmissionReviewRepository["getQualificationPolicy"]>>;
+      },
+      async updateQualificationPolicy(input) {
+        return objectField(await client.request<unknown>("/admin/auto-review-policy", { method: "PATCH", body: input, headers: { "Idempotency-Key": idempotencyKey() } }), "qualification policy") as unknown as Awaited<ReturnType<SubmissionReviewRepository["updateQualificationPolicy"]>>;
+      },
+  async listQueue(input) {
         return mapReviewQueue(await client.get<unknown>("/reviews/submissions", input));
+      },
+      async listQualification(tab) {
+        const value = objectField(await client.get<unknown>("/reviews/qualification", tab ? { tab } : undefined), "qualification queue");
+        const items = Array.isArray(value.items) ? value.items as QualificationQueueItem[] : [];
+        return { items, total: Number(value.total ?? items.length) };
+      },
+      async rerunQualification(id) {
+        return objectField(await client.request<unknown>(`/reviews/submissions/${id}/qualification/rerun`, { method: "POST", headers: { "Idempotency-Key": idempotencyKey() } }), "qualification rerun") as unknown as QualificationQueueItem;
       },
       async getDetail(id) {
         return mapReviewDetail(await client.get<unknown>(`/reviews/submissions/${id}`));

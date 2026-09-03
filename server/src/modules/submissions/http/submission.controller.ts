@@ -28,6 +28,7 @@ import { CollectibleMarketResearchService } from '../../market-research/market-r
 import { LocalSubmissionStorage } from '../infrastructure/local-submission-storage';
 import { MAX_MEDIA_BYTES } from '../domain/submission.policy';
 import { RawCardPreGradeService } from '../application/raw-card-pregrade.service';
+import { QualificationService } from '../application/qualification.service';
 
 const id = z.string().min(1).max(128);
 const metadata = z.record(z.unknown()).nullable().optional();
@@ -268,6 +269,16 @@ const manualCertificationVerification = z
     providerReference: z.string().trim().max(255).optional(),
   })
   .strict();
+const qualificationPolicy = z.object({
+  version: z.string().trim().min(1).max(80).optional(),
+  enabled: z.boolean().optional(),
+  enabledCategories: z.array(z.string().trim().min(1).max(80)).max(100).optional(),
+  enabledGraders: z.array(z.string().trim().min(1).max(40)).max(30).optional(),
+  qaSamplingBps: z.number().int().min(0).max(10000).optional(),
+  autoPreSaleLaunch: z.boolean().optional(),
+  defaultPreSaleSupply: z.string().regex(/^\d+$/).optional(),
+  emergencyDisabled: z.boolean().optional(),
+}).strict();
 
 @Controller()
 export class SubmissionController {
@@ -277,6 +288,7 @@ export class SubmissionController {
     private readonly localStorage: LocalSubmissionStorage,
     private readonly research: CollectibleMarketResearchService,
     private readonly preGrade: RawCardPreGradeService,
+    private readonly qualification: QualificationService,
   ) {}
 
   /** Staging-only upload capability endpoint. The opaque one-use token is the
@@ -615,6 +627,40 @@ export class SubmissionController {
   @RequirePermission('submission.review')
   detail(@Param('id') submissionId: string, @Req() req: AuthenticatedRequest) {
     return this.submissions.reviewDetail(req.actor!, submissionId);
+  }
+  @Get('reviews/qualification')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  qualificationQueue(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
+    const tab = z.object({ tab: z.enum(['HUMAN_REVIEW_REQUIRED', 'COLLECTOR_ACTION_REQUIRED', 'AUTO_QUALIFIED', 'BLOCKED']).optional() }).strict().parse(query).tab;
+    return this.qualification.adminQueue(req.actor!, tab);
+  }
+  @Get('reviews/submissions/:id/qualification')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  qualificationDetail(@Param('id') submissionId: string, @Req() req: AuthenticatedRequest) {
+    return this.qualification.adminQueue(req.actor!).then((result) => result.items.find((item) => item.submission.id === submissionId) ?? null);
+  }
+  @Post('reviews/submissions/:id/qualification/rerun')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  rerunQualification(@Param('id') submissionId: string, @Req() req: AuthenticatedRequest) {
+    return this.qualification.rerun(req.actor!, submissionId);
+  }
+  @Get('admin/auto-review-policy')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('admin.console.read')
+  getAutoReviewPolicy() { return this.qualification.getPolicy(); }
+  @Patch('admin/auto-review-policy')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('admin.console.read')
+  updateAutoReviewPolicy(@Body() body: unknown, @Req() req: AuthenticatedRequest) {
+    const input = qualificationPolicy.parse(body);
+    const { defaultPreSaleSupply, ...rest } = input;
+    return this.qualification.updatePolicy(req.actor!, {
+      ...rest,
+      ...(defaultPreSaleSupply ? { defaultPreSaleSupply: BigInt(defaultPreSaleSupply) } : {}),
+    });
   }
   @Get('reviews/submissions/:id/reviewers')
   @UseGuards(AccessTokenGuard, PermissionGuard)

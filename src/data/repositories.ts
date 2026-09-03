@@ -51,6 +51,7 @@ import type {
   SubmissionReviewDetail,
   SubmissionReviewQueueResponse,
   SubmissionReviewSummary,
+  QualificationQueueItem,
   ReviewQueueReadinessState,
   PublicationReadiness,
   UpdateSubmissionDraft,
@@ -122,6 +123,10 @@ export interface SubmissionRepository {
   verifyCertification(id: string, certificationNumber: string): Promise<SubmissionDetail>;
 }
 export interface SubmissionReviewRepository {
+  getQualificationPolicy(): Promise<{ version: string; enabled: boolean; enabledCategories: string[]; enabledGraders: string[]; qaSamplingBps: number; autoPreSaleLaunch: boolean; defaultPreSaleSupply: string; emergencyDisabled: boolean }>;
+  updateQualificationPolicy(input: { enabled?: boolean; qaSamplingBps?: number; autoPreSaleLaunch?: boolean; emergencyDisabled?: boolean }): Promise<{ version: string; enabled: boolean; qaSamplingBps: number; autoPreSaleLaunch: boolean; defaultPreSaleSupply: string; emergencyDisabled: boolean }>;
+  listQualification(tab?: "HUMAN_REVIEW_REQUIRED" | "COLLECTOR_ACTION_REQUIRED" | "AUTO_QUALIFIED" | "BLOCKED"): Promise<{ items: QualificationQueueItem[]; total: number }>;
+  rerunQualification(id: string): Promise<QualificationQueueItem>;
   listQueue(input?: {
     cursor?: string;
     limit?: number;

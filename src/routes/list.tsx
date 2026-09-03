@@ -867,7 +867,7 @@ export function SubmissionPage() {
     }
     submit.mutate();
   };
-  const submitted = submission?.status === "SUBMITTED";
+  const submitted = submission?.status === "SUBMITTED" || submission?.status === "APPROVED";
   const actionError =
     create.error ??
     update.error ??
@@ -4527,23 +4527,36 @@ function MySubmissions({ submissions }: { submissions: AssetSubmission[] }) {
   );
 }
 function SubmissionReceived({ submission }: { submission: SubmissionDetail }) {
+  const qualification = submission.qualification;
+  const isQualified = qualification?.customerStatus === "PRE_SALE_QUALIFIED" || submission.status === "APPROVED";
+  const needsAction = qualification?.customerStatus === "NEEDS_YOUR_ACTION";
+  const statusTitle = isQualified
+    ? "Your collectible is Pre-Sale qualified"
+    : needsAction
+      ? "A quick update is needed"
+      : qualification?.customerStatus === "BLOCKED_CONTACT_SUPPORT"
+        ? "We need to speak with you"
+        : "Your listing is being checked";
+  const statusBody = isQualified
+    ? "The automated checks passed. Your collectible is available for conditional reservations while Slice completes physical intake and verification."
+    : needsAction
+      ? qualification.reasons[0] ?? "Please update the requested listing information, then submit it again."
+      : qualification?.customerStatus === "BLOCKED_CONTACT_SUPPORT"
+        ? "This listing cannot move forward automatically. Contact Slice Support and we’ll explain the next step."
+        : "Slice is checking your listing and will route it to staff only when a decision needs human judgment.";
   return (
     <main className="list-page list-page--guided">
       <div className="list-guided-shell">
         <section className="list-received">
           <Check />
-          <p className="page-kicker">Submission received</p>
+          <p className="page-kicker">{isQualified ? "Pre-Sale qualified" : "Submission received"}</p>
           <h1>{submissionName(submission.declaredMetadata)}</h1>
-          <p>
-            Reference {submission.id}. Slice will review your collectible, evidence, and market
-            reference data. It is not published or market live.
-          </p>
+          <p>{statusTitle}. {statusBody}</p>
           <ol>
             <li>Submitted</li>
-            <li>Slice review</li>
-            <li>Valuation</li>
-            <li>Custody / verification</li>
-            <li>Marketplace eligibility</li>
+            <li>{isQualified ? "Automated checks passed" : needsAction ? "Your update" : "Slice review, if needed"}</li>
+            <li>Physical intake and verification</li>
+            <li>Final marketplace eligibility</li>
           </ol>
           <div>
             <Link to="/submissions/$id" params={{ id: submission.id }} className="button-primary">

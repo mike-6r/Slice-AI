@@ -77,7 +77,7 @@ import {
   type AdminSearch,
   type AdminSection,
 } from "./-admin-route-state";
-import type { AssetOperationSummary, SubmissionReviewQueueResponse } from "@/domain/submission";
+import type { AssetOperationSummary, QualificationQueueItem, SubmissionReviewQueueResponse } from "@/domain/submission";
 import type {
   AdminAccountsSummary,
   AdminComplianceCase,
@@ -3945,6 +3945,24 @@ function ReviewQueue({
   updateSearch: (patch: Partial<AdminSearch>) => void;
 }) {
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
+  const services = useAppServices();
+  const [qualificationTab, setQualificationTab] = useState<"HUMAN_REVIEW_REQUIRED" | "COLLECTOR_ACTION_REQUIRED" | "AUTO_QUALIFIED" | "BLOCKED">("HUMAN_REVIEW_REQUIRED");
+  const qualification = useQuery({
+    queryKey: ["admin", "qualification", qualificationTab],
+    queryFn: () => services.repositories.reviews.listQualification(qualificationTab),
+  });
+  const rerun = useMutation({
+    mutationFn: (id: string) => services.repositories.reviews.rerunQualification(id),
+    onSuccess: () => void qualification.refetch(),
+  });
+  const qualificationPolicy = useQuery({
+    queryKey: ["admin", "qualification-policy"],
+    queryFn: () => services.repositories.reviews.getQualificationPolicy(),
+  });
+  const updateQualificationPolicy = useMutation({
+    mutationFn: (input: { enabled?: boolean; autoPreSaleLaunch?: boolean; emergencyDisabled?: boolean; qaSamplingBps?: number }) => services.repositories.reviews.updateQualificationPolicy(input),
+    onSuccess: () => void qualificationPolicy.refetch(),
+  });
   const items = data?.items ?? [];
   const counts = data?.counts ?? {
     all: 0,
@@ -4075,6 +4093,31 @@ function ReviewQueue({
           tone="danger"
         />
       </div>
+      <QualificationExceptionPanel
+        activeTab={qualificationTab}
+        onTabChange={setQualificationTab}
+        items={qualification.data?.items ?? []}
+        loading={qualification.isLoading}
+        onRerun={(id) => rerun.mutate(id)}
+        rerunning={rerun.isPending}
+      />
+      {qualificationPolicy.data ? (
+        <section className="admin-panel" aria-label="Automated qualification policy">
+          <div className="admin-review-queue-heading">
+            <div>
+              <p className="admin-console-eyebrow">Policy controls</p>
+              <h3>Automated review guardrails</h3>
+              <p>Emergency disable and launch controls are audited server-side.</p>
+            </div>
+          </div>
+          <div className="admin-form-grid">
+            <label className="admin-form-field"><span>Automation enabled</span><input type="checkbox" checked={qualificationPolicy.data.enabled} onChange={(event) => updateQualificationPolicy.mutate({ enabled: event.target.checked })} /></label>
+            <label className="admin-form-field"><span>Auto-launch conditional Pre-Sale</span><input type="checkbox" checked={qualificationPolicy.data.autoPreSaleLaunch} onChange={(event) => updateQualificationPolicy.mutate({ autoPreSaleLaunch: event.target.checked })} /></label>
+            <label className="admin-form-field"><span>Emergency disable</span><input type="checkbox" checked={qualificationPolicy.data.emergencyDisabled} onChange={(event) => updateQualificationPolicy.mutate({ emergencyDisabled: event.target.checked })} /></label>
+            <div className="admin-form-field"><span>QA sample</span><strong>{(qualificationPolicy.data.qaSamplingBps / 100).toFixed(2)}%</strong></div>
+          </div>
+        </section>
+      ) : null}
       <div className="admin-review-queue-layout">
         <section className="admin-panel admin-review-table-panel">
           <div className="admin-review-tabs" role="tablist" aria-label="Review queue filters">
@@ -4584,6 +4627,61 @@ function reviewPriorityLabel(priority: string) {
       MEDIUM: "Medium",
       LOW: "Low",
     }[priority] ?? "Low"
+  );
+}
+
+function QualificationExceptionPanel({
+  activeTab,
+  onTabChange,
+  items,
+  loading,
+  onRerun,
+  rerunning,
+}: {
+  activeTab: "HUMAN_REVIEW_REQUIRED" | "COLLECTOR_ACTION_REQUIRED" | "AUTO_QUALIFIED" | "BLOCKED";
+  onTabChange: (tab: "HUMAN_REVIEW_REQUIRED" | "COLLECTOR_ACTION_REQUIRED" | "AUTO_QUALIFIED" | "BLOCKED") => void;
+  items: QualificationQueueItem[];
+  loading: boolean;
+  onRerun: (id: string) => void;
+  rerunning: boolean;
+}) {
+  const tabs = [
+    ["HUMAN_REVIEW_REQUIRED", "Needs Review"],
+    ["COLLECTOR_ACTION_REQUIRED", "Collector Action"],
+    ["AUTO_QUALIFIED", "Auto Processed"],
+    ["BLOCKED", "Blocked"],
+  ] as const;
+  return (
+    <section className="admin-panel" aria-label="Automated qualification queue">
+      <div className="admin-review-queue-heading">
+        <div>
+          <p className="admin-console-eyebrow">Automated qualification</p>
+          <h3>Exception queue</h3>
+          <p>Every automated decision is explainable, auditable, and safe to rerun.</p>
+        </div>
+      </div>
+      <div className="admin-review-tabs" role="tablist" aria-label="Qualification outcomes">
+        {tabs.map(([value, label]) => (
+          <button key={value} type="button" className={activeTab === value ? "is-active" : ""} onClick={() => onTabChange(value)}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {loading ? <p className="admin-muted">Loading qualification runs…</p> : items.length === 0 ? <p className="admin-muted">No qualification runs in this view.</p> : (
+        <div className="admin-review-qualification-list">
+          {items.slice(0, 8).map((item) => (
+            <article key={item.runId} className="admin-review-qualification-row">
+              <div>
+                <strong>{item.submission.id}</strong>
+                <p>{item.reasons[0] ?? (item.outcome === "AUTO_QUALIFIED" ? "All mandatory checks passed." : "No additional reason recorded.")}</p>
+              </div>
+              <span className="admin-status-chip">{item.outcome.replaceAll("_", " ")}</span>
+              {item.outcome === "HUMAN_REVIEW_REQUIRED" || item.outcome === "COLLECTOR_ACTION_REQUIRED" ? <button type="button" className="admin-review-refresh" onClick={() => onRerun(item.submission.id)} disabled={rerunning}>Rerun</button> : null}
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

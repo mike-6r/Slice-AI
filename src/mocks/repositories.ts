@@ -632,6 +632,18 @@ export const mockRepositories: AppRepositories = {
     },
   },
   reviews: {
+    async getQualificationPolicy() {
+      return { version: "TEST", enabled: false, enabledCategories: [], enabledGraders: [], qaSamplingBps: 0, autoPreSaleLaunch: false, defaultPreSaleSupply: "1000", emergencyDisabled: true };
+    },
+    async updateQualificationPolicy() {
+      throw new Error("Qualification policy requires the API service.");
+    },
+    async listQualification() {
+      return { items: [], total: 0 };
+    },
+    async rerunQualification() {
+      throw new Error("Qualification requires the API service.");
+    },
     async listQueue() {
       return {
         items: [],

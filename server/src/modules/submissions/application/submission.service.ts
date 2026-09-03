@@ -27,6 +27,7 @@ import { preGradeProjection } from './raw-card-pregrade.service';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { OutboxWriter } from '../../outbox/application/outbox-writer.service';
 import { AuthorizationService } from '../../identity/access/authorization.service';
+import { QualificationService } from './qualification.service';
 import { slugify } from '../../catalogue/domain/catalogue.types';
 import {
   customerResourceEvent,
@@ -172,6 +173,7 @@ export class SubmissionService {
     @Optional() private readonly capabilities?: AccountCapabilityService,
     private readonly outbox: OutboxWriter = new OutboxWriter(),
     @Optional() private readonly authorization?: AuthorizationService,
+    @Optional() private readonly qualification?: QualificationService,
   ) {}
 
   async create(
@@ -389,11 +391,19 @@ export class SubmissionService {
     });
     if (!submission) this.notFound();
     const projected = ownerProjection(submission!);
+    const qualification = await this.qualification?.ownerLatest(actor, id);
     const mediaById = new Map(
       submission!.media.map((media) => [media.id, media]),
     );
     return {
       ...projected,
+      qualification: qualification
+        ? {
+            customerStatus: qualification.customerStatus,
+            completedAt: qualification.completedAt,
+            reasons: qualification.reasons,
+          }
+        : null,
       media: await Promise.all(
         projected.media.map(async (media) => ({
           ...media,
@@ -1183,7 +1193,7 @@ export class SubmissionService {
     key: string,
   ) {
     await this.capabilities?.require(actor, 'LIST_ASSET');
-    return this.mutate(
+    const submitted = await this.mutate(
       actor,
       `submission.submit:${id}`,
       'POST',
@@ -1307,6 +1317,11 @@ export class SubmissionService {
         return ownerProjection(updated);
       },
     );
+    if (!this.qualification) return submitted;
+    return {
+      ...submitted,
+      qualification: await this.qualification.runForSubmission(id),
+    };
   }
 
   cancel(

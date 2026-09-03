@@ -552,6 +552,28 @@ enum SubmissionStatus {
   CANCELLED
 }
 
+enum QualificationOutcome {
+  AUTO_QUALIFIED
+  HUMAN_REVIEW_REQUIRED
+  COLLECTOR_ACTION_REQUIRED
+  BLOCKED
+}
+
+enum QualificationRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum QualificationCheckResult {
+  PASS
+  ADVISORY
+  UNCERTAIN
+  FAIL
+  ACTION_REQUIRED
+  BLOCKED
+}
+
 enum SubmissionMediaStatus {
   PENDING_UPLOAD
   UPLOADED
@@ -1632,11 +1654,73 @@ model AssetSubmission {
   certificationVerifications    GradingCertificationVerification[]
   certificationClaims           GradingCertificationClaim[]
   reviewFindings                SubmissionReviewFinding[]
+  qualificationRuns             QualificationRun[]
 
   @@index([ownerUserId, status, createdAt, id])
   @@index([status, submittedAt, id])
   @@index([reviewerId, status, updatedAt, id])
   @@index([preferredIntakeLocationId])
+}
+
+/// Server-authoritative, explainable qualification run. A run is immutable
+/// history; reruns create a new row rather than rewriting a previous decision.
+model QualificationRun {
+  id             String              @id @default(cuid())
+  submissionId   String
+  trigger        String              @default("SUBMISSION_SUBMITTED")
+  policyVersion  String
+  status         QualificationRunStatus @default(RUNNING)
+  outcome        QualificationOutcome?
+  startedAt      DateTime            @default(now())
+  completedAt    DateTime?
+  errorCode      String?
+  reasons        Json?
+  actions        Json?
+  retryOfId      String?
+  createdAt      DateTime            @default(now())
+  submission     AssetSubmission     @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  checks         QualificationCheck[]
+
+  @@index([submissionId, createdAt, id])
+  @@index([outcome, createdAt, id])
+  @@index([status, createdAt, id])
+}
+
+/// One meaningful gate result for a qualification run. Details are safe,
+/// human-readable explanations; provider payloads and secrets are excluded.
+model QualificationCheck {
+  id          String                   @id @default(cuid())
+  runId       String
+  code        String
+  result      QualificationCheckResult
+  mandatory   Boolean                  @default(true)
+  reason      String
+  details     Json?
+  createdAt   DateTime                 @default(now())
+  run         QualificationRun         @relation(fields: [runId], references: [id], onDelete: Restrict)
+
+  @@index([runId, code])
+  @@index([code, result, createdAt, id])
+}
+
+/// Small product-facing policy surface. It deliberately stores explicit
+/// fields instead of raw JSON so changes are auditable and reviewable.
+model AutoReviewPolicy {
+  id                    String   @id @default(cuid())
+  policyKey             String   @unique @default("default")
+  version               String
+  enabled               Boolean  @default(true)
+  enabledCategories     String[]
+  enabledGraders        String[]
+  qaSamplingBps         Int      @default(0)
+  autoPreSaleLaunch     Boolean  @default(true)
+  defaultPreSaleSupply  BigInt   @default(1000)
+  emergencyDisabled     Boolean  @default(false)
+  updatedByUserId       String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([enabled, emergencyDisabled, updatedAt])
 }
 
 enum SubmissionReviewFindingSeverity {
