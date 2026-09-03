@@ -64,6 +64,70 @@ describe('Asset Operations queue authority', () => {
     ).toMatchObject({ target: 'LAUNCH' });
   });
 
+  it('keeps a live Pre-Sale workflow independent from final-market gates', () => {
+    expect(
+      operationsQueueTestUtils.operationsNextAction('PRE_SALE_LIVE', [], {
+        physical: 'AWAITING_INTAKE',
+        verification: 'NOT_STARTED',
+        custody: 'NOT_STARTED',
+        preSaleStatus: 'ACTIVE',
+      }),
+    ).toEqual({
+      label: 'Await collector shipment',
+      actor: 'STAFF',
+      target: 'INTAKE',
+    });
+
+    const workflow = operationsQueueTestUtils.operationEconomicWorkflow({
+      currentStage: 'PRE_SALE_LIVE',
+      preSale: { status: 'ACTIVE' },
+      physicalPrerequisiteSummary: { complete: false },
+      market: { state: 'PRE_SALE' },
+    } as never);
+
+    expect(workflow.map((step) => step.key)).toEqual([
+      'PRE_SALE_SETUP',
+      'PRE_SALE_LIVE',
+      'PHYSICAL_INTAKE',
+      'FINALIZATION',
+      'MARKET_LIVE',
+    ]);
+    expect(workflow.find((step) => step.key === 'PRE_SALE_LIVE')).toMatchObject({
+      state: 'IN_PROGRESS',
+    });
+    expect(workflow.find((step) => step.key === 'FINALIZATION')).toMatchObject({
+      state: 'BLOCKED',
+    });
+  });
+
+  it('marks provisional terms ready without requiring physical completion', () => {
+    const readiness = operationsQueueTestUtils.preSaleReadinessProjection(
+      {
+        status: 'PUBLISHED',
+        initialOffering: {
+          totalUnits: 1000n,
+          offeredUnits: 750n,
+          retainedUnits: 250n,
+          pricePerUnitMinor: 1850n,
+          preSale: { status: 'DRAFT', deadlineAt: null },
+        },
+      } as never,
+      { status: 'APPROVED' } as never,
+      {} as never,
+      false,
+      false,
+    );
+
+    expect(readiness.state).toBe('READY');
+    expect(readiness.blockers).not.toEqual(
+      expect.arrayContaining([
+        'VERIFICATION_REQUIRED',
+        'SECURE_CUSTODY_REQUIRED',
+        'PRESALE_DEADLINE_EXPIRED',
+      ]),
+    );
+  });
+
   it('keeps ordinary pre-custody assets in Physical Intake, not the economic queue', () => {
     const pendingPhysical = {
       eligibleForAssetOperations: false,

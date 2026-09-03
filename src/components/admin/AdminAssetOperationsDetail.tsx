@@ -642,36 +642,20 @@ function Overview({
 
         <div className="admin-operations-overview__column">
           {operations ? (
-            <section className="admin-operation-card admin-operations-overview__gates">
-              <CardHeading
-                title="Launch Readiness"
-                status={
-                  operations.launchReadiness.state === "READY"
-                    ? "Ready"
-                    : `${operations.launchReadiness.blockers.length} blocked`
-                }
-                ready={operations.launchReadiness.state === "READY"}
+            <div className="admin-operations-overview__readiness-stack">
+              {operations.economicWorkflow.some((step) => step.key === "PRE_SALE_SETUP") ? (
+                <ReadinessCard
+                  title="Pre-Sale Readiness"
+                  helper="Only the gates required to configure and launch conditional reservations."
+                  readiness={operations.preSaleReadiness}
+                />
+              ) : null}
+              <ReadinessCard
+                title="Final Market Readiness"
+                helper="Receipt, verification, custody, final valuation, ownership, and market launch happen after Pre-Sale."
+                readiness={operations.finalMarketReadiness}
               />
-              <p className="admin-detail-muted">
-                Required launch conditions are evaluated independently by the lifecycle service.
-              </p>
-              <div className="admin-launch-gates">
-                {operations.launchReadiness.gates.map((gate) => (
-                  <div
-                    key={gate.blockerCode}
-                    className={`admin-launch-gate ${gate.state.toLowerCase()}`}
-                  >
-                    {gate.state === "SATISFIED" ? (
-                      <CheckCircle2 aria-hidden="true" />
-                    ) : (
-                      <CircleAlert aria-hidden="true" />
-                    )}
-                    <span>{gate.label}</span>
-                    <strong>{gate.state === "SATISFIED" ? "Satisfied" : "Blocked"}</strong>
-                  </div>
-                ))}
-              </div>
-            </section>
+            </div>
           ) : null}
 
           <Info title="Recent Meaningful Activity">
@@ -680,6 +664,36 @@ function Overview({
         </div>
       </div>
     </div>
+  );
+}
+
+function ReadinessCard({
+  title,
+  helper,
+  readiness,
+}: {
+  title: string;
+  helper: string;
+  readiness: AssetOperationDetailProjection["preSaleReadiness"];
+}) {
+  return (
+    <section className="admin-operation-card admin-operations-overview__gates">
+      <CardHeading
+        title={title}
+        status={readiness.state === "READY" ? "Ready" : `${readiness.blockers.length} required`}
+        ready={readiness.state === "READY"}
+      />
+      <p className="admin-detail-muted">{helper}</p>
+      <div className="admin-launch-gates">
+        {readiness.gates.map((gate) => (
+          <div key={gate.blockerCode} className={`admin-launch-gate ${gate.state.toLowerCase()}`}>
+            {gate.state === "SATISFIED" ? <CheckCircle2 aria-hidden="true" /> : <CircleAlert aria-hidden="true" />}
+            <span>{readinessLabel(gate.blockerCode, gate.label)}</span>
+            <strong>{gate.state === "SATISFIED" ? "Ready" : "Required"}</strong>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -698,8 +712,14 @@ function EconomicWorkflow({
   error: boolean;
   retry: () => void;
 }) {
-  const tabFor = (key: AssetOperationDetailProjection["economicWorkflow"][number]["key"]) =>
-    key === "INITIAL_OFFERING" ? "initial-offering" : key.toLowerCase();
+  const tabFor = (key: AssetOperationDetailProjection["economicWorkflow"][number]["key"]) => {
+    if (key === "INITIAL_OFFERING") return "initial-offering";
+    if (key === "PRE_SALE_SETUP" || key === "PRE_SALE_LIVE") return "market";
+    if (key === "PHYSICAL_INTAKE") return "overview";
+    if (key === "FINALIZATION") return "launch";
+    if (key === "MARKET_LIVE") return "market";
+    return key.toLowerCase();
+  };
   if (!operations)
     return (
       <section className="admin-economic-workflow admin-economic-workflow--unavailable">
@@ -722,7 +742,11 @@ function EconomicWorkflow({
     <section className="admin-economic-workflow" aria-label="Economic workflow">
       <div className="admin-economic-workflow__intro">
         <span>Economic workflow</span>
-        <p>Valuation through live market</p>
+        <p>
+          {operations.economicWorkflow.some((step) => step.key === "PRE_SALE_SETUP")
+            ? "Conditional access through final market"
+            : "Valuation through live market"}
+        </p>
       </div>
       <div className="admin-economic-workflow__steps">
         {operations.economicWorkflow.map((step, index) => {
@@ -758,6 +782,7 @@ function OperationsRail({
 }) {
   const action = operations?.operations.nextAction;
   const blocked = operations?.operations.blockers ?? [];
+  const preSaleReady = Boolean(operations && operations.preSaleReadiness.state === "READY");
   const location =
     operations?.physicalPrerequisites.location ??
     item.intake?.vault ??
@@ -780,6 +805,10 @@ function OperationsRail({
           (["Open Initial Offering", "launch"] as [string, DetailTab]),
         operations.availableCommands.activateMarket &&
           (["Activate market", "launch"] as [string, DetailTab]),
+        operations.availableCommands.configurePreSale &&
+          (["Configure Pre-Sale terms", "market"] as [string, DetailTab]),
+        operations.availableCommands.launchPreSale &&
+          (["Launch Pre-Sale", "market"] as [string, DetailTab]),
       ]
         .filter((command): command is [string, DetailTab] => Boolean(command))
         .filter(([, tab]) => tab !== primaryTarget)
@@ -814,7 +843,7 @@ function OperationsRail({
         </Rail>
       ) : null}
       {operations ? (
-        <Rail title="Blockers">
+        <Rail title={preSaleReady ? "Pre-Sale blockers" : "Blockers"}>
           {blocked.length ? (
             <ul className="admin-operations-rail__list">
               {blocked.map((blocker) => (
@@ -822,7 +851,11 @@ function OperationsRail({
               ))}
             </ul>
           ) : (
-            <p>No active operational blocker.</p>
+            <p>
+              {preSaleReady
+                ? "No Pre-Sale blocker. Final-market work remains separate."
+                : "No active operational blocker."}
+            </p>
           )}
         </Rail>
       ) : null}
@@ -841,7 +874,8 @@ function OperationsRail({
           )}
         </Rail>
       ) : null}
-      <Rail title="Physical Prerequisites">
+      <Rail title="Physical Progress">
+        <p>Physical completion is required for finalization, not for Pre-Sale launch.</p>
         <Field
           label="Verification"
           value={
@@ -879,6 +913,19 @@ function OperationsRail({
           </div>
         ) : null}
       </Rail>
+      {operations ? (
+        <Rail title="Final Market">
+          <strong>{operations.finalMarketReadiness.state === "READY" ? "Ready" : "Not ready"}</strong>
+          <p>Final valuation, ownership, and market launch follow physical completion.</p>
+          {operations.finalMarketReadiness.blockers.length ? (
+            <ul className="admin-operations-rail__list">
+              {operations.finalMarketReadiness.blockers.slice(0, 5).map((blocker) => (
+                <li key={blocker}>{readinessLabel(blocker, blocker)}</li>
+              ))}
+            </ul>
+          ) : null}
+        </Rail>
+      ) : null}
       <Rail title="Quick links">
         <div className="admin-operations-rail__commands">
           <a href={`/admin?section=collectibles&asset=${encodeURIComponent(item.id)}`}>
@@ -2189,6 +2236,29 @@ function sentence(value: string) {
     .replaceAll("_", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
+function readinessLabel(code: string, fallback: string) {
+  const labels: Record<string, string> = {
+    CANONICAL_ASSET_INACTIVE: "Canonical asset is active",
+    APPROVED_SUBMISSION_REQUIRED: "Approved source submission",
+    INTAKE_PATH_REQUIRED: "Physical intake created",
+    PRESALE_TERMS_REQUIRED: "Pre-Sale terms configured",
+    PRESALE_SUPPLY_REQUIRED: "Valid total supply and offered inventory",
+    PRESALE_INVENTORY_INVALID: "Offered and retained inventory reconciles",
+    PRESALE_PRICE_REQUIRED: "Provisional price per Slice",
+    PRESALE_DEADLINE_EXPIRED: "Pre-Sale deadline is valid",
+    OPERATIONAL_FREEZE_ACTIVE: "Operational freeze released",
+    PRESALE_RESTRICTION_ACTIVE: "No active intake restriction",
+    CATALOGUE_NOT_PUBLISHED: "Catalogue record active",
+    VERIFICATION_NOT_APPROVED: "Physical verification approved",
+    VALUATION_REQUIRED: "Final valuation recorded",
+    CUSTODY_NOT_SECURED: "Secure custody established",
+    ACTIVE_COVERAGE_REQUIRED: "Active insurance coverage",
+    LIFECYCLE_EXCEPTION: "No lifecycle exception",
+    OWNERSHIP_ISSUANCE_REQUIRED: "Ownership supply issued",
+    INITIAL_OFFERING_REQUIRED: "Initial Offering active",
+  };
+  return labels[code] ?? sentence(fallback);
+}
 function workflowState(value: AssetOperationDetailProjection["economicWorkflow"][number]["state"]) {
   return value === "IN_PROGRESS"
     ? "In progress"
@@ -2265,6 +2335,19 @@ function AdminPreSalePanel({
   pending: boolean;
 }) {
   const status = detail?.status ?? "NOT_CONFIGURED";
+  const estimateMinor = detail?.collectorEstimateMinor ?? (isValidPounds(estimate) ? poundsToMinor(estimate) : null);
+  const unitCount = Number(units || detail?.totalSupply || 0);
+  const percentage = Number(percent || (detail?.offeredPercentageBps ? detail.offeredPercentageBps / 100 : 0));
+  const suggestedMinor = estimateMinor && unitCount > 0
+    ? (BigInt(estimateMinor) / BigInt(unitCount)).toString()
+    : null;
+  const priceMinor = detail?.pricePerUnitMinor ?? (isValidPounds(price) ? poundsToMinor(price) : suggestedMinor);
+  const offeredUnits = unitCount > 0 && percentage > 0
+    ? Math.floor((unitCount * percentage) / 100)
+    : 0;
+  const retainedUnits = Math.max(0, unitCount - offeredUnits);
+  const impliedMinor = priceMinor && unitCount > 0 ? (BigInt(priceMinor) * BigInt(unitCount)).toString() : null;
+  const estimateMismatch = estimateMinor && impliedMinor && estimateMinor !== impliedMinor;
   return (
     <section className="admin-presale-panel" aria-label="Pre-Sale controls">
       <div className="admin-presale-panel__heading">
@@ -2273,6 +2356,10 @@ function AdminPreSalePanel({
       </div>
       {detail && status !== "NOT_CONFIGURED" ? (
         <div className="admin-presale-panel__facts">
+          <Field label="Provisional estimate" value={detail.collectorEstimateMinor ? money(detail.collectorEstimateMinor, detail.currency) : "Not supplied"} />
+          <Field label="Price per Slice" value={detail.pricePerUnitMinor ? money(detail.pricePerUnitMinor, detail.currency) : "Not set"} />
+          <Field label="Offered / retained" value={`${detail.offeredUnits} / ${Math.max(0, Number(detail.totalSupply ?? detail.offeredUnits) - Number(detail.offeredUnits))} Slices`} />
+          <Field label="Maximum raise" value={detail.pricePerUnitMinor ? money((BigInt(detail.pricePerUnitMinor) * BigInt(detail.offeredUnits)).toString(), detail.currency) : "Not set"} />
           <Field label="Physical state" value={sentence(detail.physicalStatus)} />
           <Field label="Reserved" value={`${detail.reservedUnits} / ${detail.offeredUnits} Slices`} />
           <Field label="Deadline" value={detail.deadlineAt ? dateTime(detail.deadlineAt) : "Not set"} />
@@ -2280,16 +2367,23 @@ function AdminPreSalePanel({
         </div>
       ) : (
         <>
-          <p className="admin-detail-muted">Configure a provisional Pre-Sale from the approved submission. Final valuation, ownership issuance, custody, and a live market are completed later.</p>
+          <p className="admin-detail-muted">Set the provisional terms used for conditional reservations. Receipt, verification, custody, final valuation, and final market launch are completed later.</p>
           <div className="admin-presale-panel__setup-grid">
             <label className="admin-form-field">Collector estimate (GBP)<input type="number" min="0.01" step="0.01" value={estimate} onChange={(event) => setEstimate(event.target.value)} placeholder="e.g. 2500.00" /></label>
             <label className="admin-form-field">Offer percentage<input type="number" min="0.01" max="100" step="0.01" value={percent} onChange={(event) => setPercent(event.target.value)} /></label>
             <label className="admin-form-field">Total supply<input type="number" min="1" step="1" value={units} onChange={(event) => setUnits(event.target.value)} /></label>
-            <label className="admin-form-field">Price per Slice (optional)<input type="number" min="0.01" step="0.01" value={price} onChange={(event) => setPrice(event.target.value)} placeholder="Uses estimate ÷ supply" /></label>
+            <label className="admin-form-field">Price per Slice (optional)<input type="number" min="0.01" step="0.01" value={price} onChange={(event) => setPrice(event.target.value)} placeholder="Uses estimate ÷ supply" />{suggestedMinor ? <button type="button" className="admin-ops-inline-action" onClick={() => setPrice(minorToPounds(suggestedMinor))}>Use suggested price · {money(suggestedMinor, detail?.currency ?? "GBP")}</button> : null}</label>
           </div>
+          <div className="admin-presale-panel__summary" aria-label="Pre-Sale calculation summary">
+            <div><span>Implied total</span><strong>{impliedMinor ? money(impliedMinor, detail?.currency ?? "GBP") : "—"}</strong></div>
+            <div><span>Collector retains</span><strong>{retainedUnits.toLocaleString()} Slices · {Math.max(0, 100 - percentage).toFixed(2).replace(/\.00$/, "")} %</strong></div>
+            <div><span>Offered to buyers</span><strong>{offeredUnits.toLocaleString()} Slices · {percentage.toFixed(2).replace(/\.00$/, "")} %</strong></div>
+            <div><span>Maximum raise</span><strong>{priceMinor ? money((BigInt(priceMinor) * BigInt(offeredUnits)).toString(), detail?.currency ?? "GBP") : "—"}</strong></div>
+          </div>
+          {estimateMismatch ? <p className="admin-presale-panel__warning">The selected price implies {money(impliedMinor!, detail?.currency ?? "GBP")} across supply versus the estimate of {money(estimateMinor!, detail?.currency ?? "GBP")}. Confirm this provisional basis before saving.</p> : null}
         </>
       )}
-      <label className="admin-form-field">Command reason <textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Record the operational reason (8–500 characters)" /></label>
+      <label className="admin-form-field">Reason <textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Confirming provisional Pre-Sale terms from Collector submission." /></label>
       {detail && (status === "ACTIVE" || status === "PAUSED") ? (
         <label className="admin-form-field">Extend deadline <input type="datetime-local" value={deadline} onChange={(event) => setDeadline(event.target.value)} /></label>
       ) : null}

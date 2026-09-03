@@ -349,12 +349,41 @@ export type AssetOperationDetailProjection = {
   };
   /** Server-owned progression; the UI must not infer the economic stage. */
   economicWorkflow: Array<{
-    key: "PRE_SALE" | "VALUATION" | "OWNERSHIP" | "INITIAL_OFFERING" | "LAUNCH" | "MARKET";
+    key:
+      | "PRE_SALE_SETUP"
+      | "PRE_SALE_LIVE"
+      | "PHYSICAL_INTAKE"
+      | "FINALIZATION"
+      | "MARKET_LIVE"
+      | "PRE_SALE"
+      | "VALUATION"
+      | "OWNERSHIP"
+      | "INITIAL_OFFERING"
+      | "LAUNCH"
+      | "MARKET";
     label: string;
     state: "COMPLETE" | "IN_PROGRESS" | "READY" | "BLOCKED" | "NOT_STARTED" | "LIVE";
     detail: string;
   }>;
   launchReadiness: {
+    state: "READY" | "BLOCKED";
+    blockers: string[];
+    gates: Array<{
+      blockerCode: string;
+      label: string;
+      state: "SATISFIED" | "BLOCKED";
+    }>;
+  };
+  preSaleReadiness: {
+    state: "READY" | "BLOCKED";
+    blockers: string[];
+    gates: Array<{
+      blockerCode: string;
+      label: string;
+      state: "SATISFIED" | "BLOCKED";
+    }>;
+  };
+  finalMarketReadiness: {
     state: "READY" | "BLOCKED";
     blockers: string[];
     gates: Array<{
@@ -1744,7 +1773,7 @@ export type AssetOperationsBoardItem = {
     pricePerUnitMinor: string | null;
     currency: string | null;
   };
-  preSale: { status: string } | null;
+  preSale: { status: string; openedAt?: string | null; deadlineAt?: string | null } | null;
   market: { state: string; publicationStatus: string | null; tradingStatus: string | null };
   launchReadiness: { state: "BLOCKED" | "READY"; blockers: string[] };
   currentStage:
@@ -2716,7 +2745,7 @@ export type PreSaleDetail = {
   reservedPercentageBps: number;
   availableUnits: string;
   offeredUnits: string;
-  pricePerUnitMinor: string;
+  pricePerUnitMinor: string | null;
   currency: SupportedCurrency;
   reservationCount: number;
   disclosure: string;
