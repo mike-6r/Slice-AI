@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useSession } from "@/auth/use-session";
+import { ApiError } from "@/api/http-client";
 import { PriceChart } from "@/components/Chart";
 import {
   toMarketplaceAsset,
@@ -457,6 +458,8 @@ function AssetPage() {
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>("30D");
   const [reservationUnits, setReservationUnits] = useState("1");
   const [reservationMessage, setReservationMessage] = useState<string | null>(null);
+  const [recentAuthAction, setRecentAuthAction] = useState<(() => void) | null>(null);
+  const [recentAuthPassword, setRecentAuthPassword] = useState("");
   const assetQuery = useQuery({
     queryKey: queryKeys.assets.detail(id),
     queryFn: () => services.assets.get(id as never),
@@ -468,7 +471,10 @@ function AssetPage() {
   });
   const issuanceQuery = useQuery({
     queryKey: ["ownership", "issuance", id],
-    enabled: Boolean(assetQuery.data),
+    // Pre-Sale assets do not have issued market ownership yet. Keep the
+    // live-market ownership endpoint from turning that expected state into a
+    // noisy 404 while the reservation ticket is displayed.
+    enabled: Boolean(assetQuery.data) && !Boolean(assetQuery.data?.preSale),
     queryFn: () => services.ownership.publicIssuance(id),
   });
   const ownPositionQuery = useQuery({
@@ -487,17 +493,17 @@ function AssetPage() {
   });
   const orderBookQuery = useQuery({
     queryKey: queryKeys.market.orderBook(id),
-    enabled: Boolean(assetQuery.data),
+    enabled: Boolean(assetQuery.data) && !Boolean(assetQuery.data?.preSale),
     queryFn: () => services.market.orderBook(id as never),
   });
   const ownershipSummaryQuery = useQuery({
     queryKey: ["ownership", "market-summary", id],
-    enabled: Boolean(assetQuery.data),
+    enabled: Boolean(assetQuery.data) && !Boolean(assetQuery.data?.preSale),
     queryFn: () => services.trading.ownershipMarketSummary(id),
   });
   const tradesQuery = useQuery({
     queryKey: queryKeys.market.recentTrades(id),
-    enabled: Boolean(assetQuery.data),
+    enabled: Boolean(assetQuery.data) && !Boolean(assetQuery.data?.preSale),
     queryFn: () => services.market.recentTrades(id as never),
   });
   const watchlistQuery = useQuery({
@@ -525,10 +531,27 @@ function AssetPage() {
       setReservationUnits("1");
       void queryClient.invalidateQueries({ queryKey: queryKeys.assets.detail(id) });
     },
-    onError: () =>
+    onError: (error) => {
+      if (error instanceof ApiError && error.code === "RECENT_AUTH_REQUIRED") {
+        setRecentAuthPassword("");
+        setRecentAuthAction(() => () => preSale.mutate(reservationUnits));
+        return;
+      }
       setReservationMessage(
-        "The reservation could not be created. Please check availability and try again.",
-      ),
+        error instanceof ApiError
+          ? error.message
+          : "The reservation could not be created. Please check availability and try again.",
+      );
+    },
+  });
+  const recentAuth = useMutation({
+    mutationFn: () => services.repositories.account.confirmRecentAuth(recentAuthPassword),
+    onSuccess: () => {
+      const action = recentAuthAction;
+      setRecentAuthAction(null);
+      setRecentAuthPassword("");
+      action?.();
+    },
   });
 
   if (assetQuery.isLoading)
@@ -1166,6 +1189,92 @@ function AssetPage() {
           retry={() => void similarQuery.refetch()}
         />
       </main>
+      {recentAuthAction ? (
+        <AssetRecentAuthDialog
+          password={recentAuthPassword}
+          busy={recentAuth.isPending}
+          error={recentAuth.error}
+          onPasswordChange={setRecentAuthPassword}
+          onClose={() => {
+            setRecentAuthAction(null);
+            setRecentAuthPassword("");
+            recentAuth.reset();
+          }}
+          onConfirm={() => recentAuth.mutate()}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function AssetRecentAuthDialog({
+  password,
+  busy,
+  error,
+  onPasswordChange,
+  onClose,
+  onConfirm,
+}: {
+  password: string;
+  busy: boolean;
+  error: unknown;
+  onPasswordChange: (value: string) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="wallet-bank-dialog-backdrop" role="presentation">
+      <section
+        className="wallet-bank-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="asset-reservation-auth-title"
+      >
+        <header>
+          <div>
+            <p className="page-kicker">Security check</p>
+            <h2 id="asset-reservation-auth-title">Confirm it’s really you</h2>
+          </div>
+          <button type="button" className="wallet-bank-dialog__close" onClick={onClose} disabled={busy}>
+            ×
+          </button>
+        </header>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            onConfirm();
+          }}
+        >
+          <p className="wallet-bank-dialog__intro">
+            For your protection, confirm your Slice password before reserving funds. Your password
+            is used only to refresh this session’s security check.
+          </p>
+          <label className="wallet-bank-dialog__field">
+            Password
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => onPasswordChange(event.target.value)}
+              autoFocus
+              required
+            />
+          </label>
+          {error ? (
+            <p className="wallet-bank-dialog__error">
+              {error instanceof ApiError ? error.message : "Recent authentication failed."}
+            </p>
+          ) : null}
+          <footer>
+            <button type="button" className="wallet-bank-dialog__secondary" onClick={onClose} disabled={busy}>
+              Cancel
+            </button>
+            <button type="submit" className="wallet-bank-dialog__danger" disabled={!password || busy}>
+              {busy ? "Checking…" : "Confirm identity"}
+            </button>
+          </footer>
+        </form>
+      </section>
     </div>
   );
 }
