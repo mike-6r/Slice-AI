@@ -68818,6 +68818,30 @@ body:has(.wallet-page) .wallet-page .wallet-shell {
   }
 }
 
+/* The normal trading rail is intentionally a fixed desktop row. A Pre-Sale
+   needs a few extra controls, so let this variant size the hero to its
+   content instead of allowing the action row to fall behind the next section. */
+@media (min-width: 1280px) {
+  .asset-detail-page .asset-redesign-hero:has(.asset-presale-ticket) {
+    height: auto !important;
+    min-height: 0;
+    grid-template-rows: auto;
+  }
+  .asset-detail-page .asset-redesign-hero:has(.asset-presale-ticket) > .asset-redesign-media,
+  .asset-detail-page .asset-redesign-hero:has(.asset-presale-ticket) > .asset-reference-identity,
+  .asset-detail-page .asset-redesign-hero:has(.asset-presale-ticket) > .asset-readiness-card {
+    height: auto !important;
+    min-height: 0;
+  }
+  .asset-detail-page .asset-redesign-hero:has(.asset-presale-ticket) > .asset-redesign-media .asset-showcase {
+    height: 100%;
+    min-height: 31rem;
+  }
+  .asset-detail-page .asset-redesign-hero:has(.asset-presale-ticket) > .asset-readiness-card {
+    overflow: visible !important;
+  }
+}
+
 /* Step 5 polish: make existing-grade verification and raw AI review feel like
    one premium workspace while keeping each path honest about its evidence. */
 .list-step--ai-review {

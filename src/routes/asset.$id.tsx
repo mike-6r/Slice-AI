@@ -308,7 +308,7 @@ function PreSaleTransactionTicket({
         >
           <span>
             <strong>{isPending ? "Reserving…" : isAuthenticated ? "Reserve Slices" : "Sign in to reserve"}</strong>
-            <small>Review your conditional reservation</small>
+            <small>Buy a conditional position</small>
           </span>
           <ArrowRight aria-hidden="true" />
         </button>
