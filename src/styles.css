@@ -68822,6 +68822,9 @@ body:has(.wallet-page) .wallet-page .wallet-shell {
    needs a few extra controls, so let this variant size the hero to its
    content instead of allowing the action row to fall behind the next section. */
 @media (min-width: 1280px) {
+  .asset-detail-page .asset-redesign:has(.asset-presale-ticket) {
+    grid-template-rows: auto 52px 200px 390px 160px;
+  }
   .asset-detail-page .asset-redesign-hero:has(.asset-presale-ticket) {
     height: auto !important;
     min-height: 0;
