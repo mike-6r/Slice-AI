@@ -4263,10 +4263,10 @@ const preSaleRepository = (client: ApiClient): import("@/data/repositories").Pre
   const key = () => crypto.randomUUID();
   return {
     getPublicDetail: (slug) => client.get(`/market/assets/${encodeURIComponent(slug)}/pre-sale`),
-    reserve: (slug, units) =>
+    reserve: (slug, units, confirmation) =>
       client.request(`/market/assets/${encodeURIComponent(slug)}/pre-sale/reservations`, {
         method: "POST",
-        body: { units },
+        body: { units, confirmation },
         headers: { "Idempotency-Key": key() },
       }),
     listReservations: () => client.get("/me/pre-sale-reservations"),

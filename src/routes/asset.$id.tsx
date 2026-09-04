@@ -189,6 +189,8 @@ function LifecycleReadinessPanel({ lifecycle }: { lifecycle?: MarketLifecyclePro
 
 function PreSaleTransactionTicket({
   assetTitle,
+  assetSubtitle,
+  media,
   preSale,
   reservationUnits,
   setReservationUnits,
@@ -199,6 +201,8 @@ function PreSaleTransactionTicket({
   onReserve,
 }: {
   assetTitle: string;
+  assetSubtitle: string;
+  media?: { src: string; alt: string };
   preSale: NonNullable<Asset["preSale"]>;
   reservationUnits: string;
   setReservationUnits: (value: string) => void;
@@ -208,7 +212,9 @@ function PreSaleTransactionTicket({
   message: string | null;
   onReserve: () => void;
 }) {
-  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [finalConfirmationOpen, setFinalConfirmationOpen] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const units = /^\d+$/.test(reservationUnits) ? BigInt(reservationUnits) : 0n;
   const available = BigInt(preSale.availableUnits);
   const price = BigInt(preSale.pricePerUnitMinor);
@@ -343,7 +349,7 @@ function PreSaleTransactionTicket({
               onReserve();
               return;
             }
-            setConfirmationOpen(true);
+            setReviewOpen(true);
           }}
         >
           <span>
@@ -354,28 +360,85 @@ function PreSaleTransactionTicket({
         </button>
       </div>
       {message ? <p className="asset-presale-message" role="status">{message}</p> : null}
-      {confirmationOpen ? (
+      {reviewOpen ? (
         <div className="asset-presale-modal" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget) setConfirmationOpen(false);
+          if (event.target === event.currentTarget) setReviewOpen(false);
         }}>
-          <div className="asset-presale-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="reserve-dialog-title">
-            <div className="asset-presale-modal__eyebrow">Pre-Sale reservation</div>
-            <h3 id="reserve-dialog-title">Reserve Slices</h3>
-            <p className="asset-presale-modal__asset">{assetTitle}</p>
-            <dl>
-              <div><dt>Quantity</dt><dd>{formatSliceCount(reservationUnits)}</dd></div>
-              <div><dt>Price / Slice</dt><dd>{formatCurrency(Number(price))}</dd></div>
-              <div><dt>Reservation total</dt><dd>{formatCurrency(Number(totalMinor))}</dd></div>
-              {cashAfterMinor !== undefined ? <div><dt>Cash after reservation</dt><dd>{formatCurrency(Number(cashAfterMinor))}</dd></div> : null}
-            </dl>
+          <div className="asset-presale-modal__dialog asset-presale-review-dialog" role="dialog" aria-modal="true" aria-labelledby="reserve-dialog-title">
+            <header className="asset-presale-modal__header">
+              <div>
+                <div className="asset-presale-modal__eyebrow">Pre-Sale reservation review</div>
+                <h3 id="reserve-dialog-title">Review your reservation</h3>
+                <p className="asset-presale-modal__asset">{assetTitle}</p>
+              </div>
+              <span className="asset-presale-modal__pill"><i aria-hidden="true" /> Pre-Sale</span>
+            </header>
+            <div className="asset-presale-modal__asset-card">
+              <div className="asset-presale-modal__thumb">
+                {media ? <img src={media.src} alt="" /> : <span aria-hidden="true">No image</span>}
+              </div>
+              <div>
+                <strong>{assetTitle}</strong>
+                <span>{assetSubtitle}</span>
+                <small><i aria-hidden="true" /> Awaiting intake</small>
+              </div>
+            </div>
+            <div className="asset-presale-modal__summary-grid">
+              <dl>
+                <div><dt>Quantity</dt><dd>{formatSliceCount(reservationUnits)}</dd></div>
+                <div><dt>Price per Slice</dt><dd>{formatCurrency(Number(price))}</dd></div>
+                <div><dt>Ownership received</dt><dd>{reservationOwnership}</dd></div>
+                <div><dt>Reservation total</dt><dd>{formatCurrency(Number(totalMinor))}</dd></div>
+              </dl>
+              <dl>
+                {availableCashMinor !== undefined ? <div><dt>Available cash</dt><dd>{formatCurrency(Number(availableCashMinor))}</dd></div> : null}
+                {cashAfterMinor !== undefined ? <div><dt>Cash after reservation</dt><dd className="is-positive">{formatCurrency(Number(cashAfterMinor))}</dd></div> : null}
+                <div><dt>Reservation closes</dt><dd>{formatPreSaleCountdown(preSale.deadlineAt)}</dd></div>
+                <div className="asset-presale-modal__inline-note"><dt>ⓘ</dt><dd>Funds are reserved now. Ownership becomes final after intake, verification, and custody.</dd></div>
+              </dl>
+            </div>
             <div className="asset-presale-modal__notice">
               <strong>Conditional reservation</strong>
-              <p>Your funds are reserved now. Ownership settles after intake, verification, and custody.</p>
+              <p>Your funds are reserved now. Final ownership is created only after Slice receives, verifies, and secures the collectible. If the Pre-Sale does not finalize, reserved funds are released or refunded.</p>
+            </div>
+            <div className="asset-presale-modal__next">
+              <h4>What happens next</h4>
+              <ol>
+                <li><b>1</b><strong>Reserve now</strong><span>Funds are reserved from your balance.</span></li>
+                <li><b>2</b><strong>Slice receives the collectible</strong><span>We take custody of the item.</span></li>
+                <li><b>3</b><strong>Verification &amp; custody complete</strong><span>We verify authenticity and secure it.</span></li>
+                <li><b>4</b><strong>Ownership settles</strong><span>Units are issued to your portfolio.</span></li>
+              </ol>
             </div>
             <div className="asset-presale-modal__actions">
-              <button type="button" className="secondary-action" onClick={() => setConfirmationOpen(false)}>Cancel</button>
-              <button type="button" className="primary-action" disabled={isPending} onClick={() => { setConfirmationOpen(false); onReserve(); }}>
-                {isPending ? "Reserving…" : "Confirm reservation"}
+              <button type="button" className="secondary-action" onClick={() => setReviewOpen(false)}>Back</button>
+              <button type="button" className="primary-action" disabled={isPending} onClick={() => { setReviewOpen(false); setTermsAccepted(false); setFinalConfirmationOpen(true); }}>
+                Confirm reservation <ArrowRight aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {finalConfirmationOpen ? (
+        <div className="asset-presale-modal asset-presale-modal--final" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setFinalConfirmationOpen(false);
+        }}>
+          <div className="asset-presale-modal__dialog asset-presale-final-dialog" role="dialog" aria-modal="true" aria-labelledby="reserve-final-dialog-title">
+            <div className="asset-presale-modal__eyebrow">Final confirmation</div>
+            <h3 id="reserve-final-dialog-title">Confirm and reserve?</h3>
+            <p className="asset-presale-modal__asset">This is the last step before your funds are reserved for {assetTitle}.</p>
+            <div className="asset-presale-final-dialog__amount">
+              <span>{formatSliceCount(reservationUnits)} · {reservationOwnership} ownership</span>
+              <strong>{formatCurrency(Number(totalMinor))}</strong>
+            </div>
+            <label className="asset-presale-modal__checkbox">
+              <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} />
+              <span>I understand this is a conditional Pre-Sale reservation. Final ownership is subject to physical intake, verification, and custody.</span>
+            </label>
+            <div className="asset-presale-modal__actions">
+              <button type="button" className="secondary-action" disabled={isPending} onClick={() => { setFinalConfirmationOpen(false); setReviewOpen(true); }}>Back</button>
+              <button type="button" className="primary-action" disabled={isPending || !termsAccepted} onClick={() => { setFinalConfirmationOpen(false); onReserve(); }}>
+                {isPending ? "Reserving…" : "Yes, reserve"} <ArrowRight aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -454,7 +517,7 @@ function AssetPage() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["watchlist", "current"] }),
   });
   const preSale = useMutation({
-    mutationFn: (units: string) => services.preSale.reserve(id, units),
+    mutationFn: (units: string) => services.preSale.reserve(id, units, "RESERVE_CONDITIONAL_POSITION"),
     onSuccess: (reservation) => {
       setReservationMessage(
         `Reservation ${reservation.id.slice(0, 8)} confirmed. Your funds remain reserved until physical completion.`,
@@ -708,6 +771,8 @@ function AssetPage() {
             {asset.preSale ? (
               <PreSaleTransactionTicket
                 assetTitle={asset.title}
+                assetSubtitle={[category.label, asset.setName, condition, asset.year].filter(Boolean).join(" · ")}
+                media={approvedMedia ? { src: approvedMedia.url, alt: approvedMedia.alt } : undefined}
                 preSale={asset.preSale}
                 reservationUnits={reservationUnits}
                 setReservationUnits={setReservationUnits}

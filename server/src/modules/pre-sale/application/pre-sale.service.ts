@@ -93,8 +93,9 @@ export class PreSaleService {
     });
   }
 
-  async reserve(actor: Actor, slug: string, unitsWire: string, requestId: string, key: string) {
+  async reserve(actor: Actor, slug: string, unitsWire: string, confirmation: 'RESERVE_CONDITIONAL_POSITION', requestId: string, key: string) {
     this.recentAuth.require(actor);
+    if (confirmation !== 'RESERVE_CONDITIONAL_POSITION') throw new ConflictException({ code: 'PRESALE_CONFIRMATION_REQUIRED', message: 'Explicit confirmation of the conditional Pre-Sale terms is required.' });
     const units = parseUnits(unitsWire);
     return this.db.$transaction(async (db) => {
       const existing = await db.preSaleReservation.findUnique({ where: { idempotencyKey: key } });
@@ -119,7 +120,7 @@ export class PreSaleService {
       const reserveAmount = gross + ((gross * BigInt(market?.takerFeeBps ?? 0)) / 10_000n);
       const cash = await this.ledger.reserveCashInTransaction(db, actor, { accountId: cashAccount.id, purposeType: 'PRE_SALE', purposeId: id, amountMinor: reserveAmount }, requestId);
       const row = await db.preSaleReservation.create({ data: { id, preSaleId: sale.id, buyerUserId: actor.userId, assetId: sale.assetId, units, pricePerUnitMinor: sale.initialOffering.pricePerUnitMinor, grossMinor: gross, cashReservationId: cash.id, idempotencyKey: key } });
-      await this.audit(db, sale, 'RESERVATION_CREATED', 'CUSTOMER', actor.userId, 'Customer reserved Slices', null, { reservationId: row.id, units: units.toString(), grossMinor: gross.toString() }, key);
+      await this.audit(db, sale, 'RESERVATION_CREATED', 'CUSTOMER', actor.userId, 'Customer confirmed and reserved Slices', null, { reservationId: row.id, units: units.toString(), grossMinor: gross.toString(), confirmation }, key);
       await this.notify(db, actor.userId, row.assetId, 'Pre-Sale reservation created', `Your ${units} Slice Pre-Sale reservation is pending physical verification.`, row.id, requestId, 'reservation');
       return this.customerReservation(row.id, actor.userId, db);
     });

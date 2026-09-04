@@ -68509,6 +68509,102 @@ body:has(.wallet-page) .wallet-page .wallet-shell {
 
 .asset-detail-page .asset-presale-modal__actions { display: flex; justify-content: flex-end; gap: 0.65rem; margin-top: 1.2rem; }
 
+/* Reservation review and explicit confirmation layers. */
+.asset-detail-page .asset-presale-modal {
+  z-index: 100;
+  padding: clamp(.75rem, 3vw, 2rem);
+  background: rgb(1 7 10 / .84);
+  backdrop-filter: blur(.35rem);
+}
+.asset-detail-page .asset-presale-modal__dialog {
+  width: min(45rem, 100%);
+  max-height: min(92vh, 52rem);
+  overflow: auto;
+  padding: 1.5rem;
+  border-color: rgb(75 219 183 / .48);
+  background: linear-gradient(145deg, #0a2025, #071319 72%);
+}
+.asset-detail-page .asset-presale-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.asset-detail-page .asset-presale-modal__header h3 { margin-top: .45rem; font-size: clamp(1.65rem, 4vw, 2.1rem); letter-spacing: -.04em; }
+.asset-detail-page .asset-presale-modal__pill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: .4rem;
+  padding: .45rem .7rem;
+  border: 1px solid rgb(49 220 174 / .4);
+  border-radius: 99px;
+  color: #62e8c3;
+  font-size: .68rem;
+  font-weight: 800;
+}
+.asset-detail-page .asset-presale-modal__pill i,
+.asset-detail-page .asset-presale-modal__asset-card small i { display: inline-block; width: .42rem; height: .42rem; border-radius: 50%; background: #31dcae; box-shadow: 0 0 0 .2rem rgb(49 220 174 / .12); }
+.asset-detail-page .asset-presale-modal__asset { margin-bottom: 0; font-size: .86rem; }
+.asset-detail-page .asset-presale-modal__asset-card {
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+  margin-top: 1.2rem;
+  padding: .7rem;
+  border: 1px solid rgb(132 161 168 / .18);
+  border-radius: .75rem;
+  background: rgb(3 14 18 / .52);
+}
+.asset-detail-page .asset-presale-modal__thumb { display: grid; width: 4.25rem; height: 4.75rem; flex: none; place-items: center; overflow: hidden; border: 1px solid rgb(132 161 168 / .2); border-radius: .45rem; background: #071014; color: #718b91; font-size: .6rem; }
+.asset-detail-page .asset-presale-modal__thumb img { width: 100%; height: 100%; object-fit: contain; }
+.asset-detail-page .asset-presale-modal__asset-card > div:last-child { display: grid; min-width: 0; gap: .25rem; }
+.asset-detail-page .asset-presale-modal__asset-card strong { color: #f1f7f6; font-size: .98rem; }
+.asset-detail-page .asset-presale-modal__asset-card span { overflow: hidden; color: #9bb4ba; font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; }
+.asset-detail-page .asset-presale-modal__asset-card small { display: inline-flex; align-items: center; gap: .4rem; color: #d9c36f; font-size: .68rem; font-weight: 700; }
+.asset-detail-page .asset-presale-modal__summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: .9rem; border: 1px solid rgb(132 161 168 / .16); border-radius: .75rem; background: rgb(3 14 18 / .44); }
+.asset-detail-page .asset-presale-modal__summary-grid dl { gap: 0; padding: .55rem .9rem; }
+.asset-detail-page .asset-presale-modal__summary-grid dl + dl { border-left: 1px solid rgb(132 161 168 / .16); }
+.asset-detail-page .asset-presale-modal__summary-grid dl > div { align-items: baseline; padding: .52rem 0; border-bottom: 1px solid rgb(132 161 168 / .11); }
+.asset-detail-page .asset-presale-modal__summary-grid dl > div:last-child { border-bottom: 0; }
+.asset-detail-page .asset-presale-modal__summary-grid dt { color: #9bb4ba; font-size: .72rem; }
+.asset-detail-page .asset-presale-modal__summary-grid dd { text-align: right; }
+.asset-detail-page .asset-presale-modal__summary-grid .is-positive { color: #62e8c3; }
+.asset-detail-page .asset-presale-modal__inline-note { align-items: flex-start !important; gap: .55rem !important; padding: .65rem 0 !important; }
+.asset-detail-page .asset-presale-modal__inline-note dt { color: #62e8c3; }
+.asset-detail-page .asset-presale-modal__inline-note dd { color: #a9bdc0; font-size: .68rem; font-weight: 500; line-height: 1.4; text-align: left; }
+.asset-detail-page .asset-presale-modal__notice { margin-top: .9rem; padding: .85rem .9rem; border: 1px solid rgb(230 184 57 / .48); border-left-width: 3px; border-radius: .65rem; background: rgb(100 72 15 / .2); }
+.asset-detail-page .asset-presale-modal__notice p { max-width: none; }
+.asset-detail-page .asset-presale-modal__next { margin-top: 1rem; }
+.asset-detail-page .asset-presale-modal__next h4 { margin: 0 0 .65rem; color: #f1f7f6; font-size: .92rem; }
+.asset-detail-page .asset-presale-modal__next ol { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .55rem; margin: 0; padding: 0; list-style: none; }
+.asset-detail-page .asset-presale-modal__next li { display: grid; gap: .28rem; align-content: start; min-width: 0; }
+.asset-detail-page .asset-presale-modal__next b { display: grid; width: 1.6rem; height: 1.6rem; place-items: center; border: 1px solid rgb(49 220 174 / .6); border-radius: 50%; color: #62e8c3; font-size: .7rem; }
+.asset-detail-page .asset-presale-modal__next strong { color: #eef6f5; font-size: .7rem; line-height: 1.25; }
+.asset-detail-page .asset-presale-modal__next span { color: #8fa9ae; font-size: .64rem; line-height: 1.35; }
+.asset-detail-page .asset-presale-modal__actions { align-items: center; justify-content: space-between; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid rgb(132 161 168 / .14); }
+.asset-detail-page .asset-presale-modal__actions .primary-action,
+.asset-detail-page .asset-presale-modal__actions .secondary-action { display: inline-flex; min-height: 2.7rem; align-items: center; justify-content: center; gap: .45rem; padding: .7rem 1rem; border-radius: .6rem; font-weight: 750; }
+.asset-detail-page .asset-presale-modal__actions .primary-action svg { width: 1rem; }
+.asset-detail-page .asset-presale-modal__actions .primary-action:disabled { cursor: not-allowed; opacity: .5; }
+.asset-detail-page .asset-presale-modal--final .asset-presale-modal__dialog { width: min(32rem, 100%); }
+.asset-detail-page .asset-presale-final-dialog__amount { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 1rem; padding: 1rem; border: 1px solid rgb(49 220 174 / .25); border-radius: .7rem; background: rgb(3 25 29 / .7); }
+.asset-detail-page .asset-presale-final-dialog__amount span { color: #a9bdc0; font-size: .76rem; }
+.asset-detail-page .asset-presale-final-dialog__amount strong { color: #62e8c3; font-size: 1.25rem; }
+.asset-detail-page .asset-presale-modal__checkbox { display: flex; align-items: flex-start; gap: .7rem; margin-top: 1rem; padding: .85rem; border: 1px solid rgb(132 161 168 / .2); border-radius: .65rem; background: rgb(3 14 18 / .46); color: #c2d0d1; font-size: .76rem; line-height: 1.45; }
+.asset-detail-page .asset-presale-modal__checkbox input { width: 1rem; height: 1rem; flex: none; margin-top: .1rem; accent-color: #31dcae; }
+@media (max-width: 620px) {
+  .asset-detail-page .asset-presale-modal__dialog { padding: 1rem; }
+  .asset-detail-page .asset-presale-modal__summary-grid, .asset-detail-page .asset-presale-modal__next ol { grid-template-columns: 1fr 1fr; }
+  .asset-detail-page .asset-presale-modal__summary-grid dl + dl { border-top: 1px solid rgb(132 161 168 / .16); border-left: 0; }
+}
+@media (max-width: 420px) {
+  .asset-detail-page .asset-presale-modal__header { display: grid; }
+  .asset-detail-page .asset-presale-modal__pill { justify-self: start; }
+  .asset-detail-page .asset-presale-modal__summary-grid, .asset-detail-page .asset-presale-modal__next ol { grid-template-columns: 1fr; }
+  .asset-detail-page .asset-presale-modal__summary-grid dl + dl { border-top: 1px solid rgb(132 161 168 / .16); }
+}
+
 .market-card-presale-summary {
   display: grid;
   gap: 0.55rem;

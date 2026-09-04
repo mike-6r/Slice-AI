@@ -2812,7 +2812,7 @@ export type PreSaleDetail = {
 };
 export interface PreSaleRepository {
   getPublicDetail(slug: string): Promise<PreSaleDetail>;
-  reserve(slug: string, units: string): Promise<PreSaleReservationView>;
+  reserve(slug: string, units: string, confirmation: "RESERVE_CONDITIONAL_POSITION"): Promise<PreSaleReservationView>;
   listReservations(): Promise<PreSaleReservationView[]>;
   getReservation(id: string): Promise<PreSaleReservationView>;
 }

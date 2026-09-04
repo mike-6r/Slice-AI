@@ -5,7 +5,7 @@ import { PermissionGuard } from '../../identity/access/permission.guard';
 import { RequirePermission } from '../../identity/access/permission.decorator';
 import { PreSaleService } from '../application/pre-sale.service';
 
-const units = z.object({ units: z.string().regex(/^[1-9]\d*$/).max(32) }).strict();
+const units = z.object({ units: z.string().regex(/^[1-9]\d*$/).max(32), confirmation: z.literal('RESERVE_CONDITIONAL_POSITION') }).strict();
 const reason = z.object({ reason: z.string().trim().min(8).max(500) }).strict();
 const extend = reason.extend({ deadlineAt: z.string().datetime(), incidentReference: z.string().trim().max(120).optional() }).strict();
 const configure = z.object({ estimatedValueMinor: z.string().regex(/^\d+$/).max(32).optional(), offeredPercentageBps: z.number().int().min(1).max(10_000).optional(), totalUnits: z.string().regex(/^[1-9]\d*$/).max(12).optional(), pricePerUnitMinor: z.string().regex(/^[1-9]\d*$/).max(32).optional(), currency: z.string().regex(/^[A-Z]{3}$/).optional(), reason: z.string().trim().min(8).max(500) }).strict();
@@ -21,7 +21,7 @@ export class PreSaleController {
   @UseGuards(AccessTokenGuard)
   reserve(@Param('slug') slug: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) {
     const input = this.parse(units, body); this.requireKey(key);
-    return this.presales.reserve(req.actor!, slug, input.units, req.requestId ?? 'unknown', key!);
+    return this.presales.reserve(req.actor!, slug, input.units, input.confirmation, req.requestId ?? 'unknown', key!);
   }
 
   @Get('me/pre-sale-reservations')
