@@ -2798,6 +2798,8 @@ export type PreSaleDetail = {
   pricePerUnitMinor: string | null;
   currency: SupportedCurrency;
   reservationCount: number;
+  sliceOwnershipPercentageBps?: number;
+  collectorRetainedPercentageBps?: number;
   disclosure: string;
   nextStep: string;
   collectorEstimateMinor?: string | null;

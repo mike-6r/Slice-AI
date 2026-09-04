@@ -81,6 +81,10 @@ export interface PreSaleProjection {
   reservedUnits: string;
   availableUnits: string;
   reservedPercentageBps: number;
+  /** Percentage of the full supply represented by one Slice. */
+  sliceOwnershipPercentageBps?: number;
+  /** Collector-retained percentage of the full supply. */
+  collectorRetainedPercentageBps?: number;
   reservationCount?: number;
   disclosure?: string;
   nextStep?: string;

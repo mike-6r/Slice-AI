@@ -1629,6 +1629,7 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
               0n,
             );
             const offeredUnits = asset.preSale.initialOffering.offeredUnits;
+            const totalUnits = asset.preSale.initialOffering.totalUnits;
             const collectorEstimateMinor = metadataStringValue(
               asset.submissions?.[0]?.declaredMetadata,
               'collectorExpectedValueMinor',
@@ -1642,13 +1643,17 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
                 asset.preSale.initialOffering.pricePerUnitMinor.toString(),
               currency: asset.preSale.initialOffering.currency,
               collectorEstimateMinor,
-              offeredPercentageBps: asset.preSale.initialOffering.totalUnits
+              offeredPercentageBps: totalUnits
                 ? Number(
                     (offeredUnits * 10_000n) /
-                      asset.preSale.initialOffering.totalUnits,
+                      totalUnits,
                   )
                 : undefined,
-              totalSupply: asset.preSale.initialOffering.totalUnits.toString(),
+              totalSupply: totalUnits.toString(),
+              sliceOwnershipPercentageBps: totalUnits > 0n ? Number(10_000n / totalUnits) : 0,
+              collectorRetainedPercentageBps: totalUnits > 0n
+                ? Number(((totalUnits - offeredUnits) * 10_000n) / totalUnits)
+                : 0,
               offeredUnits: offeredUnits.toString(),
               reservedUnits: reservedUnits.toString(),
               availableUnits: (offeredUnits - reservedUnits).toString(),

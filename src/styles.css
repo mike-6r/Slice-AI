@@ -70027,3 +70027,553 @@ body:has(.portfolio-page)
     border-left: 0;
   }
 }
+
+/* Pre-Sale transaction rail: keep the decision surface compact and put supply context in one place. */
+.asset-detail-page .asset-presale-ticket {
+  gap: 0.9rem;
+  padding: 1.1rem;
+  border-color: rgb(232 181 62 / 0.38);
+  background:
+    radial-gradient(circle at 100% 0, rgb(224 171 51 / 0.08), transparent 38%),
+    linear-gradient(160deg, rgb(25 28 23 / 0.98), rgb(7 22 26 / 0.98));
+}
+
+.asset-detail-page .asset-presale-ticket__header h2 {
+  font-size: clamp(1.35rem, 1.8vw, 1.8rem);
+  letter-spacing: -0.03em;
+}
+
+.asset-detail-page .asset-presale-warning {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgb(232 181 62 / 0.28);
+  border-radius: 0.75rem;
+  background: rgb(70 55 18 / 0.16);
+}
+
+.asset-detail-page .asset-presale-warning__badge {
+  color: #f1c44a;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.asset-detail-page .asset-presale-warning__content {
+  min-width: 0;
+}
+
+.asset-detail-page .asset-presale-warning__content strong {
+  display: block;
+  color: #f1f7f6;
+  font-size: 0.86rem;
+}
+
+.asset-detail-page .asset-presale-warning__content p {
+  margin: 0.2rem 0 0;
+  color: #a9bdc0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.asset-detail-page .asset-presale-warning__state {
+  display: inline-flex;
+  align-items: center;
+  color: #e7c96c;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.asset-detail-page .asset-presale-warning__state i {
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-right: 0.35rem;
+  border-radius: 50%;
+  background: #f1bd42;
+  box-shadow: 0 0 0 0.18rem rgb(241 189 66 / 0.12);
+}
+
+.asset-detail-page .asset-presale-ticket__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.asset-detail-page .asset-presale-ticket__facts > div,
+.asset-detail-page .asset-presale-ticket__supply-fact {
+  min-width: 0;
+  padding: 0.72rem 0.78rem;
+  border: 1px solid rgb(132 161 168 / 0.15);
+  border-radius: 0.68rem;
+  background: rgb(3 14 18 / 0.42);
+}
+
+.asset-detail-page .asset-presale-ticket__facts span,
+.asset-detail-page .asset-presale-ticket__supply-fact > span {
+  display: block;
+  color: #89a4ab;
+  font-size: 0.64rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.asset-detail-page .asset-presale-ticket__facts strong {
+  display: block;
+  margin-top: 0.28rem;
+  color: #f1f7f6;
+  font-size: 1rem;
+}
+
+.asset-detail-page .asset-presale-ticket__facts > div:first-child {
+  border-color: rgb(232 181 62 / 0.3);
+  background: linear-gradient(145deg, rgb(89 67 16 / 0.18), rgb(3 14 18 / 0.42));
+}
+
+.asset-detail-page .asset-presale-ticket__facts > div:first-child strong {
+  color: #f4c74a;
+}
+
+.asset-detail-page .asset-presale-ticket__supply {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding: 0.65rem;
+  border: 1px solid rgb(132 161 168 / 0.14);
+  border-radius: 0.75rem;
+  background: rgb(2 12 16 / 0.3);
+}
+
+.asset-detail-page .asset-presale-ticket__supply-fact {
+  padding: 0.62rem 0.65rem;
+  border: 0;
+  border-radius: 0.55rem;
+  background: rgb(9 26 30 / 0.54);
+}
+
+.asset-detail-page .asset-presale-ticket__supply-fact strong {
+  display: block;
+  margin-top: 0.28rem;
+  overflow: hidden;
+  color: #eef6f5;
+  font-size: 0.82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-detail-page .asset-presale-ticket__supply-fact small {
+  display: block;
+  margin-top: 0.2rem;
+  color: #62e8c3;
+  font-size: 0.62rem;
+  line-height: 1.3;
+}
+
+.asset-detail-page .asset-presale-ticket__quantity {
+  gap: 0.45rem;
+  margin-top: 0.15rem;
+}
+
+.asset-detail-page .asset-presale-ticket__total {
+  padding-top: 0.75rem;
+}
+
+.asset-detail-page .asset-presale-ticket__total strong {
+  font-size: 1.2rem;
+}
+
+.asset-detail-page .asset-presale-ticket__actions {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.6rem;
+  margin-top: 0.1rem;
+}
+
+.asset-detail-page .asset-presale-ticket__actions > button,
+.asset-detail-page .asset-presale-ticket__actions > div {
+  min-height: 3rem;
+  border-radius: 0.7rem;
+}
+
+@media (max-width: 560px) {
+  .asset-detail-page .asset-presale-warning {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .asset-detail-page .asset-presale-warning__state {
+    grid-column: 2;
+  }
+
+  .asset-detail-page .asset-presale-ticket__supply {
+    grid-template-columns: 1fr;
+  }
+}
+
+.asset-detail-page .asset-reference-identity__valuation--presale {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-top: 1rem;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.asset-detail-page .asset-reference-identity__valuation--presale > div,
+.asset-detail-page .asset-presale-ticket__facts > div {
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid rgb(132 161 168 / 0.16);
+  border-radius: 0.68rem;
+  background: rgb(3 14 18 / 0.42);
+}
+
+.asset-detail-page .asset-reference-identity__valuation--presale strong {
+  display: block;
+  margin-top: 0.35rem;
+  overflow: hidden;
+  color: #eef6f5;
+  font-size: 1.05rem;
+  letter-spacing: -0.03em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-detail-page .asset-reference-identity__valuation--presale > div:first-child strong,
+.asset-detail-page .asset-reference-identity__valuation--presale > div:nth-child(3) strong {
+  color: #64ecc1;
+}
+
+.asset-detail-page .asset-presale-ticket__tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid rgb(132 161 168 / 0.12);
+  border-radius: 0.7rem;
+  background: rgb(3 13 17 / 0.52);
+}
+
+.asset-detail-page .asset-presale-ticket__tabs button {
+  display: flex;
+  min-height: 2.55rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #87a2a9;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.asset-detail-page .asset-presale-ticket__tabs button.is-active {
+  border-bottom-color: #31dcae;
+  background: rgb(14 60 57 / 0.35);
+  color: #f1f7f6;
+}
+
+.asset-detail-page .asset-presale-ticket__tabs button:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.asset-detail-page .asset-presale-ticket__tabs small {
+  color: #6d878d;
+  font-size: 0.58rem;
+  font-weight: 500;
+}
+
+.asset-detail-page .asset-presale-ticket__facts {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.asset-detail-page .asset-presale-ticket__facts-wide {
+  grid-column: 1 / -1;
+}
+
+.asset-detail-page .asset-presale-ticket__facts-wide strong {
+  color: #eef6f5;
+}
+
+.asset-detail-page .asset-presale-ticket__reservation-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.8rem;
+  padding: 0.85rem;
+  border: 1px solid rgb(132 161 168 / 0.14);
+  border-radius: 0.75rem;
+  background: rgb(3 14 18 / 0.44);
+}
+
+.asset-detail-page .asset-presale-ticket__reservation-summary > div + div {
+  padding-left: 0.8rem;
+  border-left: 1px solid rgb(132 161 168 / 0.16);
+}
+
+.asset-detail-page .asset-presale-ticket__reservation-summary span,
+.asset-detail-page .asset-presale-ticket__reservation-summary small {
+  display: block;
+  color: #89a4ab;
+  font-size: 0.65rem;
+}
+
+.asset-detail-page .asset-presale-ticket__reservation-summary strong {
+  display: block;
+  margin-top: 0.3rem;
+  color: #f1f7f6;
+  font-size: 1.12rem;
+}
+
+.asset-detail-page .asset-presale-ticket__reservation-summary > div:first-child strong {
+  color: #62e8c3;
+}
+
+.asset-detail-page .asset-presale-ticket__reservation-summary small {
+  margin-top: 0.25rem;
+  color: #b8cbcd;
+}
+
+.asset-detail-page .asset-presale-ownership-overview {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid rgb(34 190 166 / 0.2);
+  border-radius: 0.85rem;
+  background: linear-gradient(160deg, rgb(3 25 29 / 0.88), rgb(3 14 18 / 0.62));
+}
+
+.asset-detail-page .asset-presale-ownership-overview__heading,
+.asset-detail-page .asset-presale-ownership-overview__legend > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.asset-detail-page .asset-presale-ownership-overview__heading h2 {
+  margin: 0.2rem 0 0;
+  color: #f1f7f6;
+  font-size: 1rem;
+}
+
+.asset-detail-page .asset-presale-ownership-overview__heading > span {
+  color: #91abb0;
+  font-size: 0.7rem;
+}
+
+.asset-detail-page .asset-presale-ownership-overview__bar {
+  display: flex;
+  height: 0.55rem;
+  overflow: hidden;
+  border-radius: 99px;
+  background: rgb(132 161 168 / 0.16);
+}
+
+.asset-detail-page .asset-presale-ownership-overview__bar span {
+  display: block;
+  height: 100%;
+}
+
+.asset-detail-page .asset-presale-ownership-overview__bar .is-retained,
+.asset-detail-page .asset-presale-ownership-overview__legend .is-retained {
+  background: #1fd6aa;
+}
+
+.asset-detail-page .asset-presale-ownership-overview__bar .is-available,
+.asset-detail-page .asset-presale-ownership-overview__legend .is-available {
+  background: #e5b63c;
+}
+
+.asset-detail-page .asset-presale-ownership-overview__legend {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.asset-detail-page .asset-presale-ownership-overview__legend > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  justify-content: initial;
+}
+
+.asset-detail-page .asset-presale-ownership-overview__legend i {
+  grid-row: span 2;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+}
+
+.asset-detail-page .asset-presale-ownership-overview__legend .is-reserved {
+  background: #63777d;
+}
+
+.asset-detail-page .asset-presale-ownership-overview__legend span {
+  color: #8da6ab;
+  font-size: 0.62rem;
+}
+
+.asset-detail-page .asset-presale-ownership-overview__legend strong {
+  color: #eef6f5;
+  font-size: 0.75rem;
+}
+
+.asset-detail-page .asset-presale-ownership-overview__legend small {
+  color: #91abb0;
+  font-size: 0.62rem;
+  font-weight: 500;
+}
+
+.asset-detail-page .asset-presale-ownership-overview__summary {
+  margin: 0;
+  color: #8fa9ae;
+  font-size: 0.68rem;
+}
+
+.asset-detail-page .asset-presale-ownership-overview__summary b {
+  margin-inline: 0.45rem;
+  color: #43d6b1;
+}
+
+@media (max-width: 760px) {
+  .asset-detail-page .asset-presale-ticket__facts,
+  .asset-detail-page .asset-reference-identity__valuation--presale {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .asset-detail-page .asset-presale-ownership-overview__legend {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .asset-detail-page .asset-presale-ticket__facts,
+  .asset-detail-page .asset-reference-identity__valuation--presale,
+  .asset-detail-page .asset-presale-ticket__reservation-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .asset-detail-page .asset-presale-ticket__facts-wide {
+    grid-column: auto;
+  }
+
+  .asset-detail-page .asset-presale-ticket__reservation-summary > div + div {
+    padding-top: 0.75rem;
+    padding-left: 0;
+    border-top: 1px solid rgb(132 161 168 / 0.16);
+    border-left: 0;
+  }
+}
+
+.asset-detail-page:has(.asset-presale-ownership-overview) .asset-detail-lower-grid {
+  grid-template-columns: minmax(0, 2.2fr) minmax(13rem, 0.8fr) minmax(17rem, 1fr);
+}
+
+.asset-detail-page:has(.asset-presale-ownership-overview) .asset-detail-lower-grid > .asset-price-panel {
+  grid-column: 1;
+}
+
+.asset-detail-page:has(.asset-presale-ownership-overview) .asset-detail-lower-grid > .asset-details-panel {
+  grid-column: 2;
+}
+
+.asset-detail-page:has(.asset-presale-ownership-overview) .asset-detail-lower-grid > .asset-external-panel {
+  grid-column: 3;
+}
+
+.asset-detail-page .asset-presale-summary {
+  grid-column: 2 / -1;
+  min-height: auto;
+  padding: 1.1rem 1.3rem;
+}
+
+.asset-detail-page .asset-presale-summary h2 {
+  margin: 0;
+  color: #f0fbfb;
+  font-size: 1.05rem;
+  letter-spacing: -0.03em;
+}
+
+.asset-detail-page .asset-presale-summary__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem 1.4rem;
+  margin-top: 0.9rem;
+}
+
+.asset-detail-page .asset-presale-summary__grid > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgb(145 176 181 / 0.13);
+}
+
+.asset-detail-page .asset-presale-summary__grid span {
+  color: #8fa9ae;
+  font-size: 0.65rem;
+}
+
+.asset-detail-page .asset-presale-summary__grid strong {
+  color: #eaf8f3;
+  font-size: 0.7rem;
+  text-align: right;
+  text-transform: capitalize;
+}
+
+.asset-detail-page .asset-presale-summary__grid i {
+  display: inline-block;
+  width: 0.42rem;
+  height: 0.42rem;
+  margin-right: 0.3rem;
+  border-radius: 50%;
+  background: #61777d;
+}
+
+.asset-detail-page .asset-presale-summary__grid i.is-live {
+  background: #25d6aa;
+  box-shadow: 0 0 0 0.18rem rgb(37 214 170 / 0.12);
+}
+
+.asset-detail-page .asset-presale-summary__grid i.is-pending {
+  background: #e6b839;
+}
+
+@media (max-width: 900px) {
+  .asset-detail-page:has(.asset-presale-ownership-overview) .asset-detail-lower-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .asset-detail-page:has(.asset-presale-ownership-overview) .asset-detail-lower-grid > .asset-price-panel {
+    grid-column: 1 / -1;
+  }
+
+  .asset-detail-page:has(.asset-presale-ownership-overview) .asset-detail-lower-grid > .asset-details-panel,
+  .asset-detail-page:has(.asset-presale-ownership-overview) .asset-detail-lower-grid > .asset-external-panel {
+    grid-column: auto;
+  }
+
+  .asset-detail-page .asset-presale-summary {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .asset-detail-page:has(.asset-presale-ownership-overview) .asset-detail-lower-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .asset-detail-page:has(.asset-presale-ownership-overview) .asset-detail-lower-grid > .asset-details-panel,
+  .asset-detail-page:has(.asset-presale-ownership-overview) .asset-detail-lower-grid > .asset-external-panel,
+  .asset-detail-page .asset-presale-summary {
+    grid-column: auto;
+  }
+
+  .asset-detail-page .asset-presale-summary__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

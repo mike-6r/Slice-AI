@@ -217,6 +217,21 @@ function PreSaleTransactionTicket({
   const cashAfterMinor =
     availableCashMinor === undefined ? undefined : BigInt(availableCashMinor) - totalMinor;
   const physicalLabel = preSale.physicalStatus.replaceAll("_", " ");
+  const sliceOwnershipPercentage =
+    preSale.sliceOwnershipPercentageBps !== undefined
+      ? `${formatBasisPointPercent(BigInt(preSale.sliceOwnershipPercentageBps))}%`
+      : formatPreSaleShare("1", preSale.totalSupply ?? preSale.offeredUnits);
+  const reservationOwnership = formatPreSaleShare(
+    reservationUnits,
+    preSale.totalSupply ?? preSale.offeredUnits,
+  );
+  const collectorRetainedPercentage =
+    preSale.collectorRetainedPercentageBps !== undefined
+      ? `${formatBasisPointPercent(BigInt(preSale.collectorRetainedPercentageBps))}%`
+      : formatPreSaleShare(
+          safeBigIntDifference(preSale.totalSupply, preSale.offeredUnits).toString(),
+          preSale.totalSupply ?? preSale.offeredUnits,
+        );
 
   return (
     <section className="asset-order-book asset-presale-ticket" aria-labelledby="market-status-title">
@@ -232,23 +247,44 @@ function PreSaleTransactionTicket({
 
       <div className="asset-presale-warning" role="note">
         <span className="asset-presale-warning__badge">Pre-Sale</span>
-        <div>
+        <div className="asset-presale-warning__content">
           <strong>Reserve before the market opens</strong>
-          <p>Your reservation stays conditional until Slice receives, verifies, and secures the collectible.</p>
+          <p>Funds are held now. Ownership is final only after Slice receives, verifies, and secures the collectible.</p>
         </div>
+        <span className="asset-presale-warning__state"><i aria-hidden="true" /> {physicalLabel}</span>
       </div>
 
-      <div className="asset-trading-summary asset-presale-ticket__facts">
-        <Stat label="Price per Slice" value={formatCurrency(Number(price))} accent />
-        <Stat label="Slices available" value={formatSliceCount(preSale.availableUnits)} />
-        <Stat label="Reservation closes" value={formatPreSaleCountdown(preSale.deadlineAt)} />
+      <div className="asset-presale-ticket__tabs" role="tablist" aria-label="Ownership action">
+        <button type="button" role="tab" aria-selected="true" className="is-active">
+          Reserve
+        </button>
+        <button type="button" role="tab" aria-selected="false" disabled>
+          <span>Sell</span>
+          <small>Available after finalization</small>
+        </button>
       </div>
-      <div className="asset-presale-ticket__progress" aria-label="Pre-Sale reservation progress">
-        <span style={{ width: `${Math.min(100, Number(preSale.reservedPercentageBps) / 100)}%` }} />
-      </div>
-      <div className="asset-presale-ticket__status" role="status">
-        <span><i aria-hidden="true" /> {physicalLabel}</span>
-        <span>{formatSliceCount(preSale.reservedUnits)} reserved</span>
+
+      <div className="asset-presale-ticket__facts">
+        <div>
+          <span>Price per Slice</span>
+          <strong>{formatCurrency(Number(price))}</strong>
+        </div>
+        <div>
+          <span>1 Slice =</span>
+          <strong>{sliceOwnershipPercentage}</strong>
+        </div>
+        <div>
+          <span>Available</span>
+          <strong>{formatSliceCount(preSale.availableUnits)}</strong>
+        </div>
+        <div>
+          <span>Collector retains</span>
+          <strong>{collectorRetainedPercentage}</strong>
+        </div>
+        <div className="asset-presale-ticket__facts-wide">
+          <span>Reservation closes</span>
+          <strong>{formatPreSaleCountdown(preSale.deadlineAt)}</strong>
+        </div>
       </div>
 
       <div className="asset-presale-ticket__quantity asset-presale-ticket__quantity--standard">
@@ -280,18 +316,22 @@ function PreSaleTransactionTicket({
           </button>
         </div>
       </div>
-      <div className="asset-presale-ticket__total">
-        <span>Estimated reservation total</span>
-        <strong>{formatCurrency(Number(totalMinor))}</strong>
-      </div>
-      {availableCashMinor !== undefined ? (
-        <div className="asset-presale-ticket__cash">
-          <span>Your available cash</span>
-          <strong>{formatCurrency(Number(availableCashMinor))}</strong>
+      <div className="asset-presale-ticket__reservation-summary">
+        <div>
+          <span>You&apos;re reserving</span>
+          <strong>{reservationOwnership} ownership</strong>
+          <small>{formatSliceCount(reservationUnits)}</small>
         </div>
-      ) : isAuthenticated ? (
-        <div className="asset-presale-ticket__cash"><span>Your available cash</span><strong>Loading…</strong></div>
-      ) : null}
+        <div>
+          <span>Estimated total</span>
+          <strong>{formatCurrency(Number(totalMinor))}</strong>
+          {availableCashMinor !== undefined ? (
+            <small>Available cash {formatCurrency(Number(availableCashMinor))}</small>
+          ) : isAuthenticated ? (
+            <small>Available cash loading…</small>
+          ) : null}
+        </div>
+      </div>
 
       <div className="asset-order-actions asset-presale-ticket__actions">
         <button
@@ -307,23 +347,13 @@ function PreSaleTransactionTicket({
           }}
         >
           <span>
-            <strong>{isPending ? "Reserving…" : isAuthenticated ? "Reserve Slices" : "Sign in to reserve"}</strong>
+            <strong>{isPending ? "Reserving…" : isAuthenticated ? `Reserve ${reservationOwnership}` : "Sign in to reserve"}</strong>
             <small>Buy a conditional position</small>
           </span>
           <ArrowRight aria-hidden="true" />
         </button>
-        <div className="is-sell is-disabled" aria-disabled="true">
-          <span>
-            <strong>Sell Slices</strong>
-            <small>Available after final ownership</small>
-          </span>
-        </div>
       </div>
       {message ? <p className="asset-presale-message" role="status">{message}</p> : null}
-      <p className="asset-presale-ticket__fine-print">
-        Funds are reserved now. Final ownership is created after physical intake, verification,
-        and custody are complete.
-      </p>
       {confirmationOpen ? (
         <div className="asset-presale-modal" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget) setConfirmationOpen(false);
@@ -340,7 +370,7 @@ function PreSaleTransactionTicket({
             </dl>
             <div className="asset-presale-modal__notice">
               <strong>Conditional reservation</strong>
-              <p>Your funds will be reserved. Final ownership is created only after Slice receives, verifies, and secures the collectible.</p>
+              <p>Your funds are reserved now. Ownership settles after intake, verification, and custody.</p>
             </div>
             <div className="asset-presale-modal__actions">
               <button type="button" className="secondary-action" onClick={() => setConfirmationOpen(false)}>Cancel</button>
@@ -587,7 +617,11 @@ function AssetPage() {
                 <i aria-hidden="true" />{" "}
                 {asset.preSale ? "Pre-Sale" : (lifecycle?.badge ?? "Published")}
               </span>
-              {initialOffering ? (
+              {asset.preSale ? (
+                <span className="asset-status-badge asset-status-badge--gold">
+                  Awaiting intake
+                </span>
+              ) : initialOffering ? (
                 <span className="asset-status-badge asset-status-badge--gold">
                   Initial offering
                 </span>
@@ -597,18 +631,8 @@ function AssetPage() {
                 text="Slice keeps the physical collectible, valuation, ownership supply, and trading state as separate records so each part remains clear."
               />
             </div>
-            {asset.preSale ? (
-              <div className="asset-presale-status-strip" aria-label="Pre-Sale status">
-                <span><i aria-hidden="true" /> Pre-Sale</span>
-                <span>{asset.preSale.physicalStatus.replaceAll("_", " ")}</span>
-                <span>{formatPreSaleCountdown(asset.preSale.deadlineAt)} remaining</span>
-                <details>
-                  <summary>How Pre-Sale works</summary>
-                  <p>{asset.preSale.disclosure ?? "Your reservation remains conditional until physical intake, verification, and custody are complete."}</p>
-                </details>
-              </div>
-            ) : null}
-            <div className="asset-reference-identity__valuation">
+            {!asset.preSale ? (
+              <div className="asset-reference-identity__valuation">
               <div>
                 <span className="asset-section-label">Slice valuation</span>
                 <strong>
@@ -661,7 +685,24 @@ function AssetPage() {
                   </small>
                 ) : null}
               </div>
-            </div>
+              </div>
+            ) : (
+              <PreSaleIdentityFacts
+                preSale={asset.preSale}
+                marketReference={
+                  asset.marketReference
+                    ? formatMoney(asset.marketReference.amountMinor, asset.marketReference.currency)
+                    : asset.marketReferenceLink
+                      ? "Linked"
+                      : "Not linked"
+                }
+                preSaleBasis={
+                  asset.preSale.collectorEstimateMinor
+                    ? formatMoney(asset.preSale.collectorEstimateMinor, asset.preSale.currency)
+                    : "Unavailable"
+                }
+              />
+            )}
           </section>
           <section className="asset-readiness-card" aria-labelledby="market-status-title">
             {asset.preSale ? (
@@ -708,7 +749,11 @@ function AssetPage() {
           </section>
         </section>
 
-        <AssetTrustStrip asset={asset} lifecycle={lifecycle} />
+        {asset.preSale ? (
+          <PreSaleOwnershipOverview preSale={asset.preSale} />
+        ) : (
+          <AssetTrustStrip asset={asset} lifecycle={lifecycle} />
+        )}
 
         <section className="asset-how-it-works" aria-labelledby="how-it-works-title">
           <div className="asset-section-heading">
@@ -1044,6 +1089,7 @@ function AssetPage() {
               </div>
             </dl>
           </section>
+          {asset.preSale ? <PreSaleSummary preSale={asset.preSale} /> : null}
         </section>
 
         <SimilarAssets
@@ -1056,6 +1102,101 @@ function AssetPage() {
         />
       </main>
     </div>
+  );
+}
+
+function PreSaleIdentityFacts({
+  preSale,
+  marketReference,
+  preSaleBasis,
+}: {
+  preSale: NonNullable<Asset["preSale"]>;
+  marketReference: string;
+  preSaleBasis: string;
+}) {
+  const sliceOwnership =
+    preSale.sliceOwnershipPercentageBps !== undefined
+      ? `${formatBasisPointPercent(BigInt(preSale.sliceOwnershipPercentageBps))}%`
+      : formatPreSaleShare("1", preSale.totalSupply ?? preSale.offeredUnits);
+
+  return (
+    <div className="asset-reference-identity__valuation asset-reference-identity__valuation--presale">
+      <div>
+        <span className="asset-section-label">Price per Slice</span>
+        <strong>{formatCurrency(Number(preSale.pricePerUnitMinor))}</strong>
+      </div>
+      <div>
+        <span className="asset-section-label">Ownership per Slice</span>
+        <strong>{sliceOwnership}</strong>
+      </div>
+      <div>
+        <span className="asset-section-label">Pre-Sale basis</span>
+        <strong>{preSaleBasis}</strong>
+      </div>
+      <div>
+        <span className="asset-section-label">Market reference</span>
+        <strong>{marketReference}</strong>
+      </div>
+    </div>
+  );
+}
+
+function PreSaleOwnershipOverview({ preSale }: { preSale: NonNullable<Asset["preSale"]> }) {
+  const offeredPercentage = formatPreSaleShare(
+    preSale.offeredUnits,
+    preSale.totalSupply,
+    preSale.offeredPercentageBps,
+  );
+  const retainedPercentage =
+    preSale.collectorRetainedPercentageBps !== undefined
+      ? `${formatBasisPointPercent(BigInt(preSale.collectorRetainedPercentageBps))}%`
+      : "—";
+  const reservedPercentage = formatPreSaleShare(preSale.reservedUnits, preSale.offeredUnits);
+  const offeredWidth = preSale.offeredPercentageBps ?? 0;
+  const retainedWidth = Math.max(0, 10_000 - offeredWidth);
+  const retainedUnits = safeBigIntDifference(preSale.totalSupply, preSale.offeredUnits);
+
+  return (
+    <section className="asset-presale-ownership-overview" aria-labelledby="presale-ownership-title">
+      <div className="asset-presale-ownership-overview__heading">
+        <div>
+          <p className="asset-section-label">Ownership overview</p>
+          <h2 id="presale-ownership-title">See how the supply is split.</h2>
+        </div>
+        <span>{preSale.totalSupply ? `${formatSliceCount(preSale.totalSupply)} total` : "Supply unavailable"}</span>
+      </div>
+      <div className="asset-presale-ownership-overview__bar" aria-label="Pre-Sale supply allocation">
+        <span className="is-retained" style={{ width: `${retainedWidth / 100}%` }} />
+        <span className="is-available" style={{ width: `${offeredWidth / 100}%` }} />
+      </div>
+      <div className="asset-presale-ownership-overview__legend">
+        <div><i className="is-retained" /><span>Collector keeps</span><strong>{retainedPercentage} <small>({formatSliceCount(retainedUnits)})</small></strong></div>
+        <div><i className="is-available" /><span>Available in Pre-Sale</span><strong>{offeredPercentage} <small>({formatSliceCount(preSale.availableUnits)} available)</small></strong></div>
+        <div><i className="is-reserved" /><span>Reserved so far</span><strong>{reservedPercentage} <small>({formatSliceCount(preSale.reservedUnits)})</small></strong></div>
+      </div>
+      <p className="asset-presale-ownership-overview__summary">
+        {preSale.totalSupply ? formatSliceCount(preSale.totalSupply) : "—"} total supply <b>·</b>{" "}
+        {formatSliceCount(retainedUnits)} retained <b>·</b>{" "}
+        {formatSliceCount(preSale.availableUnits)} available
+      </p>
+    </section>
+  );
+}
+
+function PreSaleSummary({ preSale }: { preSale: NonNullable<Asset["preSale"]> }) {
+  const physicalLabel = preSale.physicalStatus.replaceAll("_", " ");
+  const reservationsOpen = preSale.status === "ACTIVE";
+
+  return (
+    <section className="asset-presale-summary" aria-labelledby="presale-summary-title">
+      <h2 id="presale-summary-title">Pre-Sale summary</h2>
+      <div className="asset-presale-summary__grid">
+        <div><span>Market status</span><strong><i className="is-live" /> Pre-Sale</strong></div>
+        <div><span>Reservations</span><strong><i className={reservationsOpen ? "is-live" : "is-pending"} /> {reservationsOpen ? "Open" : "Closed"}</strong></div>
+        <div><span>Physical state</span><strong><i className="is-pending" /> {physicalLabel}</strong></div>
+        <div><span>Final trading</span><strong>Opens after custody + verification</strong></div>
+      </div>
+    </section>
   );
 }
 
@@ -2343,6 +2484,21 @@ function formatOfferingPercentage(units: string, totalUnits: string) {
     return total > 0n ? `${Number((BigInt(units) * 10_000n) / total) / 100}%` : "—";
   } catch {
     return "—";
+  }
+}
+
+function formatPreSaleShare(units: string, totalUnits?: string, percentageBps?: number) {
+  if (percentageBps !== undefined && Number.isInteger(percentageBps)) {
+    return `${formatBasisPointPercent(BigInt(percentageBps))}%`;
+  }
+  return totalUnits ? formatOfferingPercentage(units, totalUnits) : "—";
+}
+
+function safeBigIntDifference(total: string | undefined, subtract: string) {
+  try {
+    return total ? BigInt(total) - BigInt(subtract) : 0n;
+  } catch {
+    return 0n;
   }
 }
 
