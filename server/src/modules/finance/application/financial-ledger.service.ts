@@ -1158,7 +1158,7 @@ export class FinancialLedgerService {
     });
     await createIdentityTransaction(db).audit.append({
       id: randomUUID(), actorUserId: actor.userId, actorType: 'USER', action: 'FINANCE_CASH_RESERVED', resourceType: 'cash-reservation', resourceId: reservation.id,
-      requestId, sessionId: actor.sessionId as never, result: 'SUCCESS', metadata: { purposeType: input.purposeType, purposeId: input.purposeId, amountMinor: input.amountMinor.toString() }, createdAt: new Date(),
+      requestId, sessionId: actor.sessionId as never, result: 'SUCCESS', metadata: { reservationId: reservation.id, amountMinor: input.amountMinor.toString() }, createdAt: new Date(),
     });
     return reservation;
   }
