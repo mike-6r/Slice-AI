@@ -9,14 +9,15 @@ import {
   UsersRound,
 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
-import { CollectorCard } from "@/components/collectors/public-collector-ui";
+import { CollectorCard, FeaturedCollector } from "@/components/collectors/public-collector-ui";
 import { useAppServices } from "@/providers/AppServicesProvider";
-import type { CollectorDirectorySort } from "@/domain";
+import type { CollectorDirectorySort, CollectorDirectoryStatus } from "@/domain";
 
 const PAGE_SIZE = 12;
 export type CollectorSearch = {
   q?: string;
   specialty?: string;
+  status?: CollectorDirectoryStatus;
   sort?: CollectorDirectorySort;
   page?: number;
 };
@@ -54,6 +55,9 @@ export const Route = createFileRoute("/collectors")({
     sort: ["featured", "assets", "recent", "name"].includes(String(search.sort))
       ? (String(search.sort) as CollectorDirectorySort)
       : "featured",
+    status: ["all", "pre-sale", "market-live", "both"].includes(String(search.status))
+      ? (String(search.status) as CollectorDirectoryStatus)
+      : "all",
     page: Math.max(1, Math.min(10_000, Number(search.page ?? 1) || 1)),
   }),
   head: () => ({
@@ -73,17 +77,19 @@ function CollectorsPage() {
   const navigate = useNavigate({ from: "/collectors" });
   const search = Route.useSearch();
   const sort = search.sort ?? "featured";
+  const status = search.status ?? "all";
   const currentPage = search.page ?? 1;
   const [query, setQuery] = useState(search.q ?? "");
 
   useEffect(() => setQuery(search.q ?? ""), [search.q]);
 
   const result = useQuery({
-    queryKey: ["collectors", search.q ?? "", search.specialty ?? "", sort, currentPage],
+    queryKey: ["collectors", search.q ?? "", search.specialty ?? "", status, sort, currentPage],
     queryFn: () =>
       services.repositories.collectors.listPublicCollectors({
         q: search.q,
         specialty: search.specialty,
+        status,
         sort,
         page: currentPage,
         pageSize: PAGE_SIZE,
@@ -94,15 +100,16 @@ function CollectorsPage() {
   const data = result.data;
   const specialties = data?.specialties ?? [];
   const page = data?.pagination;
-  const hasFilters = Boolean(search.q || search.specialty);
+  const hasFilters = Boolean(search.q || search.specialty || status !== "all");
 
   const setSearch = (next: Partial<CollectorSearch>) => {
     void navigate({
       search: {
-        q: next.q ?? search.q,
-        specialty: next.specialty ?? search.specialty,
-        sort: next.sort ?? sort,
-        page: next.page ?? 1,
+        q: "q" in next ? next.q : search.q,
+        specialty: "specialty" in next ? next.specialty : search.specialty,
+        status: "status" in next ? next.status : status,
+        sort: "sort" in next ? next.sort : sort,
+        page: "page" in next ? next.page : 1,
       },
       replace: true,
     });
@@ -174,6 +181,22 @@ function CollectorsPage() {
             </select>
             <ChevronDown aria-hidden="true" />
           </label>
+          <label className="collectors-select-control collectors-status-control">
+            <span>Status</span>
+            <select
+              aria-label="Filter collectors by market status"
+              value={status}
+              onChange={(event) =>
+                setSearch({ status: event.target.value as CollectorDirectoryStatus })
+              }
+            >
+              <option value="all">All statuses</option>
+              <option value="pre-sale">Has Pre-Sale</option>
+              <option value="market-live">Has Market Live</option>
+              <option value="both">Has Both</option>
+            </select>
+            <ChevronDown aria-hidden="true" />
+          </label>
           <label className="collectors-select-control collectors-sort-control">
             <span>Sort</span>
             <select
@@ -184,9 +207,9 @@ function CollectorsPage() {
               }
             >
               <option value="featured">Featured first</option>
-              <option value="assets">Most assets</option>
-              <option value="recent">Recently listed</option>
-              <option value="name">Name A–Z</option>
+              <option value="assets">Most published</option>
+              <option value="recent">Recently joined</option>
+              <option value="name">Alphabetical</option>
             </select>
             <ChevronDown aria-hidden="true" />
           </label>
@@ -201,6 +224,12 @@ function CollectorsPage() {
             <span>Public directory</span>
           </div>
         </div>
+
+        <dl className="collectors-directory-stats" aria-label="Collector directory totals">
+          <div><dt>Active Collectors</dt><dd>{data?.stats.eligibleCollectorCount ?? 0}</dd></div>
+          <div><dt>Published Assets</dt><dd>{data?.stats.publishedAssetCount ?? 0}</dd></div>
+          <div><dt>Featured</dt><dd>{data?.stats.featuredCollectorCount ?? 0}</dd></div>
+        </dl>
 
         {result.isPending ? (
           <div className="collectors-directory-grid collectors-loading-grid" role="status">
@@ -225,37 +254,64 @@ function CollectorsPage() {
               Try again
             </button>
           </div>
-        ) : data?.items.length ? (
-          <div className="collectors-directory-grid">
-            {data.items.map((collector, index) => (
-              <CollectorCard key={collector.userId} collector={collector} toneIndex={index} />
-            ))}
-          </div>
-        ) : (
-          <div className="collectors-empty-state">
-            <Search aria-hidden="true" />
-            <h3>
-              {hasFilters ? "No Collectors match these filters." : "Collectors are coming soon."}
-            </h3>
-            <p>
-              {hasFilters
-                ? "Try a different name, specialty, or published collectible."
-                : "Public Collector profiles will appear as assets are published on Slice."}
-            </p>
-            {hasFilters ? (
-              <button
-                type="button"
-                onClick={() => setSearch({ q: undefined, specialty: undefined })}
-              >
-                Clear filters
-              </button>
+        ) : data ? (
+          <>
+            {data.featured.length > 0 ? (
+              <section className="collectors-featured-section" aria-labelledby="featured-heading">
+                <div className="collectors-section-heading">
+                  <div>
+                    <p className="collectors-kicker">Hand-picked by Slice</p>
+                    <h2 id="featured-heading">Featured Collectors</h2>
+                  </div>
+                  <span>{data.stats.featuredCollectorCount} featured profiles</span>
+                </div>
+                <div className="collectors-featured-grid">
+                  {data.featured.map((collector) => (
+                    <FeaturedCollector key={collector.userId} collector={collector} />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+            {data.items.length ? (
+              <section className="collectors-public-directory" aria-labelledby="public-directory-heading">
+                <div className="collectors-directory-heading">
+                  <div>
+                    <p className="collectors-kicker">Explore the community</p>
+                    <h2 id="public-directory-heading">Public Directory</h2>
+                  </div>
+                  {page ? (
+                    <span>
+                      Showing {page.total ? (page.page - 1) * page.pageSize + 1 : 0}–
+                      {Math.min(page.page * page.pageSize, page.total)} of {page.total} Collectors
+                    </span>
+                  ) : null}
+                </div>
+                <div className="collectors-directory-grid">
+                  {data.items.map((collector, index) => (
+                    <CollectorCard key={collector.userId} collector={collector} toneIndex={index} />
+                  ))}
+                </div>
+              </section>
             ) : (
-              <a className="collectors-empty-cta" href="/marketplace">
-                Explore Markets
-              </a>
+              <div className="collectors-empty-state">
+                <Search aria-hidden="true" />
+                <h3>{hasFilters ? "No collectors matched your search." : "Collectors are coming soon."}</h3>
+                <p>
+                  {hasFilters
+                    ? "Try a different name, specialty, or market status."
+                    : "Public Collector profiles will appear once they have a public Slice asset."}
+                </p>
+                {hasFilters ? (
+                  <button type="button" onClick={() => setSearch({ q: undefined, specialty: undefined, status: "all" })}>
+                    Clear filters
+                  </button>
+                ) : (
+                  <a className="collectors-empty-cta" href="/marketplace">Explore Markets</a>
+                )}
+              </div>
             )}
-          </div>
-        )}
+          </>
+        ) : null}
 
         {page && page.totalPages > 1 && (
           <nav className="collectors-pagination" aria-label="Collectors pagination">

@@ -2840,6 +2840,7 @@ export interface CollectorRepository {
     limit?: number;
     q?: string;
     specialty?: string;
+    status?: import("@/domain").CollectorDirectoryStatus;
     sort?: CollectorDirectorySort;
     page?: number;
     pageSize?: number;

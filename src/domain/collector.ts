@@ -38,6 +38,7 @@ export interface CollectorProfile {
   displayName: string;
   avatarUrl?: string | null;
   focus: string;
+  specialties?: string[];
   category: CollectorCategory;
   publicSince?: string;
   isFeatured?: boolean;
@@ -47,6 +48,8 @@ export interface CollectorProfile {
   followers?: number;
   performance?: CollectorPerformance;
   publishedListingCount?: number;
+  liveListingCount?: number;
+  preSaleListingCount?: number;
   publishedListings?: CollectorPublishedListing[];
   featuredPreviewAssets?: CollectorPublishedListing[];
   assetPagination?: {
@@ -61,6 +64,7 @@ export interface CollectorProfile {
   holdings?: CollectorHolding[];
 }
 
+export type CollectorDirectoryStatus = "all" | "pre-sale" | "market-live" | "both";
 export type CollectorDirectorySort = "featured" | "assets" | "recent" | "name";
 
 export interface CollectorDirectoryPage {

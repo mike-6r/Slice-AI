@@ -13,6 +13,9 @@ export function collectorCategoryLabel(category: string) {
  * they never infer a collector's private holdings or account data.
  */
 export function collectorSpecialties(collector: CollectorProfile) {
+  if (collector.specialties?.length) {
+    return [...new Set(collector.specialties.map((item) => collectorCategoryLabel(item)).filter(Boolean))].slice(0, 5);
+  }
   const value = repairPublicText(collector.focus).trim();
   return value.includes("\u00b7")
     ? [

@@ -248,6 +248,7 @@ type CollectorDto = {
   username?: string | null;
   headline: string | null;
   specialism: string | null;
+  specialties?: string[];
   displayName: string | null;
   avatarReference?: string | null;
   publicSince?: string | null;
@@ -255,6 +256,8 @@ type CollectorDto = {
   featurePriority?: number;
   featuredCaption?: string | null;
   latestPublicListingAt?: string | null;
+  liveListingCount?: number;
+  preSaleListingCount?: number;
   featuredPreviewAssets?: Array<{
     publicId: string;
     slug: string;
@@ -297,6 +300,7 @@ const mapCollector = (value: CollectorDto): CollectorProfile => ({
   displayName: value.displayName ?? value.slug,
   avatarUrl: value.avatarReference ?? null,
   focus: value.specialism ?? value.headline ?? "Collector profile",
+  specialties: value.specialties ?? [],
   category: "mixed",
   publicSince: value.publicSince ?? undefined,
   isFeatured: value.isFeatured === true,
@@ -320,6 +324,8 @@ const mapCollector = (value: CollectorDto): CollectorProfile => ({
     preSale: listing.preSale ?? null,
   })),
   publishedListingCount: value.publishedListingCount ?? 0,
+  liveListingCount: value.liveListingCount ?? 0,
+  preSaleListingCount: value.preSaleListingCount ?? 0,
   publishedListings: (value.publishedListings ?? []).map((listing) => ({
     assetId: listing.publicId as AssetId,
     slug: listing.slug,

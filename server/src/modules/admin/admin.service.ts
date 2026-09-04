@@ -60,6 +60,7 @@ import {
 import { isExplicitPikachuOwnerDemoSubmission } from '../lifecycle/domain/staging-demo-physical.policy';
 import { MarketRefreshService } from '../market/market-refresh.service';
 import { TrustedReferenceImportService } from '../market-research/trusted-reference-import.service';
+import { publicDiscoverableAssetWhere } from '../public-discovery/public-asset-visibility';
 
 type IntakeLocationManagementInput = {
   displayName: string;
@@ -403,7 +404,7 @@ export class AdminService {
       where: {
         ownerUserId: profile.userId,
         status: 'APPROVED',
-        asset: { is: { status: 'PUBLISHED' } },
+        asset: { is: publicDiscoverableAssetWhere(this.config.isBeta) },
       },
     });
     if (featured && (!profile.isPublic || publicAssetCount === 0)) {
@@ -493,7 +494,7 @@ export class AdminService {
       where: {
         ownerUserId: profile.userId,
         status: 'APPROVED',
-        asset: { is: { status: 'PUBLISHED' } },
+        asset: { is: publicDiscoverableAssetWhere(this.config.isBeta) },
       },
     });
     const eligible =

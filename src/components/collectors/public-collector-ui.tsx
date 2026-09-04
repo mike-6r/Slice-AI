@@ -57,6 +57,12 @@ export function CollectorAssetPreview({
   compact?: boolean;
 }) {
   const { formatMoney } = useCurrency();
+  const price = listing.preSale
+    ? formatMoney(listing.preSale.pricePerUnitMinor, listing.preSale.currency)
+    : listing.estimatedMarketValue
+      ? formatMoney(listing.estimatedMarketValue.amount, listing.estimatedMarketValue.currency)
+      : null;
+  const state = listing.preSale ? "PRE-SALE" : "LIVE";
   return (
     <Link
       to="/asset/$id"
@@ -71,15 +77,8 @@ export function CollectorAssetPreview({
           </span>
           <span className="collector-mini-holding__copy">
             <strong>{listing.title}</strong>
-            <small>
-              {listing.estimatedMarketValue
-                ? formatMoney(
-                    listing.estimatedMarketValue.amount,
-                    listing.estimatedMarketValue.currency,
-                  )
-                : collectorCategoryLabel(listing.category)}
-            </small>
-            <em>{listing.preSale ? "Pre-Sale" : "Listed"}</em>
+            <small>{price ?? listing.grade ?? collectorCategoryLabel(listing.category)}</small>
+            <em className={listing.preSale ? "is-presale" : "is-live"}>{state}</em>
           </span>
         </>
       ) : (
@@ -92,20 +91,9 @@ export function CollectorAssetPreview({
             <p>{listing.grade ?? listing.variant ?? collectorCategoryLabel(listing.category)}</p>
             <div>
               <strong>
-                {listing.estimatedMarketValue
-                  ? formatMoney(
-                      listing.estimatedMarketValue.amount,
-                      listing.estimatedMarketValue.currency,
-                    )
-                  : "Value unavailable"}
+                {price ?? "Value unavailable"}
               </strong>
-              <span>
-                {listing.preSale
-                  ? "Pre-Sale"
-                  : listing.dataStatus === "LIVE"
-                    ? "Valuation"
-                    : "Public listing"}
-              </span>
+              <span className={listing.preSale ? "is-presale" : "is-live"}>{state}</span>
             </div>
           </div>
         </>
@@ -145,18 +133,22 @@ export function FeaturedCollector({ collector }: { collector: CollectorProfile }
           ))}
         </div>
       )}
-      <dl className="featured-collector-stats has-3-stats">
+      <dl className="featured-collector-stats has-4-stats">
         <div>
-          <dt>Published assets</dt>
+          <dt>Published</dt>
           <dd>{count}</dd>
         </div>
         <div>
-          <dt>Joined</dt>
-          <dd>{collector.publicSince ? new Date(collector.publicSince).getFullYear() : "—"}</dd>
+          <dt>Live</dt>
+          <dd>{collector.liveListingCount ?? listings.filter((listing) => !listing.preSale).length}</dd>
         </div>
         <div>
-          <dt>Directory status</dt>
-          <dd className="is-positive">Active</dd>
+          <dt>Pre-Sale</dt>
+          <dd>{collector.preSaleListingCount ?? listings.filter((listing) => Boolean(listing.preSale)).length}</dd>
+        </div>
+        <div>
+          <dt>Since</dt>
+          <dd>{collector.publicSince ? new Date(collector.publicSince).getFullYear() : "—"}</dd>
         </div>
       </dl>
       {listings.length > 0 ? (
@@ -265,6 +257,14 @@ export function CollectorCard({
           <dd>{count}</dd>
         </div>
         <div>
+          <dt>Live</dt>
+          <dd>{collector.liveListingCount ?? listings.filter((listing) => !listing.preSale).length}</dd>
+        </div>
+        <div>
+          <dt>Pre-Sale</dt>
+          <dd>{collector.preSaleListingCount ?? listings.filter((listing) => Boolean(listing.preSale)).length}</dd>
+        </div>
+        <div>
           <dt>Since</dt>
           <dd>{collector.publicSince ? new Date(collector.publicSince).getFullYear() : "—"}</dd>
         </div>
@@ -282,6 +282,7 @@ export function CollectorCard({
             {listings.slice(0, 3).map((listing) => (
               <CollectorAssetPreview key={listing.assetId} listing={listing} compact />
             ))}
+            {count > 3 ? <span className="collector-more-assets">+{count - 3} more</span> : null}
           </div>
         </div>
       ) : (
