@@ -56261,6 +56261,7 @@ body:has(.portfolio-page)
     grid-column: 2;
   }
 }
+
 @media (max-width: 560px) {
   .asset-detail-page .asset-detail-lower-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -70671,5 +70672,117 @@ body:has(.portfolio-page)
 
   .asset-detail-page .asset-presale-summary__grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Pre-Sale mockup parity — terminal composition.
+   The legacy asset dashboard uses fixed rows and a 12-column placement that
+   compresses the ownership overview and separates the hero rail from the
+   other two hero panels. Keep the public projections unchanged, but give the
+   pre-sale page the same readable, full-width workspace as the reference. */
+@media (min-width: 1280px) {
+  .asset-detail-page .asset-redesign {
+    width: min(calc(100% - 48px), 106.25rem);
+    max-width: 106.25rem;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    gap: 1rem;
+  }
+
+  .asset-detail-page .asset-redesign > .asset-redesign-hero,
+  .asset-detail-page .asset-redesign > .asset-presale-ownership-overview,
+  .asset-detail-page .asset-redesign > .asset-trust-strip,
+  .asset-detail-page .asset-redesign > .asset-how-it-works,
+  .asset-detail-page .asset-redesign > .asset-detail-lower-grid,
+  .asset-detail-page .asset-redesign > .asset-similar-section {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .asset-detail-page .asset-redesign > .asset-redesign-hero {
+    grid-template-columns: minmax(20rem, 0.9fr) minmax(27rem, 1.08fr) minmax(32rem, 1.25fr);
+    grid-template-rows: minmax(29rem, auto);
+    min-height: 29rem;
+    height: auto;
+    gap: 1rem;
+  }
+
+  .asset-detail-page .asset-redesign-hero > .asset-redesign-media,
+  .asset-detail-page .asset-redesign-hero > .asset-reference-identity,
+  .asset-detail-page .asset-redesign-hero > .asset-readiness-card {
+    grid-column: auto;
+    grid-row: 1;
+    height: auto;
+    min-height: 29rem;
+  }
+
+  .asset-detail-page .asset-redesign-hero > .asset-redesign-media .asset-showcase {
+    height: 100%;
+    min-height: 29rem;
+  }
+
+  .asset-detail-page .asset-redesign-hero > .asset-readiness-card {
+    max-height: none;
+    overflow: visible;
+    padding: 1.25rem;
+  }
+
+  .asset-detail-page .asset-redesign > .asset-presale-ownership-overview {
+    min-height: 7.1rem;
+    height: auto;
+    padding: 1rem 1.25rem;
+  }
+
+  .asset-detail-page .asset-redesign > .asset-how-it-works {
+    height: auto;
+    min-height: 12.5rem;
+    padding: 1rem 1.25rem;
+  }
+
+  .asset-detail-page .asset-redesign > .asset-detail-lower-grid {
+    grid-template-columns: minmax(0, 2.2fr) minmax(17rem, 0.9fr) minmax(19rem, 1fr);
+    height: auto;
+    min-height: 25rem;
+    gap: 1rem;
+  }
+
+  .asset-detail-page .asset-redesign > .asset-detail-lower-grid > * {
+    grid-column: auto;
+    grid-row: auto;
+    min-height: 25rem;
+    height: auto;
+  }
+
+  .asset-detail-page .asset-redesign > .asset-detail-lower-grid > .asset-price-panel {
+    grid-column: 1;
+  }
+
+  .asset-detail-page .asset-redesign > .asset-detail-lower-grid > .asset-details-panel {
+    grid-column: 2;
+  }
+
+  .asset-detail-page .asset-redesign > .asset-detail-lower-grid > .asset-external-panel {
+    grid-column: 3;
+  }
+
+  .asset-detail-page .asset-redesign > .asset-detail-lower-grid > .asset-presale-summary {
+    grid-column: 2 / -1;
+    min-height: 8rem;
+  }
+
+  .asset-detail-page .asset-redesign > .asset-similar-section {
+    min-height: 9rem;
+    height: auto;
+  }
+}
+
+@media (max-width: 1279px) and (min-width: 901px) {
+  .asset-detail-page .asset-redesign > .asset-redesign-hero {
+    grid-template-columns: minmax(17rem, 0.9fr) minmax(22rem, 1.1fr);
+  }
+
+  .asset-detail-page .asset-redesign-hero > .asset-readiness-card {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
 }
