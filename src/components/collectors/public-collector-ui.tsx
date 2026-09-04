@@ -175,21 +175,26 @@ export function FeaturedCollector({ collector }: { collector: CollectorProfile }
           </div>
         </div>
       )}
-      <Link
-        to="/collector/$id"
-        search={{
-          tab: "catalogue",
-          status: "all",
-          q: "",
-          category: "all",
-          sort: "recent",
-          page: 1,
-        }}
-        params={{ id: collector.handle }}
-        className="featured-assets-link"
-      >
-        View collector profile <ArrowRight aria-hidden="true" />
-      </Link>
+      <div className="featured-collector-actions">
+        <Link
+          to="/collector/$id"
+          search={{
+            tab: "catalogue",
+            status: "all",
+            q: "",
+            category: "all",
+            sort: "recent",
+            page: 1,
+          }}
+          params={{ id: collector.handle }}
+          className="featured-assets-link"
+        >
+          View profile <ArrowRight aria-hidden="true" />
+        </Link>
+        <Link to="/collector/$id/assets" params={{ id: collector.handle }} className="featured-assets-link">
+          View all assets <ArrowRight aria-hidden="true" />
+        </Link>
+      </div>
     </article>
   );
 }

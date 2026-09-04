@@ -167,6 +167,40 @@ function customerSafeLocationAddress(input: IntakeLocationManagementInput) {
     .join(', ');
 }
 
+function intakeLocationSnapshot(location: {
+  id: string;
+  displayName: string;
+  locationType: string;
+  environment: string;
+  region: string;
+  countryCode: string;
+  receiverName: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  postalCode: string | null;
+  customerSafeAddress: string;
+  shippingInstructions: string;
+  inPersonInstructions: string | null;
+}) {
+  return {
+    locationId: location.id,
+    displayName: location.displayName,
+    locationType: location.locationType,
+    environment: location.environment,
+    region: location.region,
+    countryCode: location.countryCode,
+    receiverName: location.receiverName,
+    addressLine1: location.addressLine1,
+    addressLine2: location.addressLine2,
+    city: location.city,
+    postalCode: location.postalCode,
+    customerSafeAddress: location.customerSafeAddress,
+    shippingInstructions: location.shippingInstructions,
+    inPersonInstructions: location.inPersonInstructions,
+  };
+}
+
 function intakeLocationAuditState(location: {
   active: boolean;
   intakeAvailable: boolean;
@@ -4036,6 +4070,150 @@ export class AdminService {
    * this endpoint owns the richer receipt, verification, exception, custody,
    * and audit context required by the detail workspace.
    */
+  async assignIntakeDestination(
+    actor: Actor,
+    submissionId: string,
+    idempotencyKey: string,
+    input: {
+      vaultId: string;
+      deliveryMethod: 'SHIPMENT' | 'IN_PERSON';
+      reason: string;
+    },
+    requestId: string,
+  ) {
+    await this.authorization.authorize(
+      actor,
+      'custody.manage',
+      undefined,
+      undefined,
+      requestId,
+    );
+    return this.db.$transaction(async (db) => {
+      const submission = await db.assetSubmission.findUnique({
+        where: { id: submissionId },
+        select: {
+          id: true,
+          status: true,
+          categoryId: true,
+          intake: {
+            select: {
+              id: true,
+              vaultId: true,
+              shipment: { select: { id: true } },
+              receipt: { select: { id: true } },
+            },
+          },
+        },
+      });
+      if (!submission)
+        throw new NotFoundException({
+          code: 'SUBMISSION_NOT_FOUND',
+          message: 'Submission not found.',
+        });
+      if (submission.status !== 'APPROVED')
+        throw new ConflictException({
+          code: 'SUBMISSION_NOT_ACCEPTED',
+          message: 'A destination can only be assigned after staff accepts the submission.',
+        });
+      if (submission.intake?.shipment || submission.intake?.receipt)
+        throw new ConflictException({
+          code: 'SHIPMENT_ALREADY_STARTED',
+          message: 'The destination cannot be changed after shipment or receipt starts.',
+        });
+
+      const vault = await db.vaultIntakeLocation.findFirst({
+        where: {
+          id: input.vaultId,
+          active: true,
+          status: 'ACTIVE',
+          intakeAvailable: true,
+          operationallyApproved: true,
+          ...(input.deliveryMethod === 'SHIPMENT'
+            ? { acceptingShipments: true }
+            : { acceptingInPerson: true }),
+          environment: this.config?.appEnvironment ?? 'development',
+        },
+      });
+      if (!vault)
+        throw new NotFoundException({
+          code: 'VAULT_NOT_AVAILABLE',
+          message: 'That intake destination is no longer available for this delivery method.',
+        });
+
+      if (vault.maximumActiveIntakes !== null) {
+        const activeIntakes = await db.submissionIntake.count({
+          where: {
+            vaultId: vault.id,
+            id: submission.intake ? { not: submission.intake.id } : undefined,
+            status: { in: activeIntakeStatuses },
+          },
+        });
+        if (activeIntakes >= vault.maximumActiveIntakes)
+          throw new ConflictException({
+            code: 'VAULT_AT_CAPACITY',
+            message: 'That intake destination has reached its current capacity.',
+          });
+      }
+
+      const accepted =
+        Array.isArray(vault.acceptedCategories) && vault.acceptedCategories.length
+          ? vault.acceptedCategories
+          : null;
+      if (accepted && !accepted.includes(submission.categoryId))
+        throw new ConflictException({
+          code: 'VAULT_CATEGORY_UNSUPPORTED',
+          message: 'That destination does not accept this category.',
+        });
+
+      const intake = await db.submissionIntake.upsert({
+        where: { submissionId },
+        create: {
+          submissionId,
+          vaultId: vault.id,
+          deliveryMethod: input.deliveryMethod,
+          intakeReference: `SLICE-${submissionId.slice(-8).toUpperCase()}`,
+          status: 'SHIPPING_REQUIRED',
+          destinationSnapshot: intakeLocationSnapshot(vault),
+        },
+        update: {
+          vaultId: vault.id,
+          deliveryMethod: input.deliveryMethod,
+          status: 'SHIPPING_REQUIRED',
+          destinationSnapshot: intakeLocationSnapshot(vault),
+          updatedAt: new Date(),
+        },
+        include: { vault: true },
+      });
+      await db.auditEvent.create({
+        data: {
+          id: randomUUID(),
+          actorUserId: actor.userId,
+          actorType: 'USER',
+          action: 'INTAKE_DESTINATION_ASSIGNED',
+          resourceType: 'submission-intake',
+          resourceId: intake.id,
+          requestId,
+          result: 'SUCCESS',
+          metadata: {
+            submissionId,
+            idempotencyKey,
+            reason: input.reason.trim(),
+            changed: submission.intake?.vaultId !== vault.id,
+            deliveryMethod: input.deliveryMethod,
+            destination: { id: vault.id, displayName: vault.displayName },
+          },
+        },
+      });
+      return {
+        intakeId: intake.id,
+        submissionId,
+        status: intake.status,
+        deliveryMethod: intake.deliveryMethod,
+        destination: { id: vault.id, displayName: vault.displayName },
+      };
+    });
+  }
+
   async intakeDetail(actor: Actor, submissionId: string) {
     await this.authorization.authorize(actor, 'admin.console.read');
 

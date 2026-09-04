@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+import type { ISODateTime } from "@/domain/common";
 import type { MarketplaceAsset } from "./market-api-presentation";
 
 vi.mock("@tanstack/react-router", () => ({
@@ -163,5 +164,43 @@ describe("MarketAssetCard layout contracts", () => {
     );
 
     expect(html).toContain("Set and card number unavailable");
+  });
+
+  it("renders a compact homepage projection for pre-sale assets", () => {
+    const html = renderToStaticMarkup(
+      <MarketAssetCard
+        asset={{
+          ...asset,
+          title: "Shohei Ohtani Aa",
+          year: 2026,
+          setName: "Topps All Aces",
+          cardNumber: "1",
+          grade: "PSA 10",
+          preSale: {
+            status: "ACTIVE",
+            deadlineAt: "2030-01-01T00:00:00.000Z" as ISODateTime,
+            physicalStatus: "AWAITING_INTAKE",
+            pricePerUnitMinor: "1850",
+            currency: "GBP",
+            offeredUnits: "750",
+            reservedUnits: "12",
+            availableUnits: "738",
+            reservedPercentageBps: 160,
+            sliceOwnershipPercentageBps: 10,
+          },
+        }}
+        homepageCompact
+      />,
+    );
+
+    expect(html).toContain("market-card-home-body");
+    expect(html).toContain("2026 · Topps All Aces · #1");
+    expect(html).toContain("Price per Slice");
+    expect(html).toContain("0.10% ownership");
+    expect(html).toContain("738 available · 12 reserved");
+    expect(html).toContain("Awaiting Intake");
+    expect(html).toContain("View collectible");
+    expect(html).not.toContain("market-card-valuation");
+    expect(html).not.toContain("market-card-presale-summary");
   });
 });

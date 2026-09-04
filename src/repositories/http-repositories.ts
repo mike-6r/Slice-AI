@@ -5049,6 +5049,40 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         await client.get<unknown>(`/admin/intake/submissions/${encodeURIComponent(submissionId)}`),
       );
     },
+    async assignIntakeDestination(submissionId, input) {
+      const value = objectField(
+        await client.request<unknown>(
+          `/admin/intake/submissions/${encodeURIComponent(submissionId)}/destination`,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json", "Idempotency-Key": idempotencyKey() },
+            body: JSON.stringify(input),
+          },
+        ),
+        "intake destination assignment",
+      );
+      const destination = objectField(
+        value.destination,
+        "intake destination assignment.destination",
+      );
+      return {
+        intakeId: stringField(value.intakeId, "intake destination assignment.intakeId"),
+        submissionId: stringField(value.submissionId, "intake destination assignment.submissionId"),
+        status: stringField(value.status, "intake destination assignment.status"),
+        deliveryMethod: stringField(
+          value.deliveryMethod,
+          "intake destination assignment.deliveryMethod",
+        ) as "SHIPMENT" | "IN_PERSON",
+        destination: {
+          id: stringField(destination.id, "intake destination assignment.destination.id"),
+          displayName: stringField(
+            destination.displayName,
+            "intake destination assignment.destination.displayName",
+          ),
+        },
+        replayed: Boolean(value.replayed),
+      };
+    },
     async listIntakeLocations(input) {
       const value = objectField(
         await client.get<unknown>("/admin/intake/locations", input),

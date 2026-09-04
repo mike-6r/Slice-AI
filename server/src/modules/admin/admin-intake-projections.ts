@@ -182,14 +182,11 @@ export type IntakeNextAction = {
 export function intakeNextAction(
   item: IntakeState & { stage: string },
 ): IntakeNextAction {
-  // Destination selection is deliberately collector-owned. Admin staff approve and
-  // manage the destination catalogue, but must not select a shipping destination
-  // on a collector's behalf through this operational queue.
   if (!item.intake)
     return {
-      label: 'Await collector destination',
-      actor: 'COLLECTOR',
-      needsStaffAction: false,
+      label: 'Assign destination',
+      actor: 'STAFF',
+      needsStaffAction: true,
     };
   if (
     item.intake.exceptions?.length ||
@@ -316,7 +313,7 @@ export function intakeCounts(
 export function intakeStageReason(item: IntakeState) {
   if (!item.intake)
     return item.status === 'APPROVED'
-      ? 'Waiting for the collector to select an authorised destination before shipping can begin'
+      ? 'Waiting for staff to assign an authorised destination before shipping can begin'
       : 'Submission not accepted';
   if (item.intake.exceptions?.length)
     return 'Exception blocks normal intake progress';
@@ -402,16 +399,18 @@ export function intakeIssues(item: {
 
 export function intakeAllowedActions(item: IntakeState & { stage: string }) {
   const next = intakeNextAction(item);
-  if (!next.needsStaffAction) return [];
-  return (
-    (
-      {
-        'Resolve exception': ['RESOLVE_EXCEPTION'],
-        'Confirm in-person receipt': ['CONFIRM_RECEIPT'],
-        'Confirm physical receipt': ['CONFIRM_RECEIPT'],
-        'Begin verification': ['START_VERIFICATION'],
-        'Complete verification': ['COMPLETE_VERIFICATION'],
-      } as Record<string, string[]>
-    )[next.label] ?? []
-  );
+  const actions = next.needsStaffAction
+    ? ((
+        {
+          'Resolve exception': ['RESOLVE_EXCEPTION'],
+          'Confirm in-person receipt': ['CONFIRM_RECEIPT'],
+          'Confirm physical receipt': ['CONFIRM_RECEIPT'],
+          'Begin verification': ['START_VERIFICATION'],
+          'Complete verification': ['COMPLETE_VERIFICATION'],
+        } as Record<string, string[]>
+      )[next.label] ?? [])
+    : [];
+  if (!item.intake || (!item.intake.shipment && !item.intake.receipt))
+    actions.push('ASSIGN_DESTINATION');
+  return [...new Set(actions)];
 }

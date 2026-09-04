@@ -141,6 +141,13 @@ const intakeReceiptConfirmation = z
     notes: z.string().trim().max(2000).optional(),
   })
   .strict();
+const intakeDestinationAssignment = z
+  .object({
+    vaultId: z.string().trim().min(1).max(80),
+    deliveryMethod: z.enum(['SHIPMENT', 'IN_PERSON']),
+    reason: z.string().trim().min(3).max(500),
+  })
+  .strict();
 const intakeVerificationComplete = z
   .object({
     identityMatch: z.boolean(),
@@ -271,7 +278,9 @@ const intakeLocationsQuery = z
       ])
       .optional(),
     deliveryMethod: z.enum(['SHIPPING', 'IN_PERSON', 'BOTH']).optional(),
-    availability: z.enum(['ACCEPTING', 'PAUSED', 'AT_CAPACITY', 'UNAVAILABLE']).optional(),
+    availability: z
+      .enum(['ACCEPTING', 'PAUSED', 'AT_CAPACITY', 'UNAVAILABLE'])
+      .optional(),
     environment: z.enum(['beta', 'production']).optional(),
     status: z
       .enum(['ACTIVE', 'TEMPORARILY_UNAVAILABLE', 'INACTIVE'])
@@ -324,9 +333,24 @@ const intakeLocationInput = z
     openingHours: z.string().trim().max(1_000).nullable().optional(),
     appointmentRequired: z.boolean().default(false),
     walkInsAllowed: z.boolean().default(false),
-    publicContactInstructions: z.string().trim().max(2_000).nullable().optional(),
-    packageLabelInstructions: z.string().trim().max(2_000).nullable().optional(),
-    specialHandlingInstructions: z.string().trim().max(2_000).nullable().optional(),
+    publicContactInstructions: z
+      .string()
+      .trim()
+      .max(2_000)
+      .nullable()
+      .optional(),
+    packageLabelInstructions: z
+      .string()
+      .trim()
+      .max(2_000)
+      .nullable()
+      .optional(),
+    specialHandlingInstructions: z
+      .string()
+      .trim()
+      .max(2_000)
+      .nullable()
+      .optional(),
     maximumActiveIntakes: z.number().int().positive().nullable().optional(),
     warningThreshold: z.number().int().nonnegative().nullable().optional(),
     pauseReason: z.string().trim().max(500).nullable().optional(),
@@ -491,6 +515,27 @@ export class AdminController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.admin.intakeDetail(request.actor!, submissionId);
+  }
+  @Post('intake/submissions/:submissionId/destination')
+  @RequirePermission('custody.manage')
+  assignIntakeDestination(
+    @Param('submissionId') submissionId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    if (!idempotencyKey || !/^[\x21-\x7e]{1,128}$/.test(idempotencyKey))
+      throw new BadRequestException({
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+        message: 'A valid Idempotency-Key header is required.',
+      });
+    return this.admin.assignIntakeDestination(
+      request.actor!,
+      submissionId,
+      idempotencyKey,
+      this.parse(intakeDestinationAssignment, body),
+      request.requestId ?? 'unknown',
+    );
   }
   @Get('intake/locations')
   @RequirePermission('admin.console.read')
@@ -825,7 +870,11 @@ export class AdminController {
     @Param('id') assetId: string,
     @Req() request: AuthenticatedRequest,
   ) {
-    return this.admin.rerunMarketReference(request.actor!, assetId, request.requestId ?? 'unknown');
+    return this.admin.rerunMarketReference(
+      request.actor!,
+      assetId,
+      request.requestId ?? 'unknown',
+    );
   }
 
   @Post('assets/:id/market-references/remove-preferred')
@@ -838,7 +887,10 @@ export class AdminController {
     return this.admin.removePreferredMarketReference(
       request.actor!,
       assetId,
-      this.parse(z.object({ reason: z.string().trim().min(3).max(500) }).strict(), body).reason,
+      this.parse(
+        z.object({ reason: z.string().trim().min(3).max(500) }).strict(),
+        body,
+      ).reason,
       request.requestId ?? 'unknown',
     );
   }
@@ -853,7 +905,10 @@ export class AdminController {
     return this.admin.markMarketReferenceReview(
       request.actor!,
       assetId,
-      this.parse(z.object({ reason: z.string().trim().min(3).max(500) }).strict(), body).reason,
+      this.parse(
+        z.object({ reason: z.string().trim().min(3).max(500) }).strict(),
+        body,
+      ).reason,
       request.requestId ?? 'unknown',
     );
   }

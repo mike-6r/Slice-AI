@@ -224,6 +224,99 @@ function PreSaleCardSummary({ asset }: { asset: MarketplaceAsset }) {
   );
 }
 
+function homepageIdentity(asset: MarketplaceAsset) {
+  const identity = [
+    asset.year,
+    asset.setName,
+    asset.cardNumber ? `#${asset.cardNumber.replace(/^#/, "")}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return identity || officialGradeLabel(asset);
+}
+
+function homepagePhysicalStatus(status: string) {
+  return status
+    .toLowerCase()
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase())
+    .replace("Physical ", "");
+}
+
+function formatHomepageOwnership(percentageBps: number | undefined) {
+  if (percentageBps === undefined) return null;
+  return `${(percentageBps / 100).toFixed(2)}% ownership`;
+}
+
+function HomepageAssetBody({ asset }: { asset: MarketplaceAsset }) {
+  const { formatMoney } = useCurrency();
+  const preSale = asset.preSale;
+  const priceMinor = preSale
+    ? Number(preSale.pricePerUnitMinor)
+    : (asset.sliceValuationAmountMinor ?? asset.estimatedMarketValueMinor);
+  const priceCurrency = preSale
+    ? preSale.currency
+    : (asset.sliceValuationCurrency ?? asset.estimatedMarketValueCurrency);
+  const ownership = formatHomepageOwnership(preSale?.sliceOwnershipPercentageBps);
+
+  return (
+    <div className="market-card-home-body">
+      <div className="market-card-home-heading">
+        <span className={`market-card-home-status${preSale ? " is-presale" : " is-live"}`}>
+          <span aria-hidden="true" />
+          {preSale ? "PRE-SALE" : "LIVE"}
+        </span>
+        <h2>
+          <Link to="/asset/$id" params={{ id: asset.slug }}>
+            {asset.title}
+          </Link>
+        </h2>
+        <p>{homepageIdentity(asset)}</p>
+        <span className="market-card-home-grade">{officialGradeLabel(asset)}</span>
+      </div>
+
+      <div className="market-card-home-metrics">
+        <div>
+          <span className="market-card-label">{preSale ? "Price per Slice" : "Market value"}</span>
+          <strong>
+            {priceMinor !== undefined && priceCurrency
+              ? formatMoney(priceMinor, priceCurrency)
+              : "Unavailable"}
+            {preSale ? <small> / Slice</small> : null}
+          </strong>
+        </div>
+        {ownership ? (
+          <div>
+            <span className="market-card-label">Ownership per Slice</span>
+            <strong>{ownership}</strong>
+          </div>
+        ) : null}
+      </div>
+
+      {preSale ? (
+        <div className="market-card-home-availability">
+          <strong>
+            {preSale.availableUnits} available · {preSale.reservedUnits} reserved
+          </strong>
+          <span>
+            {homepagePhysicalStatus(preSale.physicalStatus)} ·{" "}
+            {formatPreSaleCountdown(preSale.deadlineAt)}
+          </span>
+        </div>
+      ) : (
+        <div className="market-card-home-availability">
+          <strong>{marketStatusPresentation(asset).detail}</strong>
+          <span>{asset.activeListingsCount ?? 0} active listings</span>
+        </div>
+      )}
+
+      <Link to="/asset/$id" params={{ id: asset.slug }} className="market-card-cta">
+        View collectible <ArrowRight aria-hidden="true" />
+      </Link>
+    </div>
+  );
+}
+
 function MarketAvailability({ asset }: { asset: MarketplaceAsset }) {
   const status = marketStatusPresentation(asset);
   const listings = asset.activeListingsCount ?? 0;
@@ -288,9 +381,11 @@ export function MarketAssetCardSkeleton({ compact = false }: { compact?: boolean
 export function MarketAssetCard({
   asset,
   compact = false,
+  homepageCompact = false,
 }: {
   asset: MarketplaceAsset;
   compact?: boolean;
+  homepageCompact?: boolean;
 }) {
   const services = useAppServices();
   const client = useQueryClient();
@@ -325,7 +420,9 @@ export function MarketAssetCard({
     onSettled: () => void client.invalidateQueries({ queryKey: ["watchlist", "current"] }),
   });
   return (
-    <article className={`market-investment-card${compact ? " is-compact" : ""}`}>
+    <article
+      className={`market-investment-card${compact ? " is-compact" : ""}${homepageCompact ? " is-home-compact" : ""}`}
+    >
       <div className="market-card-visual-wrap">
         <AssetVisual asset={asset} />
         <button
@@ -350,32 +447,38 @@ export function MarketAssetCard({
         </button>
       </div>
       <div className="market-card-body">
-        <div className="market-card-heading">
-          <h2>
-            <Link to="/asset/$id" params={{ id: asset.slug }}>
-              {asset.title}
+        {homepageCompact ? (
+          <HomepageAssetBody asset={asset} />
+        ) : (
+          <>
+            <div className="market-card-heading">
+              <h2>
+                <Link to="/asset/$id" params={{ id: asset.slug }}>
+                  {asset.title}
+                </Link>
+              </h2>
+              <p className="market-card-identity-line">
+                {[asset.setName, asset.cardNumber].filter(Boolean).join(" · ") ||
+                  "Set and card number unavailable"}
+              </p>
+            </div>
+            <div className="market-card-condition" aria-label="Condition and grading">
+              <span>{officialGradeLabel(asset)}</span>
+              {asset.conditionLabel ? (
+                <span aria-label={`Condition: ${asset.conditionLabel}`}>
+                  Condition: {asset.conditionLabel}
+                </span>
+              ) : null}
+            </div>
+            <ValuationBlock asset={asset} />
+            <PreSaleCardSummary asset={asset} />
+            {!compact ? <MarketAvailability asset={asset} /> : null}
+            {!compact ? <OwnershipPrompt asset={asset} /> : null}
+            <Link to="/asset/$id" params={{ id: asset.slug }} className="market-card-cta">
+              View collectible <ArrowRight aria-hidden="true" />
             </Link>
-          </h2>
-          <p className="market-card-identity-line">
-            {[asset.setName, asset.cardNumber].filter(Boolean).join(" · ") ||
-              "Set and card number unavailable"}
-          </p>
-        </div>
-        <div className="market-card-condition" aria-label="Condition and grading">
-          <span>{officialGradeLabel(asset)}</span>
-          {asset.conditionLabel ? (
-            <span aria-label={`Condition: ${asset.conditionLabel}`}>
-              Condition: {asset.conditionLabel}
-            </span>
-          ) : null}
-        </div>
-        <ValuationBlock asset={asset} />
-        <PreSaleCardSummary asset={asset} />
-        {!compact ? <MarketAvailability asset={asset} /> : null}
-        {!compact ? <OwnershipPrompt asset={asset} /> : null}
-        <Link to="/asset/$id" params={{ id: asset.slug }} className="market-card-cta">
-          View collectible <ArrowRight aria-hidden="true" />
-        </Link>
+          </>
+        )}
       </div>
     </article>
   );

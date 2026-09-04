@@ -309,7 +309,7 @@ function LiveAssetCards({ assets }: { assets: import("@/domain").Asset[] }) {
   return (
     <div className="approved-home__trending" data-testid="homepage-trending-assets">
       {assets.map((asset) => (
-        <MarketAssetCard key={asset.id} asset={toMarketplaceAsset(asset)} compact />
+        <MarketAssetCard key={asset.id} asset={toMarketplaceAsset(asset)} homepageCompact />
       ))}
     </div>
   );

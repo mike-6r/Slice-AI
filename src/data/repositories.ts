@@ -2436,6 +2436,17 @@ export interface AdminRepository {
     limit?: number;
   }): Promise<AdminIntakeResponse>;
   getIntakeDetail(submissionId: string): Promise<AdminIntakeDetail>;
+  assignIntakeDestination(
+    submissionId: string,
+    input: { vaultId: string; deliveryMethod: "SHIPMENT" | "IN_PERSON"; reason: string },
+  ): Promise<{
+    intakeId: string;
+    submissionId: string;
+    status: string;
+    deliveryMethod: "SHIPMENT" | "IN_PERSON";
+    destination: { id: string; displayName: string };
+    replayed?: boolean;
+  }>;
   listIntakeLocations(input?: {
     q?: string;
     type?: IntakeLocationType;
@@ -2837,6 +2848,8 @@ export type PreSaleReservationView = {
   id: string;
   asset: { slug: string; title: string };
   units: string;
+  totalUnits?: string;
+  sliceOwnershipPercentageBps?: number;
   pricePerUnitMinor: string;
   grossMinor: string;
   status: string;

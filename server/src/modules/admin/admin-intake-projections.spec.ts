@@ -16,17 +16,19 @@ const base = (overrides: Partial<Parameters<typeof intakeStage>[0]> = {}) => ({
 });
 
 describe('admin intake projections', () => {
-  it('keeps an accepted submission without an intake destination collector-owned', () => {
+  it('makes an accepted submission without an intake destination assignable by staff', () => {
     const item = base();
     const stage = intakeStage(item);
 
     expect(stage).toBe('AWAITING_DESTINATION');
     expect(intakeNextAction({ ...item, stage })).toEqual({
-      label: 'Await collector destination',
-      actor: 'COLLECTOR',
-      needsStaffAction: false,
+      label: 'Assign destination',
+      actor: 'STAFF',
+      needsStaffAction: true,
     });
-    expect(intakeAllowedActions({ ...item, stage })).toEqual([]);
+    expect(intakeAllowedActions({ ...item, stage })).toEqual([
+      'ASSIGN_DESTINATION',
+    ]);
   });
 
   it('distinguishes an authorised destination awaiting collector tracking from staff action', () => {
@@ -47,7 +49,9 @@ describe('admin intake projections', () => {
       actor: 'COLLECTOR',
       needsStaffAction: false,
     });
-    expect(intakeAllowedActions({ ...item, stage })).toEqual([]);
+    expect(intakeAllowedActions({ ...item, stage })).toEqual([
+      'ASSIGN_DESTINATION',
+    ]);
   });
 
   it('keeps an in-person handoff out of carrier and tracking states', () => {
@@ -71,6 +75,7 @@ describe('admin intake projections', () => {
     });
     expect(intakeAllowedActions({ ...item, stage })).toEqual([
       'CONFIRM_RECEIPT',
+      'ASSIGN_DESTINATION',
     ]);
   });
 

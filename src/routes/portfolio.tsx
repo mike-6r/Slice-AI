@@ -31,6 +31,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
 import { KpiIconTile } from "@/components/ui/KpiIconTile";
+import type { PreSaleReservationView } from "@/data/repositories";
 import type {
   Asset,
   PortfolioHolding,
@@ -47,7 +48,6 @@ import type {
   TradingOrderView,
 } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
-import { useCurrency } from "@/currency/CurrencyProvider";
 import { formatDisplayMoney } from "@/currency/currency-presentation";
 import { getCurrencyPresentation } from "@/currency/currency-store";
 import { queryKeys } from "@/queries/keys";
@@ -126,6 +126,46 @@ type PortfolioSearch = {
   holdingsPageSize?: number;
 };
 
+type ActivePreSaleReservation = PreSaleReservationView & {
+  totalUnits?: string;
+  sliceOwnershipPercentageBps?: number;
+};
+
+function activePreSaleReservations(
+  reservations: PreSaleReservationView[] | undefined,
+): ActivePreSaleReservation[] {
+  return (reservations ?? []).filter(
+    (reservation): reservation is ActivePreSaleReservation =>
+      reservation.status === "ACTIVE" || reservation.status === "CONVERTING",
+  );
+}
+
+function reservationOwnership(reservation: ActivePreSaleReservation) {
+  if (reservation.totalUnits && BigInt(reservation.totalUnits) > 0n) {
+    const scaled =
+      (BigInt(reservation.units) * 10_000n) / BigInt(reservation.totalUnits);
+    return `${scaled / 100n}.${(scaled % 100n).toString().padStart(2, "0")}%`;
+  }
+  if (reservation.sliceOwnershipPercentageBps !== undefined)
+    return `${(reservation.sliceOwnershipPercentageBps / 100).toFixed(2)}%`;
+  return "Unavailable";
+}
+
+function positionsValueMinor(
+  summary: PortfolioSummary,
+  reservations: ActivePreSaleReservation[],
+) {
+  const reservedValue = reservations.reduce(
+    (total, reservation) => total + BigInt(reservation.grossMinor),
+    0n,
+  );
+  if (summary.estimatedHoldingsValueMinor !== null)
+    return (BigInt(summary.estimatedHoldingsValueMinor) + reservedValue).toString();
+  return summary.holdings.length === 0 && reservations.length
+    ? reservedValue.toString()
+    : null;
+}
+
 function activityQueryRetry(failureCount: number, error: unknown) {
   if (
     error instanceof ApiError &&
@@ -138,7 +178,6 @@ function activityQueryRetry(failureCount: number, error: unknown) {
 }
 
 export function Portfolio() {
-  const { currency: displayCurrency, rates } = useCurrency();
   const services = useAppServices();
   const { isAuthenticated } = useSession();
   const queryClient = useQueryClient();
@@ -235,6 +274,10 @@ export function Portfolio() {
     enabled: isAuthenticated,
     staleTime: 15_000,
   });
+  const activeReservations = useMemo(
+    () => activePreSaleReservations(preSaleReservations.data),
+    [preSaleReservations.data],
+  );
   // Portfolio rows are a backend-owned projection. Do not hide or rewrite
   // published positions in the browser based on fixture slugs or media.
   const displayHoldings = useMemo(() => holdings.data ?? [], [holdings.data]);
@@ -258,6 +301,8 @@ export function Portfolio() {
     [displayHoldings],
   );
   const visibleHoldings = displayHoldings;
+  const visiblePreSaleReservations =
+    holdingFilter === "ALL" && !holdingSearch.trim() ? activeReservations : [];
   const authRequired =
     (!isAuthenticated && !summary.data) ||
     (summary.error instanceof ApiError && summary.error.status === 401);
@@ -282,20 +327,11 @@ export function Portfolio() {
               onHoldingFilterChange={() => undefined}
               onHoldingSortChange={() => undefined}
             />
-              <PortfolioKpis query={displaySummaryQuery} performance={performance} />
-            {preSaleReservations.data?.length ? (
-              <section className="portfolio-presale-section" aria-labelledby="portfolio-presale-title">
-                <div className="portfolio-presale-section__heading"><div><span className="portfolio-eyebrow">Conditional positions</span><h2 id="portfolio-presale-title">Pre-Sale reservations</h2></div><Link to="/marketplace">Explore markets <ArrowRight aria-hidden="true" /></Link></div>
-                <div className="portfolio-presale-list">
-                  {preSaleReservations.data.map((reservation) => (
-                    <Link key={reservation.id} to="/asset/$id" params={{ id: reservation.asset.slug }} className="portfolio-presale-row">
-                      <span><strong>{reservation.asset.title}</strong><small>{reservation.units} Slices · {reservation.physicalStatus.replaceAll("_", " ")}</small></span>
-                      <span><strong>{formatDisplayMoney(reservation.grossMinor, "GBP", displayCurrency, rates)}</strong><small>{reservation.status.replaceAll("_", " ")}</small></span>
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            ) : null}
+            <PortfolioKpis
+              query={displaySummaryQuery}
+              performance={performance}
+              preSaleReservations={activeReservations}
+            />
           </section>
         ) : (
           <>
@@ -337,7 +373,12 @@ export function Portfolio() {
               }}
             />
             <PortfolioTabs active={tab} />
-            {tab === "holdings" ? <HoldingsKpis query={displaySummaryQuery} /> : null}
+            {tab === "holdings" ? (
+              <HoldingsKpis
+                query={displaySummaryQuery}
+                preSaleReservations={activeReservations}
+              />
+            ) : null}
           </>
         )}
         {tab === "overview" ? (
@@ -346,6 +387,7 @@ export function Portfolio() {
               <PortfolioPerformancePanel
                 query={displaySummaryQuery}
                 performance={performance}
+                preSaleReservations={activeReservations}
                 range={performanceRange}
                 onRangeChange={setPerformanceRange}
               />
@@ -365,6 +407,7 @@ export function Portfolio() {
                   })
                 }
                 visibleHoldings={visibleHoldings?.slice(0, 5)}
+                preSaleReservations={activeReservations}
                 compact
               />
               <AllocationPanel query={displaySummaryQuery} />
@@ -379,12 +422,16 @@ export function Portfolio() {
             summary={displaySummaryQuery}
             query={holdingsPage}
             holdings={holdingsPage.data?.items ?? []}
-            totalMatches={holdingsPage.data?.total ?? 0}
+            preSaleReservations={visiblePreSaleReservations}
+            totalMatches={(holdingsPage.data?.total ?? 0) + visiblePreSaleReservations.length}
             totalHoldings={displaySummaryQuery.data?.holdings.length ?? displayHoldings.length}
             view={holdingView}
             onViewChange={setHoldingView}
             page={holdingPage}
-            pageCount={holdingsPage.data?.totalPages ?? 0}
+            pageCount={Math.max(
+              holdingsPage.data?.totalPages ?? 0,
+              visiblePreSaleReservations.length ? 1 : 0,
+            )}
             pageSize={holdingPageSize}
             onPageChange={(value) =>
               void navigate({
@@ -1551,9 +1598,11 @@ function PortfolioHeroSparkline({ query }: { query: UseQueryResult<PortfolioPerf
 function PortfolioKpis({
   query,
   performance,
+  preSaleReservations,
 }: {
   query: UseQueryResult<PortfolioSummary>;
   performance: UseQueryResult<PortfolioPerformance>;
+  preSaleReservations: ActivePreSaleReservation[];
 }) {
   if (query.isLoading) return <KpiSkeletons />;
   if (query.isError || !query.data)
@@ -1570,6 +1619,8 @@ function PortfolioKpis({
   const totalAccountValue = summary.totalAccountValueMinor ?? summary.estimatedPortfolioValueMinor;
   const availableCash = summary.availableCashMinor ?? summary.cash.availableMinor;
   const reservedCash = summary.reservedCashMinor ?? summary.cash.reservedMinor;
+  const positionValue = positionsValueMinor(summary, preSaleReservations);
+  const positionCount = summary.holdings.length + preSaleReservations.length;
   const unrealisedPercent =
     summary.unrealisedPnlPercent ??
     (valuation ? percentageOf(valuation.unrealisedValueMinor, valuation.investedCostMinor) : null);
@@ -1596,15 +1647,15 @@ function PortfolioKpis({
         }
       />
       <PortfolioKpi
-        label="Holdings value"
+        label="Positions value"
         value={
-          summary.estimatedHoldingsValueMinor === null
+          positionValue === null
             ? "Unavailable"
-            : formatPortfolioMoney(summary.estimatedHoldingsValueMinor)
+            : formatPortfolioMoney(positionValue)
         }
         icon={Landmark}
         sparkline={performancePoints.map((point) => point.holdingsValueMinor ?? "0")}
-        detail={`Across ${summary.holdings.length} asset${summary.holdings.length === 1 ? "" : "s"}`}
+                detail={`Across ${positionCount} position${positionCount === 1 ? "" : "s"}`}
       />
       <PortfolioKpi
         label="Available cash"
@@ -1651,7 +1702,13 @@ function KpiSkeletons() {
   );
 }
 
-function HoldingsKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
+function HoldingsKpis({
+  query,
+  preSaleReservations,
+}: {
+  query: UseQueryResult<PortfolioSummary>;
+  preSaleReservations: ActivePreSaleReservation[];
+}) {
   if (query.isLoading) return <KpiSkeletons />;
   if (query.isError || !query.data) {
     return (
@@ -1666,21 +1723,23 @@ function HoldingsKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
   const unrealisedPercent =
     query.data.unrealisedPnlPercent ??
     (valuation ? percentageOf(valuation.unrealisedValueMinor, valuation.investedCostMinor) : null);
+  const positionValue = positionsValueMinor(query.data, preSaleReservations);
+  const positionCount = query.data.holdings.length + preSaleReservations.length;
   return (
     <section className="portfolio-kpis portfolio-kpis--holdings" aria-label="Holdings summary">
       <PortfolioKpi
-        label="Holdings value"
+        label="Positions value"
         value={
-          query.data.estimatedHoldingsValueMinor === null
+          positionValue === null
             ? "Unavailable"
-            : formatPortfolioMoney(query.data.estimatedHoldingsValueMinor)
+            : formatPortfolioMoney(positionValue)
         }
         icon={Landmark}
-        detail={`Across ${query.data.holdings.length} position${query.data.holdings.length === 1 ? "" : "s"}`}
+        detail={`Across ${positionCount} position${positionCount === 1 ? "" : "s"}`}
       />
       <PortfolioKpi
         label="Total positions"
-        value={String(query.data.holdings.length)}
+        value={String(positionCount)}
         icon={Layers3}
         detail="Across all collectibles"
       />
@@ -1766,15 +1825,20 @@ function KpiSparkline({ values }: { values: string[] }) {
 function PortfolioPerformancePanel({
   query,
   performance,
+  preSaleReservations,
   range,
   onRangeChange,
 }: {
   query: UseQueryResult<PortfolioSummary>;
   performance: UseQueryResult<PortfolioPerformance>;
+  preSaleReservations: ActivePreSaleReservation[];
   range: PortfolioPerformanceRange;
   onRangeChange: (range: PortfolioPerformanceRange) => void;
 }) {
   const selectedChange = performance.data?.periodChangeMinor ?? null;
+  const positionValue = query.data
+    ? positionsValueMinor(query.data, preSaleReservations)
+    : null;
   const hasExternalCashFlow =
     performance.data?.netCashFlowMinor !== undefined && performance.data.netCashFlowMinor !== "0";
   return (
@@ -1825,10 +1889,10 @@ function PortfolioPerformancePanel({
           />
           <dl className="portfolio-performance-periods">
             <div>
-              <dt>Holdings value</dt>
-              <dd>
-                {query.data.estimatedHoldingsValueMinor
-                  ? formatPortfolioMoney(query.data.estimatedHoldingsValueMinor)
+                <dt>Positions value</dt>
+                <dd>
+                {positionValue !== null
+                  ? formatPortfolioMoney(positionValue)
                   : "Unavailable"}
               </dd>
             </div>
@@ -2276,6 +2340,7 @@ function HoldingsExperience({
   summary,
   query,
   holdings,
+  preSaleReservations,
   totalMatches,
   totalHoldings,
   view,
@@ -2289,6 +2354,7 @@ function HoldingsExperience({
   summary: UseQueryResult<PortfolioSummary>;
   query: UseQueryResult<PortfolioHoldingPage>;
   holdings: PortfolioHolding[];
+  preSaleReservations: ActivePreSaleReservation[];
   totalMatches: number;
   totalHoldings: number;
   view: "list" | "grid";
@@ -2299,11 +2365,12 @@ function HoldingsExperience({
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
 }) {
-  const hasSearchResults = totalMatches > 0;
-  const hasAnyHoldings = totalHoldings > 0;
+  const hasSearchResults = totalMatches > 0 || preSaleReservations.length > 0;
+  const hasAnyHoldings = totalHoldings > 0 || preSaleReservations.length > 0;
+  const totalPositions = totalHoldings + preSaleReservations.length;
   return (
     <PortfolioPanel
-      title="Your holdings"
+      title={`Your positions (${totalPositions})`}
       className="portfolio-panel--holdings-dedicated"
       header={
         <div className="portfolio-view-toggle" role="group" aria-label="Holdings view">
@@ -2339,7 +2406,7 @@ function HoldingsExperience({
         <PortfolioEmptyState
           className="portfolio-empty-state--holdings-page"
           icon={<Landmark aria-hidden="true" />}
-          message="You don't own a Slice in any collectibles yet."
+          message="You don't have any positions yet."
           detail="Explore the market to find a collectible you'd like to own."
           action={
             <Link to="/marketplace" className="portfolio-empty-state__link">
@@ -2359,6 +2426,9 @@ function HoldingsExperience({
           {holdings.map((holding) => (
             <HoldingCard key={holding.assetId} holding={holding} />
           ))}
+          {preSaleReservations.map((reservation) => (
+            <PreSalePositionCard key={`pre-sale-${reservation.id}`} reservation={reservation} />
+          ))}
         </div>
       ) : (
         <div className="portfolio-table-wrap portfolio-table-wrap--holdings-dedicated" tabIndex={0}>
@@ -2377,6 +2447,9 @@ function HoldingsExperience({
             <tbody>
               {holdings.map((holding) => (
                 <HoldingRow key={holding.assetId} holding={holding} />
+              ))}
+              {preSaleReservations.map((reservation) => (
+                <PreSalePositionRow key={`pre-sale-${reservation.id}`} reservation={reservation} />
               ))}
             </tbody>
           </table>
@@ -2521,6 +2594,7 @@ function HoldingsPanel({
   filter,
   onFilterChange,
   visibleHoldings,
+  preSaleReservations,
   compact = false,
 }: {
   summary: UseQueryResult<PortfolioSummary>;
@@ -2529,11 +2603,16 @@ function HoldingsPanel({
   filter: HoldingFilter;
   onFilterChange: (filter: HoldingFilter) => void;
   visibleHoldings: PortfolioHolding[] | undefined;
+  preSaleReservations: ActivePreSaleReservation[];
   compact?: boolean;
 }) {
   return (
     <PortfolioPanel
-      title={query.data ? `Your holdings (${query.data.length})` : "Your holdings"}
+      title={
+        query.data
+          ? `Your positions (${query.data.length + preSaleReservations.length})`
+          : "Your positions"
+      }
       className="portfolio-panel--holdings"
       header={
         <div className="portfolio-holdings-header">
@@ -2584,6 +2663,7 @@ function HoldingsPanel({
       ) : compact ? (
         <CompactHoldingsList
           holdings={visibleHoldings ?? []}
+          preSaleReservations={filter === "ALL" ? preSaleReservations : []}
           hasAnyHoldings={Boolean(query.data?.length)}
         />
       ) : (
@@ -2601,10 +2681,17 @@ function HoldingsPanel({
               </tr>
             </thead>
             <tbody>
-              {visibleHoldings?.length ? (
-                visibleHoldings.map((holding) => (
+              {visibleHoldings?.length || preSaleReservations.length ? (
+                (visibleHoldings ?? []).map((holding) => (
                   <HoldingRow key={holding.assetId} holding={holding} />
-                ))
+                )).concat(
+                  preSaleReservations.map((reservation) => (
+                    <PreSalePositionRow
+                      key={`pre-sale-${reservation.id}`}
+                      reservation={reservation}
+                    />
+                  )),
+                )
               ) : (
                 <tr className="portfolio-table__empty-row">
                   <td colSpan={7}>
@@ -2638,23 +2725,25 @@ function HoldingsPanel({
 
 function CompactHoldingsList({
   holdings,
+  preSaleReservations,
   hasAnyHoldings,
 }: {
   holdings: PortfolioHolding[];
+  preSaleReservations: ActivePreSaleReservation[];
   hasAnyHoldings: boolean;
 }) {
-  if (!holdings.length) {
+  if (!holdings.length && !preSaleReservations.length) {
     return (
       <PortfolioEmptyState
         className="portfolio-empty-state--table"
         icon={<Landmark aria-hidden="true" />}
         message={
-          hasAnyHoldings ? "No holdings match this filter." : "You don't own any assets yet."
+          hasAnyHoldings ? "No holdings match this filter." : "You don't have any positions yet."
         }
         detail={
           hasAnyHoldings
             ? "Try another category."
-            : "Start building your portfolio by exploring the marketplace for great opportunities."
+            : "Start building your portfolio by exploring the marketplace."
         }
         action={
           !hasAnyHoldings ? (
@@ -2724,8 +2813,135 @@ function CompactHoldingsList({
           </article>
         );
       })}
+      {preSaleReservations.map((reservation) => (
+        <PreSalePositionRowCard
+          key={`pre-sale-${reservation.id}`}
+          reservation={reservation}
+        />
+      ))}
     </div>
   );
+}
+
+function PreSalePositionRowCard({
+  reservation,
+}: {
+  reservation: ActivePreSaleReservation;
+}) {
+  const deadline = reservation.deadlineAt
+    ? formatRemainingDeadline(reservation.deadlineAt)
+    : "Deadline unavailable";
+  return (
+    <article className="portfolio-compact-holding portfolio-compact-holding--presale">
+      <div className="portfolio-compact-holding__identity">
+        <Link
+          to="/asset/$id"
+          params={{ id: reservation.asset.slug }}
+          className="portfolio-asset portfolio-asset--link"
+        >
+          <span className="portfolio-asset__icon portfolio-asset__icon--presale" aria-hidden="true">
+            <Clock3 />
+          </span>
+          <span className="portfolio-asset__copy">
+            <strong>{reservation.asset.title}</strong>
+            <small>PRE-SALE · {reservation.units} reserved</small>
+          </span>
+        </Link>
+      </div>
+      <dl className="portfolio-compact-holding__metrics">
+        <div>
+          <dt>Ownership reserved</dt>
+          <dd>{reservationOwnership(reservation)} ownership reserved</dd>
+          <small>{reservation.units} {reservation.units === "1" ? "Slice" : "Slices"}</small>
+        </div>
+        <div>
+          <dt>Position value</dt>
+          <dd>{formatPortfolioMoney(reservation.grossMinor)}</dd>
+          <small>Reserved amount</small>
+        </div>
+        <div>
+          <dt>Status</dt>
+          <dd>{formatPhysicalStatus(reservation.physicalStatus)}</dd>
+          <small>{deadline}</small>
+        </div>
+      </dl>
+      <p className="portfolio-compact-holding__presale-note">Sell unavailable until finalization.</p>
+    </article>
+  );
+}
+
+function PreSalePositionCard({
+  reservation,
+}: {
+  reservation: ActivePreSaleReservation;
+}) {
+  return (
+    <article className="portfolio-holding-card portfolio-holding-card--presale">
+      <div className="portfolio-holding-card__body">
+        <span className="portfolio-position-badge">PRE-SALE</span>
+        <h3>{reservation.asset.title}</h3>
+        <p>{reservation.units} {reservation.units === "1" ? "Slice" : "Slices"} reserved</p>
+        <dl>
+          <div>
+            <dt>Ownership reserved</dt>
+            <dd>{reservationOwnership(reservation)} ownership reserved</dd>
+          </div>
+          <div>
+            <dt>Position value</dt>
+            <dd>{formatPortfolioMoney(reservation.grossMinor)}</dd>
+          </div>
+          <div>
+            <dt>Status</dt>
+            <dd>{formatPhysicalStatus(reservation.physicalStatus)}</dd>
+          </div>
+        </dl>
+        <p className="portfolio-holding-card__presale-note">
+          {reservation.deadlineAt ? formatRemainingDeadline(reservation.deadlineAt) : "Deadline unavailable"} · Sell unavailable until finalization.
+        </p>
+        <Link to="/asset/$id" params={{ id: reservation.asset.slug }} className="portfolio-table__action">
+          View asset <ArrowRight aria-hidden="true" />
+        </Link>
+      </div>
+    </article>
+  );
+}
+
+function PreSalePositionRow({
+  reservation,
+}: {
+  reservation: ActivePreSaleReservation;
+}) {
+  return (
+    <tr className="portfolio-presale-position-row">
+      <td data-label="Asset">
+        <Link to="/asset/$id" params={{ id: reservation.asset.slug }} className="portfolio-asset portfolio-asset--link">
+          <span className="portfolio-asset__icon portfolio-asset__icon--presale" aria-hidden="true"><Clock3 /></span>
+          <span className="portfolio-asset__copy"><strong>{reservation.asset.title}</strong><small>PRE-SALE · {reservation.units} reserved</small></span>
+        </Link>
+      </td>
+      <td data-label="Ownership">{reservationOwnership(reservation)} ownership reserved</td>
+      <td data-label="Available to sell">Unavailable until finalization</td>
+      <td data-label="Price per Slice">{formatPortfolioMoney(reservation.pricePerUnitMinor)}</td>
+      <td data-label="Current value">{formatPortfolioMoney(reservation.grossMinor)}</td>
+      <td data-label="P/L (unrealised)">Unavailable</td>
+      <td data-label="Actions"><Link to="/asset/$id" params={{ id: reservation.asset.slug }} className="portfolio-table__action">View <ArrowRight aria-hidden="true" /></Link></td>
+    </tr>
+  );
+}
+
+function formatPhysicalStatus(value: string) {
+  return value
+    .toLowerCase()
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function formatRemainingDeadline(value: string) {
+  const remaining = new Date(value).getTime() - Date.now();
+  if (!Number.isFinite(remaining) || remaining <= 0) return "Deadline passed";
+  const days = Math.floor(remaining / 86_400_000);
+  if (days > 0) return `${days}d remaining`;
+  return `${Math.max(1, Math.floor(remaining / 3_600_000))}h remaining`;
 }
 
 function HoldingRow({ holding }: { holding: PortfolioHolding }) {

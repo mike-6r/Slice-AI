@@ -83,19 +83,45 @@ const total = (money: Money, units: number) => gbp((money.amount / 100) * units)
 
 export const mockRepositories: AppRepositories = {
   admin: {
-    async getPreSale() { throw new Error("Pre-Sale requires the API service."); },
-    async configurePreSale() { throw new Error("Pre-Sale requires the API service."); },
-    async openPreSale() { throw new Error("Pre-Sale requires the API service."); },
-    async pausePreSale() { throw new Error("Pre-Sale requires the API service."); },
-    async resumePreSale() { throw new Error("Pre-Sale requires the API service."); },
-    async extendPreSale() { throw new Error("Pre-Sale requires the API service."); },
-    async cancelPreSale() { throw new Error("Pre-Sale requires the API service."); },
-    async finalizePreSale() { throw new Error("Pre-Sale requires the API service."); },
-    async linkMarketReference() { throw new Error("Market references require the API service."); },
-    async forceLinkMarketReference() { throw new Error("Market references require the API service."); },
-    async rerunMarketReference() { throw new Error("Market references require the API service."); },
-    async removePreferredMarketReference() { throw new Error("Market references require the API service."); },
-    async markMarketReferenceReview() { throw new Error("Market references require the API service."); },
+    async getPreSale() {
+      throw new Error("Pre-Sale requires the API service.");
+    },
+    async configurePreSale() {
+      throw new Error("Pre-Sale requires the API service.");
+    },
+    async openPreSale() {
+      throw new Error("Pre-Sale requires the API service.");
+    },
+    async pausePreSale() {
+      throw new Error("Pre-Sale requires the API service.");
+    },
+    async resumePreSale() {
+      throw new Error("Pre-Sale requires the API service.");
+    },
+    async extendPreSale() {
+      throw new Error("Pre-Sale requires the API service.");
+    },
+    async cancelPreSale() {
+      throw new Error("Pre-Sale requires the API service.");
+    },
+    async finalizePreSale() {
+      throw new Error("Pre-Sale requires the API service.");
+    },
+    async linkMarketReference() {
+      throw new Error("Market references require the API service.");
+    },
+    async forceLinkMarketReference() {
+      throw new Error("Market references require the API service.");
+    },
+    async rerunMarketReference() {
+      throw new Error("Market references require the API service.");
+    },
+    async removePreferredMarketReference() {
+      throw new Error("Market references require the API service.");
+    },
+    async markMarketReferenceReview() {
+      throw new Error("Market references require the API service.");
+    },
     async getOverview() {
       return {
         users: { active: 0 },
@@ -246,6 +272,9 @@ export const mockRepositories: AppRepositories = {
     },
     async getIntakeDetail() {
       throw new Error("Physical intake detail requires the API service.");
+    },
+    async assignIntakeDestination() {
+      throw new Error("Intake destination assignment requires the API service.");
     },
     async listIntakeLocations() {
       return {
@@ -638,7 +667,16 @@ export const mockRepositories: AppRepositories = {
   },
   reviews: {
     async getQualificationPolicy() {
-      return { version: "TEST", enabled: false, enabledCategories: [], enabledGraders: [], qaSamplingBps: 0, autoPreSaleLaunch: false, defaultPreSaleSupply: "1000", emergencyDisabled: true };
+      return {
+        version: "TEST",
+        enabled: false,
+        enabledCategories: [],
+        enabledGraders: [],
+        qaSamplingBps: 0,
+        autoPreSaleLaunch: false,
+        defaultPreSaleSupply: "1000",
+        emergencyDisabled: true,
+      };
     },
     async updateQualificationPolicy() {
       throw new Error("Qualification policy requires the API service.");
@@ -869,10 +907,18 @@ export const mockRepositories: AppRepositories = {
     },
   },
   preSale: {
-    async getPublicDetail() { throw new Error("Pre-Sale requires the API service."); },
-    async reserve() { throw new Error("Pre-Sale requires the API service."); },
-    async listReservations() { return []; },
-    async getReservation() { throw new Error("Pre-Sale requires the API service."); },
+    async getPublicDetail() {
+      throw new Error("Pre-Sale requires the API service.");
+    },
+    async reserve() {
+      throw new Error("Pre-Sale requires the API service.");
+    },
+    async listReservations() {
+      return [];
+    },
+    async getReservation() {
+      throw new Error("Pre-Sale requires the API service.");
+    },
   },
   portfolio: {
     async getPortfolio() {

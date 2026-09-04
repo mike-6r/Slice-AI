@@ -1654,3 +1654,113 @@ body:has(.collectors-page) .collectors-page .collectors-shell {
     min-height: 66px;
   }
 }
+
+/* Final collectors-directory frame. The public directory mockup uses the
+ * wider showcase canvas; keep that geometry local to this route so the other
+ * customer pages retain their shared frame. */
+@media (min-width: 721px) {
+  body:has(.collectors-page) .main-navigation > .site-shell,
+  body:has(.collectors-page) .market-tape__shell,
+  body:has(.collectors-page) .slice-footer .site-shell,
+  body:has(.collectors-page) .collectors-page .collectors-shell {
+    width: min(calc(100% - 3rem), 118rem);
+    max-width: 118rem;
+    margin-inline: auto;
+  }
+
+  body:has(.collectors-page) .collectors-page {
+    min-height: 0;
+    padding-bottom: 2.5rem;
+  }
+
+  body:has(.collectors-page) .collectors-hero--directory {
+    grid-template-columns: minmax(0, 1.25fr) minmax(24rem, 0.75fr);
+    gap: clamp(3rem, 6vw, 7rem);
+    padding-top: 2.2rem;
+    padding-bottom: 0.8rem;
+  }
+
+  body:has(.collectors-page) .collectors-directory {
+    padding-top: 0;
+  }
+
+  body:has(.collectors-page) .collectors-directory-toolbar {
+    display: grid;
+    grid-template-columns: minmax(18rem, 1.45fr) minmax(14rem, 1fr) minmax(14rem, 1fr) minmax(12rem, 0.8fr);
+    align-items: stretch;
+    gap: 0.8rem;
+    padding: 0.5rem 0.9rem 0.65rem;
+    border: 1px solid rgba(126, 163, 170, 0.16);
+    border-radius: 0.7rem 0.7rem 0 0;
+    background: rgba(11, 23, 29, 0.68);
+  }
+
+  body:has(.collectors-page) .collectors-directory-search {
+    width: auto;
+    max-width: none;
+    min-height: 2.45rem;
+  }
+
+  body:has(.collectors-page) .collectors-directory-search input {
+    height: 2.35rem;
+  }
+
+  body:has(.collectors-page) .collectors-select-control {
+    min-width: 0;
+  }
+
+  body:has(.collectors-page) .collectors-directory-results-bar {
+    display: none;
+  }
+
+  body:has(.collectors-page) .collectors-directory-stats {
+    border-right: 1px solid rgba(126, 163, 170, 0.16);
+    border-bottom: 1px solid rgba(126, 163, 170, 0.16);
+    border-left: 1px solid rgba(126, 163, 170, 0.16);
+    border-radius: 0 0 0.7rem 0.7rem;
+    background: rgba(11, 23, 29, 0.42);
+  }
+
+  body:has(.collectors-page) .collectors-featured-section,
+  body:has(.collectors-page) .collectors-public-directory {
+    padding-top: 1.8rem;
+  }
+
+  body:has(.collectors-page) .collectors-featured-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body:has(.collectors-page) .collectors-directory-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  body:has(.collectors-page) .collectors-directory-grid > :only-child {
+    max-width: 25rem;
+  }
+}
+
+@media (max-width: 720px) {
+  body:has(.collectors-page) .collectors-page {
+    padding-bottom: 1.5rem;
+  }
+}
+
+.collectors-featured-card .featured-collector-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.collectors-featured-card .featured-collector-actions .featured-assets-link {
+  margin-top: 0;
+}
+
+@media (max-width: 520px) {
+  .collectors-featured-card .featured-collector-actions {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+}

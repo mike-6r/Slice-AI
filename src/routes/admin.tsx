@@ -1573,6 +1573,20 @@ function PhysicalIntakeBoard({
       void queryClient.invalidateQueries({ queryKey: ["admin", "intake-detail", selectedIntake] });
     },
   });
+  const destinationAssignment = useMutation({
+    mutationFn: ({
+      submissionId,
+      input,
+    }: {
+      submissionId: string;
+      input: IntakeDestinationInput;
+    }) => services.repositories.admin.assignIntakeDestination(submissionId, input),
+    onSuccess: () => {
+      updateSearch({ page: "1", intakeTab: "overview" });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "intake"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "intake-detail", selectedIntake] });
+    },
+  });
   const [draftSearch, setDraftSearch] = useState(search);
   const [receiptRow, setReceiptRow] = useState<AdminIntakeRow | null>(null);
   const [demoRow, setDemoRow] = useState<AdminIntakeRow | null>(null);
@@ -1691,6 +1705,12 @@ function PhysicalIntakeBoard({
         onClose={closeIntake}
         onSelectTab={selectIntakeTab}
         onReceipt={(input) => receipt.mutate({ id: detailRow.id, input })}
+        onAssignDestination={async (input) => {
+          await destinationAssignment.mutateAsync({
+            submissionId: detailRow.submissionId,
+            input,
+          });
+        }}
         onStartVerification={() => verificationStart.mutate(detailRow.id)}
         onCompleteVerification={(input) => verificationComplete.mutate({ id: detailRow.id, input })}
         onCreateException={(input) => exceptionCreate.mutate({ id: detailRow.id, input })}
@@ -1705,6 +1725,8 @@ function PhysicalIntakeBoard({
         verificationStarting={verificationStart.isPending}
         verificationCompleting={verificationComplete.isPending}
         exceptionSaving={exceptionCreate.isPending || exceptionResolve.isPending}
+        destinationSaving={destinationAssignment.isPending}
+        destinationFailed={destinationAssignment.isError}
       />
     );
   }
@@ -2313,18 +2335,28 @@ type IntakeExceptionInput = {
   notes: string;
 };
 
+type IntakeDestinationInput = {
+  vaultId: string;
+  deliveryMethod: "SHIPMENT" | "IN_PERSON";
+  reason: string;
+};
+
 function IntakeDetailAction({
   row,
   onReceipt,
   onStartVerification,
+  onAssignDestination,
   onCompleteDemoIntake,
   verificationStarting,
+  destinationSaving,
 }: {
   row: AdminIntakeRow;
   onReceipt: () => void;
   onStartVerification: () => void;
+  onAssignDestination: () => void;
   onCompleteDemoIntake: () => void;
   verificationStarting: boolean;
+  destinationSaving: boolean;
 }) {
   if (row.allowedActions.includes("COMPLETE_DEMO_INTAKE"))
     return (
@@ -2356,10 +2388,10 @@ function IntakeDetailAction({
       <button
         type="button"
         className="button-primary"
-        disabled
-        title="The collector selects an approved destination from their workspace."
+        disabled={destinationSaving}
+        onClick={onAssignDestination}
       >
-        Await collector destination
+        {destinationSaving ? "Assigning destination…" : "Assign destination"}
       </button>
     );
   return null;
@@ -2372,6 +2404,7 @@ function PhysicalIntakeDetailPage({
   onClose,
   onSelectTab,
   onReceipt,
+  onAssignDestination,
   onStartVerification,
   onCompleteVerification,
   onCreateException,
@@ -2384,6 +2417,8 @@ function PhysicalIntakeDetailPage({
   verificationStarting,
   verificationCompleting,
   exceptionSaving,
+  destinationSaving,
+  destinationFailed,
 }: {
   row: AdminIntakeRow;
   detail: AdminIntakeDetail | undefined;
@@ -2391,6 +2426,7 @@ function PhysicalIntakeDetailPage({
   onClose: () => void;
   onSelectTab: (tab: IntakeDetailTab) => void;
   onReceipt: (input: IntakeReceiptInput) => void;
+  onAssignDestination: (input: IntakeDestinationInput) => Promise<void>;
   onStartVerification: () => void;
   onCompleteVerification: (input: IntakeVerificationInput) => void;
   onCreateException: (input: IntakeExceptionInput) => void;
@@ -2403,9 +2439,12 @@ function PhysicalIntakeDetailPage({
   verificationStarting: boolean;
   verificationCompleting: boolean;
   exceptionSaving: boolean;
+  destinationSaving: boolean;
+  destinationFailed: boolean;
 }) {
+  const services = useAppServices();
   const [dialog, setDialog] = useState<
-    "receipt" | "demo" | "verification" | "exception" | "resolve" | null
+    "destination" | "receipt" | "demo" | "verification" | "exception" | "resolve" | null
   >(null);
   const [resolveExceptionId, setResolveExceptionId] = useState<string | null>(null);
   const [receiptDraft, setReceiptDraft] = useState<IntakeReceiptInput>({
@@ -2433,6 +2472,44 @@ function PhysicalIntakeDetailPage({
     notes: "",
   });
   const [resolutionNote, setResolutionNote] = useState("");
+  const [destinationDraft, setDestinationDraft] = useState<IntakeDestinationInput>({
+    vaultId: row.vault?.id ?? "",
+    deliveryMethod: row.deliveryMethod ?? "SHIPMENT",
+    reason: "Assigned by the physical intake operator.",
+  });
+  const destinationLocations = useQuery({
+    queryKey: [
+      "admin",
+      "intake",
+      "destination-options",
+      row.submissionId,
+      destinationDraft.deliveryMethod,
+    ],
+    queryFn: () =>
+      services.repositories.admin.listIntakeLocations({
+        availability: "ACCEPTING",
+        status: "ACTIVE",
+        deliveryMethod: destinationDraft.deliveryMethod === "SHIPMENT" ? "SHIPPING" : "IN_PERSON",
+        acceptingNewIntakes: true,
+        page: 1,
+        pageSize: 100,
+        sort: "NAME",
+        sortDirection: "asc",
+      }),
+    enabled: dialog === "destination",
+    staleTime: 30_000,
+  });
+  useEffect(() => {
+    if (dialog !== "destination") return;
+    const options = destinationLocations.data?.items ?? [];
+    if (!options.length) return;
+    setDestinationDraft((current) => ({
+      ...current,
+      vaultId: options.some((option) => option.id === current.vaultId)
+        ? current.vaultId
+        : options[0].id,
+    }));
+  }, [dialog, destinationLocations.data?.items]);
   const activeTab = normalizeIntakeDetailTab(tab);
   const steps = [
     ["destination", "Destination"],
@@ -2572,13 +2649,15 @@ function PhysicalIntakeDetailPage({
           <button
             type="button"
             className="button-primary"
-            disabled={!row.allowedActions.includes("ASSIGN_DESTINATION")}
-            title={
-              row.allowedActions.includes("ASSIGN_DESTINATION")
-                ? undefined
-                : "Destination selection is currently owned by the collector or destination management workspace."
-            }
-            onClick={() => onSelectTab("movement")}
+            disabled={destinationSaving}
+            onClick={() => {
+              setDestinationDraft({
+                vaultId: row.vault?.id ?? "",
+                deliveryMethod: row.deliveryMethod ?? "SHIPMENT",
+                reason: "Assigned by the physical intake operator.",
+              });
+              setDialog("destination");
+            }}
           >
             Assign Destination
           </button>
@@ -2626,6 +2705,15 @@ function PhysicalIntakeDetailPage({
             <IntakeMovementTab
               row={row}
               detail={detail}
+              onAssignDestination={() => {
+                setDestinationDraft({
+                  vaultId: row.vault?.id ?? "",
+                  deliveryMethod: row.deliveryMethod ?? "SHIPMENT",
+                  reason: "Assigned by the physical intake operator.",
+                });
+                setDialog("destination");
+              }}
+              destinationSaving={destinationSaving}
               onOpenException={() => setDialog("exception")}
             />
           ) : null}
@@ -2657,13 +2745,23 @@ function PhysicalIntakeDetailPage({
             <IntakeDetailAction
               row={row}
               onReceipt={() => setDialog("receipt")}
+              onAssignDestination={() => {
+                setDestinationDraft({
+                  vaultId: row.vault?.id ?? "",
+                  deliveryMethod: row.deliveryMethod ?? "SHIPMENT",
+                  reason: "Assigned by the physical intake operator.",
+                });
+                setDialog("destination");
+              }}
               onStartVerification={onStartVerification}
               onCompleteDemoIntake={() => setDialog("demo")}
               verificationStarting={verificationStarting}
+              destinationSaving={destinationSaving}
             />
             {row.stage === "AWAITING_DESTINATION" ? (
               <small>
-                The collector must select an approved receiving destination from their workspace.
+                Assign an approved receiving destination before the collector can ship or arrange
+                drop-off.
               </small>
             ) : null}
           </section>
@@ -2706,13 +2804,15 @@ function PhysicalIntakeDetailPage({
             <div className="physical-intake-rail-actions">
               <button
                 type="button"
-                onClick={() => onSelectTab("movement")}
-                disabled={!row.allowedActions.includes("ASSIGN_DESTINATION")}
-                title={
-                  !row.allowedActions.includes("ASSIGN_DESTINATION")
-                    ? "Destination selection is owned by the collector or destination workspace."
-                    : undefined
-                }
+                disabled={destinationSaving}
+                onClick={() => {
+                  setDestinationDraft({
+                    vaultId: row.vault?.id ?? "",
+                    deliveryMethod: row.deliveryMethod ?? "SHIPMENT",
+                    reason: "Assigned by the physical intake operator.",
+                  });
+                  setDialog("destination");
+                }}
               >
                 Assign destination
               </button>
@@ -2862,7 +2962,111 @@ function PhysicalIntakeDetailPage({
                   ? "Physical exception"
                   : "Physical authority"}
             </p>
-            {dialog === "demo" ? (
+            {dialog === "destination" ? (
+              <form
+                onSubmit={async (event) => {
+                  event.preventDefault();
+                  if (!destinationDraft.vaultId || !destinationDraft.reason.trim()) return;
+                  await onAssignDestination({
+                    ...destinationDraft,
+                    reason: destinationDraft.reason.trim(),
+                  });
+                  setDialog(null);
+                }}
+              >
+                <h2>Assign intake destination</h2>
+                <p>
+                  Choose an approved receiving location and delivery method. This controls where the
+                  collector sends the physical collectible.
+                </p>
+                <label className="admin-form-field">
+                  <span>Delivery method</span>
+                  <select
+                    value={destinationDraft.deliveryMethod}
+                    onChange={(event) =>
+                      setDestinationDraft((current) => ({
+                        ...current,
+                        deliveryMethod: event.target
+                          .value as IntakeDestinationInput["deliveryMethod"],
+                        vaultId: "",
+                      }))
+                    }
+                  >
+                    <option value="SHIPMENT">Shipping</option>
+                    <option value="IN_PERSON">In-person drop-off</option>
+                  </select>
+                </label>
+                <label className="admin-form-field">
+                  <span>Approved destination</span>
+                  <select
+                    required
+                    value={destinationDraft.vaultId}
+                    disabled={
+                      destinationLocations.isLoading || !destinationLocations.data?.items.length
+                    }
+                    onChange={(event) =>
+                      setDestinationDraft((current) => ({
+                        ...current,
+                        vaultId: event.target.value,
+                      }))
+                    }
+                  >
+                    {!destinationLocations.data?.items.length ? (
+                      <option value="">
+                        {destinationLocations.isLoading
+                          ? "Loading approved destinations…"
+                          : "No eligible destinations available"}
+                      </option>
+                    ) : null}
+                    {destinationLocations.data?.items.map((location) => (
+                      <option key={location.id} value={location.id}>
+                        {location.displayName} · {location.region}, {location.countryCode}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="admin-form-field">
+                  <span>Reason</span>
+                  <textarea
+                    required
+                    minLength={3}
+                    value={destinationDraft.reason}
+                    onChange={(event) =>
+                      setDestinationDraft((current) => ({ ...current, reason: event.target.value }))
+                    }
+                    placeholder="Explain why this destination is being assigned."
+                  />
+                </label>
+                {destinationLocations.isError ? (
+                  <p className="text-negative">Approved destinations could not be loaded.</p>
+                ) : null}
+                {destinationFailed ? (
+                  <p className="text-negative">
+                    The destination could not be assigned. No state was changed.
+                  </p>
+                ) : null}
+                <div className="physical-intake-modal-actions">
+                  <button
+                    type="button"
+                    className="admin-inline-action"
+                    onClick={() => setDialog(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="button-primary"
+                    disabled={
+                      destinationSaving ||
+                      destinationLocations.isLoading ||
+                      !destinationDraft.vaultId
+                    }
+                  >
+                    {destinationSaving ? "Assigning…" : "Assign destination"}
+                  </button>
+                </div>
+              </form>
+            ) : dialog === "demo" ? (
               <>
                 <h2>Complete Demo Intake</h2>
                 <p>
@@ -3469,10 +3673,14 @@ function IntakeOverviewTab({
 function IntakeMovementTab({
   row,
   detail,
+  onAssignDestination,
+  destinationSaving,
   onOpenException,
 }: {
   row: AdminIntakeRow;
   detail: AdminIntakeDetail | undefined;
+  onAssignDestination: () => void;
+  destinationSaving: boolean;
   onOpenException: () => void;
 }) {
   const intake = detail?.intake;
@@ -3588,10 +3796,10 @@ function IntakeMovementTab({
           <button
             type="button"
             className="admin-secondary-button"
-            disabled
-            title="Destination assignment is collector-owned for this record."
+            onClick={onAssignDestination}
+            disabled={destinationSaving}
           >
-            Assign destination
+            {destinationSaving ? "Assigning destination…" : "Assign destination"}
           </button>
           <button
             type="button"

@@ -340,7 +340,8 @@ export class PreSaleService {
   private async customerReservation(id: string, userId: string, db: Db | PrismaService) {
     const row = await db.preSaleReservation.findFirst({ where: { id, buyerUserId: userId }, include: { preSale: { include: { asset: true, initialOffering: true } } } });
     if (!row) throw notFound('PRESALE_RESERVATION_NOT_FOUND', 'Reservation not found.');
-    return { id: row.id, asset: { slug: row.preSale.asset.slug, title: row.preSale.asset.title }, units: row.units.toString(), pricePerUnitMinor: row.pricePerUnitMinor.toString(), grossMinor: row.grossMinor.toString(), status: row.status, createdAt: row.createdAt.toISOString(), deadlineAt: row.preSale.deadlineAt?.toISOString() ?? null, physicalStatus: row.preSale.physicalStatus, disclosure: 'Final ownership is created only after Slice receives, verifies, and secures the collectible.' };
+    const totalUnits = row.preSale.initialOffering.totalUnits;
+    return { id: row.id, asset: { slug: row.preSale.asset.slug, title: row.preSale.asset.title }, units: row.units.toString(), totalUnits: totalUnits.toString(), sliceOwnershipPercentageBps: totalUnits > 0n ? Number(10_000n / totalUnits) : 0, pricePerUnitMinor: row.pricePerUnitMinor.toString(), grossMinor: row.grossMinor.toString(), status: row.status, createdAt: row.createdAt.toISOString(), deadlineAt: row.preSale.deadlineAt?.toISOString() ?? null, physicalStatus: row.preSale.physicalStatus, disclosure: 'Final ownership is created only after Slice receives, verifies, and secures the collectible.' };
   }
 
   private async physicalAuthority(db: Db, assetId: string) {

@@ -6,6 +6,7 @@ import { mockRepositories } from "@/mocks/repositories";
 import { AppServicesProvider } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 import type { AppRepositories } from "@/data/repositories";
+import type { PreSaleReservationView } from "@/data/repositories";
 import type {
   ISODateTime,
   PortfolioLot,
@@ -56,9 +57,15 @@ const summary: PortfolioSummary = {
   valuationStatus: "FULL" as const,
 };
 
-function renderPortfolio() {
+function renderPortfolio(options: {
+  portfolioSummary?: PortfolioSummary;
+  reservations?: PreSaleReservationView[];
+} = {}) {
+  const portfolioSummary = options.portfolioSummary ?? summary;
+  const reservations = options.reservations ?? [];
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
-  client.setQueryData(queryKeys.portfolio.summary, summary);
+  client.setQueryData(queryKeys.portfolio.summary, portfolioSummary);
+  client.setQueryData(["portfolio", "pre-sale-reservations"], reservations);
   const lots: PortfolioLot[] = [
     {
       assetSlug: "safe-asset",
@@ -83,14 +90,14 @@ function renderPortfolio() {
     ],
     nextCursor: "next-safe-cursor",
   };
-  client.setQueryData(queryKeys.portfolio.holdings, summary.holdings);
+  client.setQueryData(queryKeys.portfolio.holdings, portfolioSummary.holdings);
   client.setQueryData(queryKeys.portfolio.lots, lots);
   client.setQueryData(queryKeys.portfolio.transactions(), transactions);
   const repositories: AppRepositories = {
     ...mockRepositories,
     portfolio: {
-      getPortfolio: async () => summary,
-      getHoldings: async () => summary.holdings,
+      getPortfolio: async () => portfolioSummary,
+      getHoldings: async () => portfolioSummary.holdings,
       getLots: async () => lots,
       getTransactions: async () => transactions,
       getPerformance: async () => ({
@@ -112,6 +119,10 @@ function renderPortfolio() {
         previousPeriod: null,
       }),
     },
+    preSale: {
+      ...mockRepositories.preSale,
+      listReservations: async () => reservations,
+    },
   };
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>
@@ -127,7 +138,7 @@ describe("approved portfolio workspace", () => {
     const html = renderPortfolio();
     expect(html).toContain("Total portfolio value");
     expect(html).toContain("Cash £75.00");
-    expect(html).toContain("Holdings value");
+    expect(html).toContain("Positions value");
     expect(html).toContain("Unrealised P/L");
     expect(html).toContain("Allocation");
     expect(html).toContain("Safe asset");
@@ -148,5 +159,39 @@ describe("approved portfolio workspace", () => {
     expect(html).not.toContain("24h change");
     expect(html).toContain("portfolio-overview-content");
     expect(html).not.toContain("account-safe-id");
+  });
+
+  it("integrates an active Pre-Sale reservation into positions without a false empty state", () => {
+    const reservation: PreSaleReservationView = {
+      id: "reservation-1",
+      asset: { slug: "presale-asset", title: "Pre-Sale asset" },
+      units: "1",
+      totalUnits: "1000",
+      sliceOwnershipPercentageBps: 10,
+      pricePerUnitMinor: "1850",
+      grossMinor: "1850",
+      status: "ACTIVE",
+      createdAt: at,
+      deadlineAt: "2099-08-07T00:00:00.000Z",
+      physicalStatus: "AWAITING_INTAKE",
+      disclosure: "Conditional until finalization.",
+    };
+    const html = renderPortfolio({
+      portfolioSummary: {
+        ...summary,
+        holdings: [],
+        estimatedHoldingsValueMinor: "0",
+        estimatedPortfolioValueMinor: "10000",
+        totalAccountValueMinor: "10000",
+      },
+      reservations: [reservation],
+    });
+    expect(html).toContain("Your positions (1)");
+    expect(html).toContain("Pre-Sale asset");
+    expect(html).toContain("£18.50");
+    expect(html).toContain("0.10% ownership reserved");
+    expect(html).toContain("Sell unavailable until finalization.");
+    expect(html).not.toContain("You don't have any positions yet.");
+    expect(html).not.toContain("Conditional Positions");
   });
 });
