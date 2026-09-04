@@ -162,8 +162,17 @@ export class ProviderService {
 export class CollectorService {
   constructor(private readonly repositories: AppRepositories) {}
   list = () => this.repositories.collectors.listCollectors();
-  get = (id: import("@/domain").UserId, input?: { page?: number; pageSize?: number }) =>
-    this.repositories.collectors.getCollector(id, input);
+  get = (
+    id: import("@/domain").UserId,
+    input?: {
+      page?: number;
+      pageSize?: number;
+      q?: string;
+      status?: "all" | "pre-sale" | "market-live";
+      category?: string;
+      sort?: "recent" | "name" | "price";
+    },
+  ) => this.repositories.collectors.getCollector(id, input);
   follow = (id: import("@/domain").UserId) => this.repositories.collectors.followCollector(id);
   unfollow = (id: import("@/domain").UserId) => this.repositories.collectors.unfollowCollector(id);
 }

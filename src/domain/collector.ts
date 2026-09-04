@@ -19,6 +19,8 @@ export interface CollectorPublishedListing {
   slug: string;
   title: string;
   category: string;
+  year?: number | null;
+  cardNumber?: string | null;
   variant?: string | null;
   grade?: string | null;
   listedAt?: string | null;
@@ -27,6 +29,14 @@ export interface CollectorPublishedListing {
   asOf?: string;
   dataStatus?: "DEMO" | "DELAYED" | "LIVE" | "UNAVAILABLE";
   preSale?: PreSaleProjection | null;
+}
+export interface CollectorPublicActivity {
+  id: string;
+  type: "PRE_SALE" | "MARKET_LIVE";
+  title: string;
+  detail: string;
+  occurredAt: string;
+  assetSlug: string;
 }
 export interface CollectorSpecialtyOption {
   name: string;
@@ -39,6 +49,7 @@ export interface CollectorProfile {
   avatarUrl?: string | null;
   focus: string;
   specialties?: string[];
+  categories?: string[];
   category: CollectorCategory;
   publicSince?: string;
   isFeatured?: boolean;
@@ -52,6 +63,7 @@ export interface CollectorProfile {
   preSaleListingCount?: number;
   publishedListings?: CollectorPublishedListing[];
   featuredPreviewAssets?: CollectorPublishedListing[];
+  activity?: CollectorPublicActivity[];
   assetPagination?: {
     page: number;
     pageSize: number;

@@ -90,9 +90,7 @@ export function CollectorAssetPreview({
             <h4>{listing.title}</h4>
             <p>{listing.grade ?? listing.variant ?? collectorCategoryLabel(listing.category)}</p>
             <div>
-              <strong>
-                {price ?? "Value unavailable"}
-              </strong>
+              <strong>{price ?? "Value unavailable"}</strong>
               <span className={listing.preSale ? "is-presale" : "is-live"}>{state}</span>
             </div>
           </div>
@@ -140,11 +138,16 @@ export function FeaturedCollector({ collector }: { collector: CollectorProfile }
         </div>
         <div>
           <dt>Live</dt>
-          <dd>{collector.liveListingCount ?? listings.filter((listing) => !listing.preSale).length}</dd>
+          <dd>
+            {collector.liveListingCount ?? listings.filter((listing) => !listing.preSale).length}
+          </dd>
         </div>
         <div>
           <dt>Pre-Sale</dt>
-          <dd>{collector.preSaleListingCount ?? listings.filter((listing) => Boolean(listing.preSale)).length}</dd>
+          <dd>
+            {collector.preSaleListingCount ??
+              listings.filter((listing) => Boolean(listing.preSale)).length}
+          </dd>
         </div>
         <div>
           <dt>Since</dt>
@@ -172,7 +175,19 @@ export function FeaturedCollector({ collector }: { collector: CollectorProfile }
           </div>
         </div>
       )}
-      <Link to="/collector/$id" params={{ id: collector.handle }} className="featured-assets-link">
+      <Link
+        to="/collector/$id"
+        search={{
+          tab: "catalogue",
+          status: "all",
+          q: "",
+          category: "all",
+          sort: "recent",
+          page: 1,
+        }}
+        params={{ id: collector.handle }}
+        className="featured-assets-link"
+      >
         View collector profile <ArrowRight aria-hidden="true" />
       </Link>
     </article>
@@ -231,7 +246,18 @@ export function CollectorCard({
       <header>
         <CollectorAvatar collector={collector} />
         <div className="collector-card-identity">
-          <Link to="/collector/$id" params={{ id: collector.handle }}>
+          <Link
+            to="/collector/$id"
+            search={{
+              tab: "catalogue",
+              status: "all",
+              q: "",
+              category: "all",
+              sort: "recent",
+              page: 1,
+            }}
+            params={{ id: collector.handle }}
+          >
             {collector.displayName}
           </Link>
           <small>@{collector.handle}</small>
@@ -258,11 +284,16 @@ export function CollectorCard({
         </div>
         <div>
           <dt>Live</dt>
-          <dd>{collector.liveListingCount ?? listings.filter((listing) => !listing.preSale).length}</dd>
+          <dd>
+            {collector.liveListingCount ?? listings.filter((listing) => !listing.preSale).length}
+          </dd>
         </div>
         <div>
           <dt>Pre-Sale</dt>
-          <dd>{collector.preSaleListingCount ?? listings.filter((listing) => Boolean(listing.preSale)).length}</dd>
+          <dd>
+            {collector.preSaleListingCount ??
+              listings.filter((listing) => Boolean(listing.preSale)).length}
+          </dd>
         </div>
         <div>
           <dt>Since</dt>
@@ -291,6 +322,14 @@ export function CollectorCard({
       <footer className="collector-card-footer">
         <Link
           to="/collector/$id"
+          search={{
+            tab: "catalogue",
+            status: "all",
+            q: "",
+            category: "all",
+            sort: "recent",
+            page: 1,
+          }}
           params={{ id: collector.handle }}
           className="collector-card-profile-link"
         >
@@ -310,22 +349,69 @@ export function CollectorCard({
 
 export function PublicCollectorAssetCard({ listing }: { listing: CollectorPublishedListing }) {
   const { formatMoney } = useCurrency();
+  const isPreSale = Boolean(listing.preSale);
+  const price = isPreSale
+    ? formatMoney(listing.preSale!.pricePerUnitMinor, listing.preSale!.currency)
+    : listing.estimatedMarketValue
+      ? formatMoney(listing.estimatedMarketValue.amount, listing.estimatedMarketValue.currency)
+      : "—";
+  const ownership = listing.preSale?.sliceOwnershipPercentageBps;
+  const available = listing.preSale?.availableUnits;
+  const offered = listing.preSale?.offeredUnits;
+  const progress =
+    offered && Number(offered) > 0
+      ? Math.min(100, (Number(listing.preSale?.reservedUnits ?? 0) / Number(offered)) * 100)
+      : 0;
   return (
     <Link to="/asset/$id" params={{ id: listing.slug }} className="public-collector-asset-card">
       <div className="public-collector-asset-media">
         <AssetMedia listing={listing} />
+        <span className={`public-collector-asset-badge ${isPreSale ? "is-presale" : "is-live"}`}>
+          {isPreSale ? "PRE-SALE" : "LIVE"}
+        </span>
       </div>
-      <div>
-        <p>{listing.preSale ? "Pre-Sale" : collectorCategoryLabel(listing.category)}</p>
+      <div className="public-collector-asset-copy">
+        <p>{isPreSale ? "Pre-Sale" : "Market Live"}</p>
         <h3>{listing.title}</h3>
+        <small>
+          {[
+            listing.year,
+            listing.variant,
+            listing.cardNumber ? `#${listing.cardNumber}` : null,
+            listing.grade,
+          ]
+            .filter(Boolean)
+            .join(" · ") || collectorCategoryLabel(listing.category)}
+        </small>
         <strong>
-          {listing.estimatedMarketValue
-            ? formatMoney(
-                listing.estimatedMarketValue.amount,
-                listing.estimatedMarketValue.currency,
-              )
-            : "Value unavailable"}
+          {price}
+          {isPreSale ? " / Slice" : ""}
         </strong>
+        {ownership !== undefined ? (
+          <span className="public-collector-asset-ownership">
+            {(ownership / 100).toFixed(2)}% ownership per Slice
+          </span>
+        ) : null}
+        {isPreSale ? (
+          <>
+            <div
+              className="public-collector-asset-progress"
+              aria-label={`${progress.toFixed(0)}% reserved`}
+            >
+              <span style={{ width: `${progress}%` }} />
+            </div>
+            <span className="public-collector-asset-availability">
+              {listing.preSale!.reservedUnits} / {listing.preSale!.offeredUnits} reserved
+              <em>{available} available</em>
+            </span>
+          </>
+        ) : null}
+        <span className={`public-collector-asset-state ${isPreSale ? "is-presale" : "is-live"}`}>
+          <i /> {isPreSale ? "Awaiting intake" : "Live on market"}
+        </span>
+        <span className="public-collector-asset-cta">
+          View collectible <ArrowRight aria-hidden="true" />
+        </span>
       </div>
     </Link>
   );

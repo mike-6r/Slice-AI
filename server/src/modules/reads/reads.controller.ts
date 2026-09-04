@@ -91,8 +91,15 @@ export class ReadsController {
             profile: {
               is: {
                 OR: [
-                  { displayName: { contains: searchTerm, mode: 'insensitive' } },
-                  { publicUsername: { contains: searchTerm, mode: 'insensitive' } },
+                  {
+                    displayName: { contains: searchTerm, mode: 'insensitive' },
+                  },
+                  {
+                    publicUsername: {
+                      contains: searchTerm,
+                      mode: 'insensitive',
+                    },
+                  },
                 ],
               },
             },
@@ -106,8 +113,16 @@ export class ReadsController {
                     ...publicAssetWhere,
                     OR: [
                       { title: { contains: searchTerm, mode: 'insensitive' } },
-                      { category: { name: { contains: searchTerm, mode: 'insensitive' } } },
-                      { collectibleSet: { name: { contains: searchTerm, mode: 'insensitive' } } },
+                      {
+                        category: {
+                          name: { contains: searchTerm, mode: 'insensitive' },
+                        },
+                      },
+                      {
+                        collectibleSet: {
+                          name: { contains: searchTerm, mode: 'insensitive' },
+                        },
+                      },
                     ],
                   },
                 },
@@ -123,7 +138,9 @@ export class ReadsController {
         OR: [
           {
             publicCollectorProfile: {
-              is: { specialism: { contains: specialtyTerm, mode: 'insensitive' } },
+              is: {
+                specialism: { contains: specialtyTerm, mode: 'insensitive' },
+              },
             },
           },
           {
@@ -133,7 +150,9 @@ export class ReadsController {
                 asset: {
                   is: {
                     ...publicAssetWhere,
-                    category: { name: { contains: specialtyTerm, mode: 'insensitive' } },
+                    category: {
+                      name: { contains: specialtyTerm, mode: 'insensitive' },
+                    },
                   },
                 },
               },
@@ -144,22 +163,38 @@ export class ReadsController {
     }
     if (marketStatus === 'pre-sale') {
       filters.push({
-        submissions: { some: { status: 'APPROVED', asset: { is: preSaleAssetWhere } } },
+        submissions: {
+          some: { status: 'APPROVED', asset: { is: preSaleAssetWhere } },
+        },
       });
     } else if (marketStatus === 'market-live') {
       filters.push({
-        submissions: { some: { status: 'APPROVED', asset: { is: liveAssetWhere } } },
+        submissions: {
+          some: { status: 'APPROVED', asset: { is: liveAssetWhere } },
+        },
       });
     } else if (marketStatus === 'both') {
       filters.push(
-        { submissions: { some: { status: 'APPROVED', asset: { is: preSaleAssetWhere } } } },
-        { submissions: { some: { status: 'APPROVED', asset: { is: liveAssetWhere } } } },
+        {
+          submissions: {
+            some: { status: 'APPROVED', asset: { is: preSaleAssetWhere } },
+          },
+        },
+        {
+          submissions: {
+            some: { status: 'APPROVED', asset: { is: liveAssetWhere } },
+          },
+        },
       );
     }
     const baseWhere: Prisma.UserWhereInput = {
       ...publicWhere,
       ...nonDemoWhere,
-      ...(filters.length === 1 ? filters[0] : filters.length ? { AND: filters } : {}),
+      ...(filters.length === 1
+        ? filters[0]
+        : filters.length
+          ? { AND: filters }
+          : {}),
     };
     const orderBy: Prisma.UserOrderByWithRelationInput[] =
       order === 'name'
@@ -206,7 +241,11 @@ export class ReadsController {
         where: {
           ...publicWhere,
           ...nonDemoWhere,
-          ...(filters.length === 1 ? filters[0] : filters.length ? { AND: filters } : {}),
+          ...(filters.length === 1
+            ? filters[0]
+            : filters.length
+              ? { AND: filters }
+              : {}),
           publicCollectorProfile: { is: { isPublic: true, isFeatured: true } },
         },
         include: publicCollectorUserInclude(publicAssetWhere),
@@ -254,13 +293,16 @@ export class ReadsController {
         },
       }),
     ]);
-    const ownerIds = [...new Set([...rows, ...featuredRows].map((row) => row.id))];
+    const ownerIds = [
+      ...new Set([...rows, ...featuredRows].map((row) => row.id)),
+    ];
     const countWhere = {
       ownerUserId: { in: ownerIds },
       status: 'APPROVED' as const,
       asset: { is: publicAssetWhere },
     } satisfies Prisma.AssetSubmissionWhereInput;
-    const aggregateCountsAvailable = typeof this.db.assetSubmission.groupBy === 'function';
+    const aggregateCountsAvailable =
+      typeof this.db.assetSubmission.groupBy === 'function';
     const [publishedCounts, liveCounts, preSaleCounts] =
       ownerIds.length && aggregateCountsAvailable
         ? await Promise.all([
@@ -285,10 +327,15 @@ export class ReadsController {
       ownerIds.map((ownerId) => [
         ownerId,
         {
-          published: publishedCounts.find((row) => row.ownerUserId === ownerId)?._count._all ?? 0,
-          live: liveCounts.find((row) => row.ownerUserId === ownerId)?._count._all ?? 0,
+          published:
+            publishedCounts.find((row) => row.ownerUserId === ownerId)?._count
+              ._all ?? 0,
+          live:
+            liveCounts.find((row) => row.ownerUserId === ownerId)?._count
+              ._all ?? 0,
           preSale:
-            preSaleCounts.find((row) => row.ownerUserId === ownerId)?._count._all ?? 0,
+            preSaleCounts.find((row) => row.ownerUserId === ownerId)?._count
+              ._all ?? 0,
         },
       ]),
     );
@@ -349,10 +396,41 @@ export class ReadsController {
     @Param('slug') slug: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
+    @Query('q') query?: string,
+    @Query('status') status?: string,
+    @Query('category') category?: string,
+    @Query('sort') sort?: string,
   ) {
     const assetPage = parseCollectorPage(page);
-    const assetPageSize = parseCollectorPageSize(pageSize ?? '8');
+    const assetPageSize = parseCollectorPageSize(pageSize);
     const publicAssetWhere = publicDiscoverableAssetWhere(this.config.isBeta);
+    const assetWhere: Prisma.AssetWhereInput = {
+      ...publicAssetWhere,
+      ...(status === 'pre-sale'
+        ? { preSale: { is: { status: 'ACTIVE' } } }
+        : {}),
+      ...(status === 'market-live' ? { status: 'PUBLISHED' } : {}),
+      ...(category?.trim()
+        ? {
+            category: {
+              name: { contains: category.trim(), mode: 'insensitive' },
+            },
+          }
+        : {}),
+      ...(query?.trim()
+        ? {
+            OR: [
+              { title: { contains: query.trim(), mode: 'insensitive' } },
+              { shortName: { contains: query.trim(), mode: 'insensitive' } },
+              {
+                collectibleSet: {
+                  name: { contains: query.trim(), mode: 'insensitive' },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
     const fallbackUserId = slug.startsWith('collector-')
       ? slug.slice('collector-'.length)
       : null;
@@ -364,7 +442,7 @@ export class ReadsController {
         submissions: {
           some: {
             status: 'APPROVED',
-            asset: { is: publicAssetWhere },
+            asset: { is: assetWhere },
           },
         },
         AND: [
@@ -377,15 +455,27 @@ export class ReadsController {
         ],
       },
       include: publicCollectorUserInclude(
-        publicAssetWhere,
+        assetWhere,
         (assetPage - 1) * assetPageSize,
         assetPageSize,
+        sort === 'name' ? 'name' : sort === 'price' ? 'price' : 'recent',
       ),
     });
-    const [publicAssetTotal, liveAssetTotal, preSaleAssetTotal] = x
+    const [assetTotal, publicAssetTotal, liveAssetTotal, preSaleAssetTotal] = x
       ? await Promise.all([
           this.db.assetSubmission.count({
-            where: { ownerUserId: x.id, status: 'APPROVED', asset: { is: publicAssetWhere } },
+            where: {
+              ownerUserId: x.id,
+              status: 'APPROVED',
+              asset: { is: assetWhere },
+            },
+          }),
+          this.db.assetSubmission.count({
+            where: {
+              ownerUserId: x.id,
+              status: 'APPROVED',
+              asset: { is: publicAssetWhere },
+            },
           }),
           this.db.assetSubmission.count({
             where: {
@@ -402,7 +492,7 @@ export class ReadsController {
             },
           }),
         ])
-      : [0, 0, 0];
+      : [0, 0, 0, 0];
     return x
       ? await publicCollectorView(
           x,
@@ -411,14 +501,16 @@ export class ReadsController {
           {
             page: assetPage,
             pageSize: assetPageSize,
-            total: publicAssetTotal,
-            totalPages: publicAssetTotal
-              ? Math.ceil(publicAssetTotal / assetPageSize)
-              : 0,
-            hasNextPage: assetPage * assetPageSize < publicAssetTotal,
+            total: assetTotal,
+            totalPages: assetTotal ? Math.ceil(assetTotal / assetPageSize) : 0,
+            hasNextPage: assetPage * assetPageSize < assetTotal,
             hasPreviousPage: assetPage > 1,
           },
-          { published: publicAssetTotal, live: liveAssetTotal, preSale: preSaleAssetTotal },
+          {
+            published: publicAssetTotal,
+            live: liveAssetTotal,
+            preSale: preSaleAssetTotal,
+          },
         )
       : { error: 'COLLECTOR_NOT_FOUND' };
   }
@@ -765,6 +857,7 @@ const publicCollectorUserInclude = (
   assetWhere: Prisma.AssetWhereInput = { status: 'PUBLISHED' },
   submissionSkip = 0,
   submissionTake = 8,
+  sort: 'recent' | 'name' | 'price' = 'recent',
 ) =>
   ({
     profile: {
@@ -809,6 +902,8 @@ const publicCollectorUserInclude = (
             slug: true,
             title: true,
             shortName: true,
+            year: true,
+            cardNumber: true,
             publishedAt: true,
             category: { select: { name: true } },
             collectibleSet: { select: { name: true } },
@@ -826,7 +921,9 @@ const publicCollectorUserInclude = (
                 physicalStatus: true,
                 initialOffering: {
                   select: {
+                    totalUnits: true,
                     offeredUnits: true,
+                    retainedUnits: true,
                     pricePerUnitMinor: true,
                     currency: true,
                   },
@@ -855,7 +952,19 @@ const publicCollectorUserInclude = (
           select: { id: true, slot: true, objectKey: true },
         },
       },
-      orderBy: [{ reviewedAt: 'desc' }, { id: 'desc' }],
+      orderBy:
+        sort === 'name'
+          ? [{ asset: { title: 'asc' } }, { id: 'asc' }]
+          : sort === 'price'
+            ? [
+                {
+                  asset: {
+                    preSale: { initialOffering: { pricePerUnitMinor: 'asc' } },
+                  },
+                },
+                { id: 'asc' },
+              ]
+            : [{ reviewedAt: 'desc' }, { id: 'desc' }],
       skip: submissionSkip,
       take: submissionTake,
     },
@@ -889,6 +998,8 @@ async function publicCollectorView(
         slug: string;
         title: string;
         shortName: string | null;
+        year: number | null;
+        cardNumber: string | null;
         category: { name: string };
         collectibleSet: { name: string } | null;
         publishedAt: Date | null;
@@ -903,6 +1014,8 @@ async function publicCollectorView(
           physicalStatus: string;
           initialOffering: {
             offeredUnits: bigint;
+            totalUnits: bigint;
+            retainedUnits: bigint;
             pricePerUnitMinor: bigint;
             currency: string;
           };
@@ -949,6 +1062,8 @@ async function publicCollectorView(
         slug: asset.slug,
         title: asset.title,
         category: asset.category.name,
+        year: asset.year,
+        cardNumber: asset.cardNumber,
         variant: asset.shortName ?? asset.collectibleSet?.name ?? null,
         grade: asset.gradeScaleEntry
           ? `${asset.gradeScaleEntry.company.displayName || asset.gradeScaleEntry.company.name} ${asset.gradeScaleEntry.label}`
@@ -966,15 +1081,38 @@ async function publicCollectorView(
                   openedAt: asset.preSale.openedAt?.toISOString() ?? null,
                   deadlineAt: asset.preSale.deadlineAt?.toISOString() ?? null,
                   physicalStatus: asset.preSale.physicalStatus,
+                  collectorEstimateMinor: null,
                   pricePerUnitMinor:
                     asset.preSale.initialOffering.pricePerUnitMinor.toString(),
                   currency: asset.preSale.initialOffering.currency,
+                  offeredPercentageBps: asset.preSale.initialOffering.totalUnits
+                    ? Number(
+                        (asset.preSale.initialOffering.offeredUnits * 10_000n) /
+                          asset.preSale.initialOffering.totalUnits,
+                      )
+                    : 0,
+                  totalSupply:
+                    asset.preSale.initialOffering.totalUnits.toString(),
                   offeredUnits: offeredUnits.toString(),
                   reservedUnits: reservedUnits.toString(),
                   availableUnits: (offeredUnits - reservedUnits).toString(),
                   reservedPercentageBps: offeredUnits
                     ? Number((reservedUnits * 10_000n) / offeredUnits)
                     : 0,
+                  sliceOwnershipPercentageBps:
+                    asset.preSale.initialOffering.totalUnits > 0n
+                      ? Number(
+                          10_000n / asset.preSale.initialOffering.totalUnits,
+                        )
+                      : 0,
+                  collectorRetainedPercentageBps:
+                    asset.preSale.initialOffering.totalUnits > 0n
+                      ? Number(
+                          (asset.preSale.initialOffering.retainedUnits *
+                            10_000n) /
+                            asset.preSale.initialOffering.totalUnits,
+                        )
+                      : 0,
                 };
               })()
             : null,
@@ -1015,6 +1153,9 @@ async function publicCollectorView(
     username: x.profile?.publicUsername ?? profile?.slug ?? `collector-${x.id}`,
     headline: profile?.headline ?? null,
     specialism: profile?.specialism ?? null,
+    categories: [
+      ...new Set(listings.map((listing) => listing.category).filter(Boolean)),
+    ],
     specialties: (profile?.specialism ?? '')
       .split('·')
       .map((value) => value.trim())
@@ -1030,13 +1171,38 @@ async function publicCollectorView(
     featurePriority: profile?.featurePriority ?? 0,
     featuredCaption: profile?.featuredCaption ?? null,
     publishedListingCount:
-      assetCounts?.published ?? (isBeta ? listings.length : x._count.submissions),
-    liveListingCount: assetCounts?.live ?? listings.filter((listing) => !listing.preSale).length,
+      assetCounts?.published ??
+      (isBeta ? listings.length : x._count.submissions),
+    liveListingCount:
+      assetCounts?.live ??
+      listings.filter((listing) => !listing.preSale).length,
     preSaleListingCount:
-      assetCounts?.preSale ?? listings.filter((listing) => Boolean(listing.preSale)).length,
+      assetCounts?.preSale ??
+      listings.filter((listing) => Boolean(listing.preSale)).length,
     latestPublicListingAt: listings[0]?.listedAt ?? null,
     featuredPreviewAssets: listings.slice(0, 3),
     publishedListings: listings,
+    activity: listings
+      .filter((listing) => listing.listedAt)
+      .slice(0, 8)
+      .map((listing) => ({
+        id: `${listing.slug}-${listing.preSale ? 'pre-sale' : 'market-live'}`,
+        type: listing.preSale
+          ? ('PRE_SALE' as const)
+          : ('MARKET_LIVE' as const),
+        title: listing.preSale
+          ? `${listing.title} entered Pre-Sale`
+          : `${listing.title} listed on the market`,
+        detail: [
+          listing.year,
+          listing.variant,
+          listing.cardNumber ? `#${listing.cardNumber}` : null,
+        ]
+          .filter(Boolean)
+          .join(' · '),
+        occurredAt: listing.listedAt as string,
+        assetSlug: listing.slug,
+      })),
     assetPagination,
   };
 }
@@ -1207,8 +1373,10 @@ function parseCollectorSort(value: string | undefined) {
 }
 
 function parseCollectorStatus(value: string | undefined) {
-  if (value === undefined || value === '' || value === 'all') return 'all' as const;
-  if (value === 'pre-sale' || value === 'market-live' || value === 'both') return value;
+  if (value === undefined || value === '' || value === 'all')
+    return 'all' as const;
+  if (value === 'pre-sale' || value === 'market-live' || value === 'both')
+    return value;
   throw new BadRequestException({
     code: 'VALIDATION_FAILED',
     message: 'Request validation failed.',

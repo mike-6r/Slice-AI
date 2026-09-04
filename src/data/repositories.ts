@@ -123,9 +123,32 @@ export interface SubmissionRepository {
   verifyCertification(id: string, certificationNumber: string): Promise<SubmissionDetail>;
 }
 export interface SubmissionReviewRepository {
-  getQualificationPolicy(): Promise<{ version: string; enabled: boolean; enabledCategories: string[]; enabledGraders: string[]; qaSamplingBps: number; autoPreSaleLaunch: boolean; defaultPreSaleSupply: string; emergencyDisabled: boolean }>;
-  updateQualificationPolicy(input: { enabled?: boolean; qaSamplingBps?: number; autoPreSaleLaunch?: boolean; emergencyDisabled?: boolean }): Promise<{ version: string; enabled: boolean; qaSamplingBps: number; autoPreSaleLaunch: boolean; defaultPreSaleSupply: string; emergencyDisabled: boolean }>;
-  listQualification(tab?: "HUMAN_REVIEW_REQUIRED" | "COLLECTOR_ACTION_REQUIRED" | "AUTO_QUALIFIED" | "BLOCKED"): Promise<{ items: QualificationQueueItem[]; total: number }>;
+  getQualificationPolicy(): Promise<{
+    version: string;
+    enabled: boolean;
+    enabledCategories: string[];
+    enabledGraders: string[];
+    qaSamplingBps: number;
+    autoPreSaleLaunch: boolean;
+    defaultPreSaleSupply: string;
+    emergencyDisabled: boolean;
+  }>;
+  updateQualificationPolicy(input: {
+    enabled?: boolean;
+    qaSamplingBps?: number;
+    autoPreSaleLaunch?: boolean;
+    emergencyDisabled?: boolean;
+  }): Promise<{
+    version: string;
+    enabled: boolean;
+    qaSamplingBps: number;
+    autoPreSaleLaunch: boolean;
+    defaultPreSaleSupply: string;
+    emergencyDisabled: boolean;
+  }>;
+  listQualification(
+    tab?: "HUMAN_REVIEW_REQUIRED" | "COLLECTOR_ACTION_REQUIRED" | "AUTO_QUALIFIED" | "BLOCKED",
+  ): Promise<{ items: QualificationQueueItem[]; total: number }>;
   rerunQualification(id: string): Promise<QualificationQueueItem>;
   listQueue(input?: {
     cursor?: string;
@@ -1843,7 +1866,14 @@ export type AdminMarketReference = {
   providerReferenceId: string;
   originalUrl: string | null;
   canonicalUrl: string | null;
-  matchStatus: "LINKED" | "VERIFIED MATCH" | "NEEDS REVIEW" | "MISMATCH" | "PROVIDER UNAVAILABLE" | "STALE" | "NOT LINKED";
+  matchStatus:
+    | "LINKED"
+    | "VERIFIED MATCH"
+    | "NEEDS REVIEW"
+    | "MISMATCH"
+    | "PROVIDER UNAVAILABLE"
+    | "STALE"
+    | "NOT LINKED";
   matchReasons: string[];
   fetchStatus: "AVAILABLE" | "UNAVAILABLE" | "NOT_CHECKED";
   currentObservation: { valueMinor: string; currency: string; observedAt: string } | null;
@@ -2338,11 +2368,24 @@ export type InitialOfferingPreview = Omit<
 
 export interface AdminRepository {
   getPreSale(assetId: string): Promise<PreSaleDetail>;
-  configurePreSale(assetId: string, input: { estimatedValueMinor?: string; offeredPercentageBps?: number; totalUnits?: string; pricePerUnitMinor?: string; currency?: string; reason: string }): Promise<PreSaleDetail>;
+  configurePreSale(
+    assetId: string,
+    input: {
+      estimatedValueMinor?: string;
+      offeredPercentageBps?: number;
+      totalUnits?: string;
+      pricePerUnitMinor?: string;
+      currency?: string;
+      reason: string;
+    },
+  ): Promise<PreSaleDetail>;
   openPreSale(assetId: string): Promise<PreSaleDetail>;
   pausePreSale(assetId: string, reason: string): Promise<PreSaleDetail>;
   resumePreSale(assetId: string, reason: string): Promise<PreSaleDetail>;
-  extendPreSale(assetId: string, input: { deadlineAt: string; reason: string; incidentReference?: string }): Promise<PreSaleDetail>;
+  extendPreSale(
+    assetId: string,
+    input: { deadlineAt: string; reason: string; incidentReference?: string },
+  ): Promise<PreSaleDetail>;
   cancelPreSale(assetId: string, reason: string): Promise<PreSaleDetail>;
   finalizePreSale(assetId: string): Promise<PreSaleDetail>;
   getOverview(): Promise<AdminOverview>;
@@ -2435,7 +2478,17 @@ export interface AdminRepository {
   commandIntakeLocation(
     id: string,
     input: {
-      command: "PAUSE_NEW_INTAKES" | "RESUME_NEW_INTAKES" | "DEACTIVATE" | "REACTIVATE" | "ENABLE_SHIPPING" | "DISABLE_SHIPPING" | "ENABLE_IN_PERSON" | "DISABLE_IN_PERSON" | "REPAIR_AVAILABILITY" | "REPAIR_CAPACITY_PROJECTION";
+      command:
+        | "PAUSE_NEW_INTAKES"
+        | "RESUME_NEW_INTAKES"
+        | "DEACTIVATE"
+        | "REACTIVATE"
+        | "ENABLE_SHIPPING"
+        | "DISABLE_SHIPPING"
+        | "ENABLE_IN_PERSON"
+        | "DISABLE_IN_PERSON"
+        | "REPAIR_AVAILABILITY"
+        | "REPAIR_CAPACITY_PROJECTION";
       reason: string;
       incidentReference?: string;
     },
@@ -2700,7 +2753,15 @@ export interface AdminRepository {
     cooldownUntil: string | null;
   }>;
   linkMarketReference(id: string, input: { url: string; reason?: string }): Promise<unknown>;
-  forceLinkMarketReference(id: string, input: { url: string; reason: string; confirmation: "FORCE_LINK_MARKET_REFERENCE"; assetId: string }): Promise<unknown>;
+  forceLinkMarketReference(
+    id: string,
+    input: {
+      url: string;
+      reason: string;
+      confirmation: "FORCE_LINK_MARKET_REFERENCE";
+      assetId: string;
+    },
+  ): Promise<unknown>;
   rerunMarketReference(id: string): Promise<unknown>;
   removePreferredMarketReference(id: string, reason: string): Promise<unknown>;
   markMarketReferenceReview(id: string, reason: string): Promise<unknown>;
@@ -2806,13 +2867,42 @@ export type PreSaleDetail = {
   offeredPercentageBps?: number;
   totalSupply?: string | null;
   readiness?: { ready: boolean; blockers: string[] };
-  commands?: { canConfigurePreSale: boolean; canLaunchPreSale: boolean; canEditPreSaleTerms: boolean; canPausePreSale: boolean; canResumePreSale: boolean; canCancelPreSale: boolean; canExtendPreSale: boolean; canFinalizePreSale: boolean };
-  reservations?: Array<{ id: string; buyerUserId: string; units: string; grossMinor: string; status: string; createdAt: string }>;
-  history?: Array<{ action: string; source: string; reason: string; actorUserId: string | null; createdAt: string; before: unknown; after: unknown; reference: string | null }>;
+  commands?: {
+    canConfigurePreSale: boolean;
+    canLaunchPreSale: boolean;
+    canEditPreSaleTerms: boolean;
+    canPausePreSale: boolean;
+    canResumePreSale: boolean;
+    canCancelPreSale: boolean;
+    canExtendPreSale: boolean;
+    canFinalizePreSale: boolean;
+  };
+  reservations?: Array<{
+    id: string;
+    buyerUserId: string;
+    units: string;
+    grossMinor: string;
+    status: string;
+    createdAt: string;
+  }>;
+  history?: Array<{
+    action: string;
+    source: string;
+    reason: string;
+    actorUserId: string | null;
+    createdAt: string;
+    before: unknown;
+    after: unknown;
+    reference: string | null;
+  }>;
 };
 export interface PreSaleRepository {
   getPublicDetail(slug: string): Promise<PreSaleDetail>;
-  reserve(slug: string, units: string, confirmation: "RESERVE_CONDITIONAL_POSITION"): Promise<PreSaleReservationView>;
+  reserve(
+    slug: string,
+    units: string,
+    confirmation: "RESERVE_CONDITIONAL_POSITION",
+  ): Promise<PreSaleReservationView>;
   listReservations(): Promise<PreSaleReservationView[]>;
   getReservation(id: string): Promise<PreSaleReservationView>;
 }
@@ -2848,7 +2938,14 @@ export interface CollectorRepository {
   }): Promise<CollectorDirectoryPage>;
   getCollector(
     id: UserId,
-    input?: { page?: number; pageSize?: number },
+    input?: {
+      page?: number;
+      pageSize?: number;
+      q?: string;
+      status?: "all" | "pre-sale" | "market-live";
+      category?: string;
+      sort?: "recent" | "name" | "price";
+    },
   ): Promise<CollectorProfile | null>;
   followCollector(id: UserId): Promise<void>;
   unfollowCollector(id: UserId): Promise<void>;

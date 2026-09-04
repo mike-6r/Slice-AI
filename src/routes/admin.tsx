@@ -77,7 +77,11 @@ import {
   type AdminSearch,
   type AdminSection,
 } from "./-admin-route-state";
-import type { AssetOperationSummary, QualificationQueueItem, SubmissionReviewQueueResponse } from "@/domain/submission";
+import type {
+  AssetOperationSummary,
+  QualificationQueueItem,
+  SubmissionReviewQueueResponse,
+} from "@/domain/submission";
 import type {
   AdminAccountsSummary,
   AdminComplianceCase,
@@ -1670,15 +1674,8 @@ function PhysicalIntakeBoard({
     },
   });
   const exceptionResolve = useMutation({
-    mutationFn: ({
-      id,
-      exceptionId,
-      note,
-    }: {
-      id: string;
-      exceptionId: string;
-      note: string;
-    }) => services.repositories.admin.resolveIntakeException(id, exceptionId, { note }),
+    mutationFn: ({ id, exceptionId, note }: { id: string; exceptionId: string; note: string }) =>
+      services.repositories.admin.resolveIntakeException(id, exceptionId, { note }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["admin", "intake-detail", selectedIntake] });
       updateSearch({ page: "1" });
@@ -1695,9 +1692,7 @@ function PhysicalIntakeBoard({
         onSelectTab={selectIntakeTab}
         onReceipt={(input) => receipt.mutate({ id: detailRow.id, input })}
         onStartVerification={() => verificationStart.mutate(detailRow.id)}
-        onCompleteVerification={(input) =>
-          verificationComplete.mutate({ id: detailRow.id, input })
-        }
+        onCompleteVerification={(input) => verificationComplete.mutate({ id: detailRow.id, input })}
         onCreateException={(input) => exceptionCreate.mutate({ id: detailRow.id, input })}
         onResolveException={(exceptionId, note) =>
           exceptionResolve.mutate({ id: detailRow.id, exceptionId, note })
@@ -2409,7 +2404,9 @@ function PhysicalIntakeDetailPage({
   verificationCompleting: boolean;
   exceptionSaving: boolean;
 }) {
-  const [dialog, setDialog] = useState<"receipt" | "demo" | "verification" | "exception" | "resolve" | null>(null);
+  const [dialog, setDialog] = useState<
+    "receipt" | "demo" | "verification" | "exception" | "resolve" | null
+  >(null);
   const [resolveExceptionId, setResolveExceptionId] = useState<string | null>(null);
   const [receiptDraft, setReceiptDraft] = useState<IntakeReceiptInput>({
     packageCondition: "UNKNOWN",
@@ -2452,8 +2449,12 @@ function PhysicalIntakeDetailPage({
     .filter(Boolean)
     .join(" · ");
   const statusTone = intakeStageTone(row);
-  const actionDescription = detail?.projection?.primaryBlocker?.reason || row.stageReason || "No further action is currently available.";
-  const primaryBlocker = detail?.projection?.primaryBlocker ??
+  const actionDescription =
+    detail?.projection?.primaryBlocker?.reason ||
+    row.stageReason ||
+    "No further action is currently available.";
+  const primaryBlocker =
+    detail?.projection?.primaryBlocker ??
     (row.issues[0]
       ? {
           ...row.issues[0],
@@ -2463,7 +2464,11 @@ function PhysicalIntakeDetailPage({
               : row.issues[0].label,
         }
       : !row.vault && !row.demoIntake && row.stage === "AWAITING_DESTINATION"
-        ? { code: "DESTINATION_REQUIRED", label: "Receiving destination required", severity: "HIGH" as const }
+        ? {
+            code: "DESTINATION_REQUIRED",
+            label: "Receiving destination required",
+            severity: "HIGH" as const,
+          }
         : null);
   const exceptions = detail?.intake?.exceptions ?? [];
   const contributors = Array.from(
@@ -2526,7 +2531,10 @@ function PhysicalIntakeDetailPage({
         </div>
       </article>
 
-      <section className="physical-intake-detail-stepper-panel" aria-label="Physical intake lifecycle">
+      <section
+        className="physical-intake-detail-stepper-panel"
+        aria-label="Physical intake lifecycle"
+      >
         <ol className="physical-intake-stepper">
           {steps.map(([step, label], index) => {
             const state = intakeStepState(row, step);
@@ -2540,7 +2548,7 @@ function PhysicalIntakeDetailPage({
                     : state === "current"
                       ? row.stageLabel
                       : state === "blocked"
-                        ? intakeStepReason(row, step) ?? "Blocked"
+                        ? (intakeStepReason(row, step) ?? "Blocked")
                         : "Not started"}
                 </small>
               </li>
@@ -2640,37 +2648,141 @@ function PhysicalIntakeDetailPage({
           {activeTab === "history" ? <IntakeHistoryTab detail={detail} /> : null}
         </main>
         <aside className="physical-intake-detail-rail">
-          <section className={`physical-intake-next-action-card ${row.exception ? "is-blocked" : ""}`}>
+          <section
+            className={`physical-intake-next-action-card ${row.exception ? "is-blocked" : ""}`}
+          >
             <p>Next action</p>
             <h2>{row.nextAction}</h2>
             <span>{actionDescription}</span>
-            <IntakeDetailAction row={row} onReceipt={() => setDialog("receipt")} onStartVerification={onStartVerification} onCompleteDemoIntake={() => setDialog("demo")} verificationStarting={verificationStarting} />
-            {row.stage === "AWAITING_DESTINATION" ? <small>The collector must select an approved receiving destination from their workspace.</small> : null}
+            <IntakeDetailAction
+              row={row}
+              onReceipt={() => setDialog("receipt")}
+              onStartVerification={onStartVerification}
+              onCompleteDemoIntake={() => setDialog("demo")}
+              verificationStarting={verificationStarting}
+            />
+            {row.stage === "AWAITING_DESTINATION" ? (
+              <small>
+                The collector must select an approved receiving destination from their workspace.
+              </small>
+            ) : null}
           </section>
           <section className="physical-intake-detail-card physical-intake-rail-status-card">
-            <div className="physical-intake-card-heading"><div><p className="admin-console-eyebrow">Current status</p><h2>{row.stageLabel}</h2></div><span className={`admin-status-pill ${statusTone}`}>{row.exception ? "Blocked" : "Open"}</span></div>
+            <div className="physical-intake-card-heading">
+              <div>
+                <p className="admin-console-eyebrow">Current status</p>
+                <h2>{row.stageLabel}</h2>
+              </div>
+              <span className={`admin-status-pill ${statusTone}`}>
+                {row.exception ? "Blocked" : "Open"}
+              </span>
+            </div>
             <dl className="physical-intake-detail-facts">
-              <div><dt>Location</dt><dd>{intakeCurrentLocation(row, detail?.projection)}</dd></div>
-              <div><dt>Waiting on</dt><dd>{row.nextActor === "NONE" ? "No one" : sentence(row.nextActor)}</dd></div>
-              <div><dt>Blocker</dt><dd>{primaryBlocker?.label ?? "None"}</dd></div>
-              <div><dt>Time in stage</dt><dd>{age(row.currentStageSince)}</dd></div>
+              <div>
+                <dt>Location</dt>
+                <dd>{intakeCurrentLocation(row, detail?.projection)}</dd>
+              </div>
+              <div>
+                <dt>Waiting on</dt>
+                <dd>{row.nextActor === "NONE" ? "No one" : sentence(row.nextActor)}</dd>
+              </div>
+              <div>
+                <dt>Blocker</dt>
+                <dd>{primaryBlocker?.label ?? "None"}</dd>
+              </div>
+              <div>
+                <dt>Time in stage</dt>
+                <dd>{age(row.currentStageSince)}</dd>
+              </div>
             </dl>
           </section>
           <section className="physical-intake-detail-card physical-intake-quick-actions-card">
-            <div className="physical-intake-card-heading"><div><p className="admin-console-eyebrow">Operator controls</p><h2>Quick actions</h2></div></div>
+            <div className="physical-intake-card-heading">
+              <div>
+                <p className="admin-console-eyebrow">Operator controls</p>
+                <h2>Quick actions</h2>
+              </div>
+            </div>
             <div className="physical-intake-rail-actions">
-              <button type="button" onClick={() => onSelectTab("movement")} disabled={!row.allowedActions.includes("ASSIGN_DESTINATION")} title={!row.allowedActions.includes("ASSIGN_DESTINATION") ? "Destination selection is owned by the collector or destination workspace." : undefined}>Assign destination</button>
-              <button type="button" disabled title="Staff assignment authority is not present in the current intake projection.">Assign staff</button>
-              <button type="button" disabled title="Internal-note authority is not present in the current intake projection.">Add internal note</button>
-              <button type="button" onClick={() => setDialog("exception")}>Add exception</button>
-              <button type="button" onClick={() => onSelectTab("movement")} disabled={!row.allowedActions.includes("MANAGE_TRACKING")} title={!row.allowedActions.includes("MANAGE_TRACKING") ? "Shipment mutation authority is not present in the current intake projection." : undefined}>Manage shipment</button>
-              <button type="button" onClick={() => setDialog("receipt")} disabled={!row.allowedActions.includes("CONFIRM_RECEIPT")} title={!row.allowedActions.includes("CONFIRM_RECEIPT") ? "Receipt is not currently an allowed action for this intake." : undefined}>Record physical receipt</button>
-              <button type="button" onClick={onStartVerification} disabled={!row.allowedActions.includes("START_VERIFICATION") || verificationStarting}>{verificationStarting ? "Starting verification…" : "Start verification"}</button>
-              <button type="button" className="is-recovery" disabled title="Recovery and override authority is not exposed for this record.">Recovery &amp; overrides</button>
+              <button
+                type="button"
+                onClick={() => onSelectTab("movement")}
+                disabled={!row.allowedActions.includes("ASSIGN_DESTINATION")}
+                title={
+                  !row.allowedActions.includes("ASSIGN_DESTINATION")
+                    ? "Destination selection is owned by the collector or destination workspace."
+                    : undefined
+                }
+              >
+                Assign destination
+              </button>
+              <button
+                type="button"
+                disabled
+                title="Staff assignment authority is not present in the current intake projection."
+              >
+                Assign staff
+              </button>
+              <button
+                type="button"
+                disabled
+                title="Internal-note authority is not present in the current intake projection."
+              >
+                Add internal note
+              </button>
+              <button type="button" onClick={() => setDialog("exception")}>
+                Add exception
+              </button>
+              <button
+                type="button"
+                onClick={() => onSelectTab("movement")}
+                disabled={!row.allowedActions.includes("MANAGE_TRACKING")}
+                title={
+                  !row.allowedActions.includes("MANAGE_TRACKING")
+                    ? "Shipment mutation authority is not present in the current intake projection."
+                    : undefined
+                }
+              >
+                Manage shipment
+              </button>
+              <button
+                type="button"
+                onClick={() => setDialog("receipt")}
+                disabled={!row.allowedActions.includes("CONFIRM_RECEIPT")}
+                title={
+                  !row.allowedActions.includes("CONFIRM_RECEIPT")
+                    ? "Receipt is not currently an allowed action for this intake."
+                    : undefined
+                }
+              >
+                Record physical receipt
+              </button>
+              <button
+                type="button"
+                onClick={onStartVerification}
+                disabled={
+                  !row.allowedActions.includes("START_VERIFICATION") || verificationStarting
+                }
+              >
+                {verificationStarting ? "Starting verification…" : "Start verification"}
+              </button>
+              <button
+                type="button"
+                className="is-recovery"
+                disabled
+                title="Recovery and override authority is not exposed for this record."
+              >
+                Recovery &amp; overrides
+              </button>
             </div>
           </section>
           <section className="physical-intake-detail-card physical-intake-detail-links-card">
-            <div className="physical-intake-card-heading"><div><p className="admin-console-eyebrow">Navigation</p><h2>Quick links</h2></div></div>
+            <div className="physical-intake-card-heading">
+              <div>
+                <p className="admin-console-eyebrow">Navigation</p>
+                <h2>Quick links</h2>
+              </div>
+            </div>
             <Link
               to="/operations/submissions"
               search={{ submission: row.submissionId, tab: "Overview" }}
@@ -2691,18 +2803,54 @@ function PhysicalIntakeDetailPage({
             <Link to="/admin" search={{ section: "intake" }}>
               Asset operations <span>↗</span>
             </Link>
-            {detail?.projection?.deepLinks.audit ? <Link to={detail.projection.deepLinks.audit}><span>Audit log</span><span>↗</span></Link> : null}
+            {detail?.projection?.deepLinks.audit ? (
+              <Link to={detail.projection.deepLinks.audit}>
+                <span>Audit log</span>
+                <span>↗</span>
+              </Link>
+            ) : null}
           </section>
           <section className="physical-intake-detail-card physical-intake-intake-info-card">
-            <div className="physical-intake-card-heading"><div><p className="admin-console-eyebrow">Record</p><h2>Intake information</h2></div></div>
-            <dl className="physical-intake-detail-facts"><div><dt>Work type</dt><dd>{intakeWorkTypeLabel(row.workType)}</dd></div><div><dt>Intake ID</dt><dd>{row.intakeReference ?? shortId(row.id)}</dd></div><div><dt>Created</dt><dd>{date(detail?.intake?.selectedAt ?? row.currentStageSince)}</dd></div><div><dt>Last updated</dt><dd>{date(row.updatedAt)}</dd></div><div><dt>Revision</dt><dd>{detail?.projection?.revision ?? "Current"}</dd></div></dl>
+            <div className="physical-intake-card-heading">
+              <div>
+                <p className="admin-console-eyebrow">Record</p>
+                <h2>Intake information</h2>
+              </div>
+            </div>
+            <dl className="physical-intake-detail-facts">
+              <div>
+                <dt>Work type</dt>
+                <dd>{intakeWorkTypeLabel(row.workType)}</dd>
+              </div>
+              <div>
+                <dt>Intake ID</dt>
+                <dd>{row.intakeReference ?? shortId(row.id)}</dd>
+              </div>
+              <div>
+                <dt>Created</dt>
+                <dd>{date(detail?.intake?.selectedAt ?? row.currentStageSince)}</dd>
+              </div>
+              <div>
+                <dt>Last updated</dt>
+                <dd>{date(row.updatedAt)}</dd>
+              </div>
+              <div>
+                <dt>Revision</dt>
+                <dd>{detail?.projection?.revision ?? "Current"}</dd>
+              </div>
+            </dl>
           </section>
         </aside>
       </div>
       <section className="physical-intake-detail-footnote">
         <span aria-hidden="true">ⓘ</span>
-        <p>Physical Intake is responsible for the real-world movement, receipt, verification, and custody handoff of this collectible.</p>
-        <button type="button" onClick={() => onSelectTab("history")}>How physical intake works ↗</button>
+        <p>
+          Physical Intake is responsible for the real-world movement, receipt, verification, and
+          custody handoff of this collectible.
+        </p>
+        <button type="button" onClick={() => onSelectTab("history")}>
+          How physical intake works ↗
+        </button>
       </section>
       {dialog ? (
         <div className="physical-intake-modal" role="dialog" aria-modal="true">
@@ -2722,7 +2870,11 @@ function PhysicalIntakeDetailPage({
                   production shipment, receipt, or custody truth.
                 </p>
                 <div className="physical-intake-modal-actions">
-                  <button type="button" className="admin-inline-action" onClick={() => setDialog(null)}>
+                  <button
+                    type="button"
+                    className="admin-inline-action"
+                    onClick={() => setDialog(null)}
+                  >
                     Cancel
                   </button>
                   <button
@@ -2798,7 +2950,11 @@ function PhysicalIntakeDetailPage({
                   ))}
                 </div>
                 <div className="physical-intake-modal-actions">
-                  <button type="button" className="admin-inline-action" onClick={() => setDialog(null)}>
+                  <button
+                    type="button"
+                    className="admin-inline-action"
+                    onClick={() => setDialog(null)}
+                  >
                     Cancel
                   </button>
                   <button type="submit" className="button-primary" disabled={receiptPending}>
@@ -2851,10 +3007,18 @@ function PhysicalIntakeDetailPage({
                   />
                 </label>
                 <div className="physical-intake-modal-actions">
-                  <button type="button" className="admin-inline-action" onClick={() => setDialog(null)}>
+                  <button
+                    type="button"
+                    className="admin-inline-action"
+                    onClick={() => setDialog(null)}
+                  >
                     Cancel
                   </button>
-                  <button type="submit" className="button-primary" disabled={verificationCompleting}>
+                  <button
+                    type="submit"
+                    className="button-primary"
+                    disabled={verificationCompleting}
+                  >
                     {verificationCompleting ? "Saving…" : "Complete verification"}
                   </button>
                 </div>
@@ -2869,12 +3033,17 @@ function PhysicalIntakeDetailPage({
                 }}
               >
                 <h2>Add intake exception</h2>
-                <p>Keep the description factual and operational. Open exceptions can block downstream stages.</p>
+                <p>
+                  Keep the description factual and operational. Open exceptions can block downstream
+                  stages.
+                </p>
                 <label className="admin-form-field">
                   <span>Type</span>
                   <select
                     value={exceptionDraft.code}
-                    onChange={(event) => setExceptionDraft((current) => ({ ...current, code: event.target.value }))}
+                    onChange={(event) =>
+                      setExceptionDraft((current) => ({ ...current, code: event.target.value }))
+                    }
                   >
                     <option value="DAMAGED_PACKAGE">Package damaged</option>
                     <option value="WRONG_ITEM">Wrong collectible</option>
@@ -2908,11 +3077,17 @@ function PhysicalIntakeDetailPage({
                   <textarea
                     required
                     value={exceptionDraft.notes}
-                    onChange={(event) => setExceptionDraft((current) => ({ ...current, notes: event.target.value }))}
+                    onChange={(event) =>
+                      setExceptionDraft((current) => ({ ...current, notes: event.target.value }))
+                    }
                   />
                 </label>
                 <div className="physical-intake-modal-actions">
-                  <button type="button" className="admin-inline-action" onClick={() => setDialog(null)}>
+                  <button
+                    type="button"
+                    className="admin-inline-action"
+                    onClick={() => setDialog(null)}
+                  >
                     Cancel
                   </button>
                   <button type="submit" className="button-primary" disabled={exceptionSaving}>
@@ -2940,7 +3115,11 @@ function PhysicalIntakeDetailPage({
                   />
                 </label>
                 <div className="physical-intake-modal-actions">
-                  <button type="button" className="admin-inline-action" onClick={() => setDialog(null)}>
+                  <button
+                    type="button"
+                    className="admin-inline-action"
+                    onClick={() => setDialog(null)}
+                  >
                     Cancel
                   </button>
                   <button type="submit" className="button-primary" disabled={exceptionSaving}>
@@ -2951,7 +3130,8 @@ function PhysicalIntakeDetailPage({
             )}
             {(dialog === "receipt" && receiptFailed) || (dialog === "demo" && demoFailed) ? (
               <p className="text-negative">
-                The authorized intake action could not be completed. No additional frontend state was created.
+                The authorized intake action could not be completed. No additional frontend state
+                was created.
               </p>
             ) : null}
           </div>
@@ -3044,16 +3224,32 @@ function IntakeOperationalCards({
     <section className="physical-intake-operational-cards" aria-label="Operational intake summary">
       <article className="physical-intake-detail-card physical-intake-location-card">
         <div className="physical-intake-card-heading">
-          <div><p className="admin-console-eyebrow">Current location</p><h2>{currentLocation}</h2></div>
+          <div>
+            <p className="admin-console-eyebrow">Current location</p>
+            <h2>{currentLocation}</h2>
+          </div>
           <span className="physical-intake-location-badge">Live</span>
         </div>
         <p className="physical-intake-card-description">
-          {row.receipt ? "The asset has been physically received by Slice staff." : "The asset has not been shipped or delivered to Slice yet."}
+          {row.receipt
+            ? "The asset has been physically received by Slice staff."
+            : "The asset has not been shipped or delivered to Slice yet."}
         </p>
         <div className="physical-intake-location-path" aria-label="Custody path">
-          <span><b>●</b><small>Collector</small></span><i aria-hidden="true" />
-          <span><b>◆</b><small>Slice Intake</small></span><i aria-hidden="true" />
-          <span><b>▣</b><small>Vault</small></span>
+          <span>
+            <b>●</b>
+            <small>Collector</small>
+          </span>
+          <i aria-hidden="true" />
+          <span>
+            <b>◆</b>
+            <small>Slice Intake</small>
+          </span>
+          <i aria-hidden="true" />
+          <span>
+            <b>▣</b>
+            <small>Vault</small>
+          </span>
         </div>
         <div className="physical-intake-card-divider" />
         <p className="admin-safe-note">Expected next event</p>
@@ -3063,22 +3259,87 @@ function IntakeOperationalCards({
 
       <article className="physical-intake-detail-card physical-intake-staff-card">
         <div className="physical-intake-card-heading">
-          <div><p className="admin-console-eyebrow">Assigned staff</p><h2>Unassigned</h2></div>
-          <button type="button" className="admin-secondary-button" disabled title="Staff assignment authority is not present in the current intake projection.">Assign staff</button>
+          <div>
+            <p className="admin-console-eyebrow">Assigned staff</p>
+            <h2>Unassigned</h2>
+          </div>
+          <button
+            type="button"
+            className="admin-secondary-button"
+            disabled
+            title="Staff assignment authority is not present in the current intake projection."
+          >
+            Assign staff
+          </button>
         </div>
         <p className="physical-intake-card-description">No staff member is currently assigned.</p>
-        <dl className="physical-intake-mini-facts"><div><dt>Primary intake owner</dt><dd>Unassigned</dd></div><div><dt>Contributors ({contributors.length})</dt><dd>{contributors.length ? contributors.join(", ") : "No contributors recorded yet."}</dd></div></dl>
-        <p className="admin-safe-note">Any authorised staff member can perform actions on this intake.</p>
+        <dl className="physical-intake-mini-facts">
+          <div>
+            <dt>Primary intake owner</dt>
+            <dd>Unassigned</dd>
+          </div>
+          <div>
+            <dt>Contributors ({contributors.length})</dt>
+            <dd>
+              {contributors.length ? contributors.join(", ") : "No contributors recorded yet."}
+            </dd>
+          </div>
+        </dl>
+        <p className="admin-safe-note">
+          Any authorised staff member can perform actions on this intake.
+        </p>
       </article>
 
       <article className="physical-intake-detail-card physical-intake-exceptions-card">
         <div className="physical-intake-card-heading">
-          <div><p className="admin-console-eyebrow">Risk controls</p><h2>Exceptions</h2></div>
-          <button type="button" className="admin-inline-action" onClick={onOpenException}>View all</button>
+          <div>
+            <p className="admin-console-eyebrow">Risk controls</p>
+            <h2>Exceptions</h2>
+          </div>
+          <button type="button" className="admin-inline-action" onClick={onOpenException}>
+            View all
+          </button>
         </div>
-        <div className="physical-intake-exception-counts"><span><strong>{blocking}</strong>Blocking</span><span><strong>{advisory}</strong>Advisory</span><span><strong>0</strong>Info</span></div>
-        {openExceptions.length ? openExceptions.slice(0, 2).map((item) => <div className="physical-intake-exception-row is-open" key={item.id}><span>{sentence(item.code)}</span><small>{sentence(item.severity)} · {date(item.createdAt)}</small><button type="button" className="admin-inline-action" onClick={() => onResolveException(item.id)}>Resolve</button></div>) : <><p className="physical-intake-empty-state">No active exceptions</p><p className="admin-safe-note">All clear.</p></>}
-        <button type="button" className="admin-secondary-button physical-intake-add-exception" onClick={onOpenException}>+ Add exception</button>
+        <div className="physical-intake-exception-counts">
+          <span>
+            <strong>{blocking}</strong>Blocking
+          </span>
+          <span>
+            <strong>{advisory}</strong>Advisory
+          </span>
+          <span>
+            <strong>0</strong>Info
+          </span>
+        </div>
+        {openExceptions.length ? (
+          openExceptions.slice(0, 2).map((item) => (
+            <div className="physical-intake-exception-row is-open" key={item.id}>
+              <span>{sentence(item.code)}</span>
+              <small>
+                {sentence(item.severity)} · {date(item.createdAt)}
+              </small>
+              <button
+                type="button"
+                className="admin-inline-action"
+                onClick={() => onResolveException(item.id)}
+              >
+                Resolve
+              </button>
+            </div>
+          ))
+        ) : (
+          <>
+            <p className="physical-intake-empty-state">No active exceptions</p>
+            <p className="admin-safe-note">All clear.</p>
+          </>
+        )}
+        <button
+          type="button"
+          className="admin-secondary-button physical-intake-add-exception"
+          onClick={onOpenException}
+        >
+          + Add exception
+        </button>
       </article>
     </section>
   );
@@ -3102,7 +3363,14 @@ function IntakeOverviewTab({
   const facts = [
     ["Current location", intakeCurrentLocation(row, detail?.projection)],
     ["Destination", row.vault?.displayName ?? row.demoIntake?.destinationLabel ?? "Not assigned"],
-    ["Delivery method", row.deliveryMethod === "IN_PERSON" ? "In-person" : row.deliveryMethod ? "Shipping" : "Not selected"],
+    [
+      "Delivery method",
+      row.deliveryMethod === "IN_PERSON"
+        ? "In-person"
+        : row.deliveryMethod
+          ? "Shipping"
+          : "Not selected",
+    ],
     ["Tracking", row.shipment ? `${row.shipment.carrier} · ${row.shipment.trackingNumber}` : "—"],
     ["Receipt", row.receipt ? "Received by Slice" : "Not received"],
     ["Verification", row.verification ? sentence(row.verification.status) : "Not started"],
@@ -3112,65 +3380,516 @@ function IntakeOverviewTab({
   return (
     <>
       <section className="physical-intake-detail-card physical-intake-overview-summary">
-        <div className="physical-intake-card-heading"><div><p className="admin-console-eyebrow">Operator snapshot</p><h2>What happens next</h2></div><span className="physical-intake-location-badge">{intakeCurrentLocation(row, detail?.projection)}</span></div>
-        <p>{row.nextAction}. {row.stageReason}</p>
-        <div className="physical-intake-detail-grid">{facts.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
+        <div className="physical-intake-card-heading">
+          <div>
+            <p className="admin-console-eyebrow">Operator snapshot</p>
+            <h2>What happens next</h2>
+          </div>
+          <span className="physical-intake-location-badge">
+            {intakeCurrentLocation(row, detail?.projection)}
+          </span>
+        </div>
+        <p>
+          {row.nextAction}. {row.stageReason}
+        </p>
+        <div className="physical-intake-detail-grid">
+          {facts.map(([label, value]) => (
+            <div key={label}>
+              <span>{label}</span>
+              <strong>{value}</strong>
+            </div>
+          ))}
+        </div>
       </section>
       <section className="physical-intake-detail-card">
-        <div className="physical-intake-card-heading"><div><p className="admin-console-eyebrow">Physical intake summary</p><h2>Operational details</h2></div><span>{contributors.length} contributor{contributors.length === 1 ? "" : "s"}</span></div>
+        <div className="physical-intake-card-heading">
+          <div>
+            <p className="admin-console-eyebrow">Physical intake summary</p>
+            <h2>Operational details</h2>
+          </div>
+          <span>
+            {contributors.length} contributor{contributors.length === 1 ? "" : "s"}
+          </span>
+        </div>
         <dl className="physical-intake-detail-facts">
-          <div><dt>Destination</dt><dd>{intake?.destination.displayName ?? row.vault?.displayName ?? "Not assigned"}</dd></div>
-          <div><dt>Shipment</dt><dd>{intake?.shipment ? `${sentence(intake.shipment.status)} · ${intake.shipment.carrier}` : "Not started"}</dd></div>
-          <div><dt>Physical receipt</dt><dd>{intake?.receipt ? `Received by ${intake.receipt.confirmedBy} · ${date(intake.receipt.confirmedAt)}` : "Not received"}</dd></div>
-          <div><dt>Verification</dt><dd>{intake?.verification ? sentence(intake.verification.status) : "Not started"}</dd></div>
-          <div><dt>Custody</dt><dd>{detail?.custody ? sentence(detail.custody.status) : "Not established"}</dd></div>
-          <div><dt>Blocking exceptions</dt><dd className={openExceptions.length ? "text-negative" : ""}>{openExceptions.length || "None"}</dd></div>
+          <div>
+            <dt>Destination</dt>
+            <dd>{intake?.destination.displayName ?? row.vault?.displayName ?? "Not assigned"}</dd>
+          </div>
+          <div>
+            <dt>Shipment</dt>
+            <dd>
+              {intake?.shipment
+                ? `${sentence(intake.shipment.status)} · ${intake.shipment.carrier}`
+                : "Not started"}
+            </dd>
+          </div>
+          <div>
+            <dt>Physical receipt</dt>
+            <dd>
+              {intake?.receipt
+                ? `Received by ${intake.receipt.confirmedBy} · ${date(intake.receipt.confirmedAt)}`
+                : "Not received"}
+            </dd>
+          </div>
+          <div>
+            <dt>Verification</dt>
+            <dd>{intake?.verification ? sentence(intake.verification.status) : "Not started"}</dd>
+          </div>
+          <div>
+            <dt>Custody</dt>
+            <dd>{detail?.custody ? sentence(detail.custody.status) : "Not established"}</dd>
+          </div>
+          <div>
+            <dt>Blocking exceptions</dt>
+            <dd className={openExceptions.length ? "text-negative" : ""}>
+              {openExceptions.length || "None"}
+            </dd>
+          </div>
         </dl>
-        <div className="physical-intake-command-row"><button type="button" className="admin-secondary-button" onClick={onOpenReceipt} disabled={Boolean(row.receipt) || !row.allowedActions.includes("CONFIRM_RECEIPT")}>Confirm receipt</button><button type="button" className="admin-secondary-button" onClick={onOpenException}>Add exception</button></div>
+        <div className="physical-intake-command-row">
+          <button
+            type="button"
+            className="admin-secondary-button"
+            onClick={onOpenReceipt}
+            disabled={Boolean(row.receipt) || !row.allowedActions.includes("CONFIRM_RECEIPT")}
+          >
+            Confirm receipt
+          </button>
+          <button type="button" className="admin-secondary-button" onClick={onOpenException}>
+            Add exception
+          </button>
+        </div>
       </section>
       <IntakeActivityPreview detail={detail} />
     </>
   );
 }
 
-function IntakeMovementTab({ row, detail, onOpenException }: { row: AdminIntakeRow; detail: AdminIntakeDetail | undefined; onOpenException: () => void }) {
+function IntakeMovementTab({
+  row,
+  detail,
+  onOpenException,
+}: {
+  row: AdminIntakeRow;
+  detail: AdminIntakeDetail | undefined;
+  onOpenException: () => void;
+}) {
   const intake = detail?.intake;
   const shipment = intake?.shipment;
-  const trackingUrl = row.shipment ? safeTrackingUrl(row.shipment.carrier, row.shipment.trackingNumber) : null;
-  return <>
-    <section className="physical-intake-workflow-card admin-panel"><header><Truck aria-hidden="true" /><div><p className="admin-console-eyebrow">Movement</p><h2>{row.deliveryMethod === "IN_PERSON" ? "In-person drop-off" : "Destination and shipment"}</h2></div></header>
-      <div className="physical-intake-detail-grid physical-intake-movement-grid"><div><span>Destination</span><strong>{intake?.destination.displayName ?? row.vault?.displayName ?? row.demoIntake?.destinationLabel ?? "Not assigned"}</strong><small>{row.vault ? `${row.vault.region}, ${row.vault.countryCode}` : "Approved destination required"}</small></div><div><span>Capability</span><strong>{row.deliveryMethod === "IN_PERSON" ? "In-person" : "Shipping"}</strong><small>{intake?.destination ? `${intake.destination.active ? "Active" : "Inactive"} · ${intake.destination.environment}` : "—"}</small></div></div>
-      {row.deliveryMethod === "IN_PERSON" ? <div className="physical-intake-inline-callout"><strong>Drop-off workflow</strong><p>The collector is expected to bring the item to the approved destination. No carrier or tracking event is inferred.</p></div> : <div className="physical-intake-shipment-card"><div><strong>{shipment ? sentence(shipment.status) : row.vault ? "Awaiting shipment" : "Waiting for destination"}</strong><p>{shipment?.notes ?? (row.vault ? "The collector has not provided tracking yet." : "Shipping instructions are unavailable until a destination is confirmed.")}</p></div><dl><div><dt>Carrier</dt><dd>{shipment?.carrier ?? row.shipment?.carrier ?? "—"}</dd></div><div><dt>Tracking</dt><dd>{shipment?.trackingNumber ?? row.shipment?.trackingNumber ?? "—"}{trackingUrl ? <a href={trackingUrl} target="_blank" rel="noreferrer">Open ↗</a> : null}</dd></div><div><dt>Carrier state</dt><dd>{row.carrierState ? sentence(row.carrierState.status) : "Provider unavailable"}</dd></div><div><dt>Last update</dt><dd>{row.carrierState?.lastUpdatedAt ? date(row.carrierState.lastUpdatedAt) : "—"}</dd></div></dl></div>}
-    </section>
-    <section className="physical-intake-detail-card"><div className="physical-intake-card-heading"><div><p className="admin-console-eyebrow">Controls</p><h2>Movement commands</h2></div><span>Authority-aware</span></div><div className="physical-intake-command-grid"><button type="button" className="admin-secondary-button" disabled title="Destination assignment is collector-owned for this record.">Assign destination</button><button type="button" className="admin-secondary-button" disabled title="No shipment mutation command is available in the current projection.">Manage tracking</button><button type="button" className="admin-secondary-button" onClick={onOpenException}>Add movement exception</button><Link to="/admin" search={{ section: "intake", location: row.vault?.id }}>Manage destinations ↗</Link></div></section>
-  </>;
+  const trackingUrl = row.shipment
+    ? safeTrackingUrl(row.shipment.carrier, row.shipment.trackingNumber)
+    : null;
+  return (
+    <>
+      <section className="physical-intake-workflow-card admin-panel">
+        <header>
+          <Truck aria-hidden="true" />
+          <div>
+            <p className="admin-console-eyebrow">Movement</p>
+            <h2>
+              {row.deliveryMethod === "IN_PERSON"
+                ? "In-person drop-off"
+                : "Destination and shipment"}
+            </h2>
+          </div>
+        </header>
+        <div className="physical-intake-detail-grid physical-intake-movement-grid">
+          <div>
+            <span>Destination</span>
+            <strong>
+              {intake?.destination.displayName ??
+                row.vault?.displayName ??
+                row.demoIntake?.destinationLabel ??
+                "Not assigned"}
+            </strong>
+            <small>
+              {row.vault
+                ? `${row.vault.region}, ${row.vault.countryCode}`
+                : "Approved destination required"}
+            </small>
+          </div>
+          <div>
+            <span>Capability</span>
+            <strong>{row.deliveryMethod === "IN_PERSON" ? "In-person" : "Shipping"}</strong>
+            <small>
+              {intake?.destination
+                ? `${intake.destination.active ? "Active" : "Inactive"} · ${intake.destination.environment}`
+                : "—"}
+            </small>
+          </div>
+        </div>
+        {row.deliveryMethod === "IN_PERSON" ? (
+          <div className="physical-intake-inline-callout">
+            <strong>Drop-off workflow</strong>
+            <p>
+              The collector is expected to bring the item to the approved destination. No carrier or
+              tracking event is inferred.
+            </p>
+          </div>
+        ) : (
+          <div className="physical-intake-shipment-card">
+            <div>
+              <strong>
+                {shipment
+                  ? sentence(shipment.status)
+                  : row.vault
+                    ? "Awaiting shipment"
+                    : "Waiting for destination"}
+              </strong>
+              <p>
+                {shipment?.notes ??
+                  (row.vault
+                    ? "The collector has not provided tracking yet."
+                    : "Shipping instructions are unavailable until a destination is confirmed.")}
+              </p>
+            </div>
+            <dl>
+              <div>
+                <dt>Carrier</dt>
+                <dd>{shipment?.carrier ?? row.shipment?.carrier ?? "—"}</dd>
+              </div>
+              <div>
+                <dt>Tracking</dt>
+                <dd>
+                  {shipment?.trackingNumber ?? row.shipment?.trackingNumber ?? "—"}
+                  {trackingUrl ? (
+                    <a href={trackingUrl} target="_blank" rel="noreferrer">
+                      Open ↗
+                    </a>
+                  ) : null}
+                </dd>
+              </div>
+              <div>
+                <dt>Carrier state</dt>
+                <dd>
+                  {row.carrierState ? sentence(row.carrierState.status) : "Provider unavailable"}
+                </dd>
+              </div>
+              <div>
+                <dt>Last update</dt>
+                <dd>
+                  {row.carrierState?.lastUpdatedAt ? date(row.carrierState.lastUpdatedAt) : "—"}
+                </dd>
+              </div>
+            </dl>
+          </div>
+        )}
+      </section>
+      <section className="physical-intake-detail-card">
+        <div className="physical-intake-card-heading">
+          <div>
+            <p className="admin-console-eyebrow">Controls</p>
+            <h2>Movement commands</h2>
+          </div>
+          <span>Authority-aware</span>
+        </div>
+        <div className="physical-intake-command-grid">
+          <button
+            type="button"
+            className="admin-secondary-button"
+            disabled
+            title="Destination assignment is collector-owned for this record."
+          >
+            Assign destination
+          </button>
+          <button
+            type="button"
+            className="admin-secondary-button"
+            disabled
+            title="No shipment mutation command is available in the current projection."
+          >
+            Manage tracking
+          </button>
+          <button type="button" className="admin-secondary-button" onClick={onOpenException}>
+            Add movement exception
+          </button>
+          <Link to="/admin" search={{ section: "intake", location: row.vault?.id }}>
+            Manage destinations ↗
+          </Link>
+        </div>
+      </section>
+    </>
+  );
 }
 
-function IntakeReceiptTab({ row, detail, onOpenReceipt }: { row: AdminIntakeRow; detail: AdminIntakeDetail | undefined; onOpenReceipt: () => void }) {
+function IntakeReceiptTab({
+  row,
+  detail,
+  onOpenReceipt,
+}: {
+  row: AdminIntakeRow;
+  detail: AdminIntakeDetail | undefined;
+  onOpenReceipt: () => void;
+}) {
   const receipt = detail?.intake?.receipt;
-  return <section className="physical-intake-workflow-card admin-panel"><header><PackageCheck aria-hidden="true" /><div><p className="admin-console-eyebrow">Receipt</p><h2>{receipt ? "Received by Slice" : "Physical possession"}</h2></div></header><div className="physical-intake-receipt-state"><strong>{receipt ? "RECEIVED BY SLICE" : row.demoIntake ? "DEMO RECEIPT" : "NOT RECEIVED"}</strong><p>{receipt ? "This is an explicit staff-confirmed physical receipt. Carrier delivery remains a separate event." : row.demoIntake ? "Staging-only simulated receipt; it is not production physical truth." : "No authorised staff member has confirmed physical possession."}</p></div><dl className="physical-intake-detail-facts"> <div><dt>Received by</dt><dd>{receipt?.confirmedBy ?? (row.receipt ? shortId(row.receipt.confirmedById) : "—")}</dd></div><div><dt>Received at</dt><dd>{receipt ? date(receipt.confirmedAt) : row.demoIntake ? date(row.demoIntake.simulatedReceiptAt) : "—"}</dd></div><div><dt>Package condition</dt><dd>{receipt?.packageCondition ? sentence(receipt.packageCondition) : "—"}</dd></div><div><dt>Receipt note</dt><dd>{receipt?.notes ?? "—"}</dd></div><div><dt>Evidence</dt><dd>Physical intake evidence is separate from collector submission evidence.</dd></div></dl>{!receipt && !row.demoIntake ? <button type="button" className="button-primary" onClick={onOpenReceipt} disabled={!row.allowedActions.includes("CONFIRM_RECEIPT")}>Confirm physical receipt</button> : null}</section>;
+  return (
+    <section className="physical-intake-workflow-card admin-panel">
+      <header>
+        <PackageCheck aria-hidden="true" />
+        <div>
+          <p className="admin-console-eyebrow">Receipt</p>
+          <h2>{receipt ? "Received by Slice" : "Physical possession"}</h2>
+        </div>
+      </header>
+      <div className="physical-intake-receipt-state">
+        <strong>
+          {receipt ? "RECEIVED BY SLICE" : row.demoIntake ? "DEMO RECEIPT" : "NOT RECEIVED"}
+        </strong>
+        <p>
+          {receipt
+            ? "This is an explicit staff-confirmed physical receipt. Carrier delivery remains a separate event."
+            : row.demoIntake
+              ? "Staging-only simulated receipt; it is not production physical truth."
+              : "No authorised staff member has confirmed physical possession."}
+        </p>
+      </div>
+      <dl className="physical-intake-detail-facts">
+        {" "}
+        <div>
+          <dt>Received by</dt>
+          <dd>
+            {receipt?.confirmedBy ?? (row.receipt ? shortId(row.receipt.confirmedById) : "—")}
+          </dd>
+        </div>
+        <div>
+          <dt>Received at</dt>
+          <dd>
+            {receipt
+              ? date(receipt.confirmedAt)
+              : row.demoIntake
+                ? date(row.demoIntake.simulatedReceiptAt)
+                : "—"}
+          </dd>
+        </div>
+        <div>
+          <dt>Package condition</dt>
+          <dd>{receipt?.packageCondition ? sentence(receipt.packageCondition) : "—"}</dd>
+        </div>
+        <div>
+          <dt>Receipt note</dt>
+          <dd>{receipt?.notes ?? "—"}</dd>
+        </div>
+        <div>
+          <dt>Evidence</dt>
+          <dd>Physical intake evidence is separate from collector submission evidence.</dd>
+        </div>
+      </dl>
+      {!receipt && !row.demoIntake ? (
+        <button
+          type="button"
+          className="button-primary"
+          onClick={onOpenReceipt}
+          disabled={!row.allowedActions.includes("CONFIRM_RECEIPT")}
+        >
+          Confirm physical receipt
+        </button>
+      ) : null}
+    </section>
+  );
 }
 
-function IntakeVerificationTab({ row, detail, onComplete, completing }: { row: AdminIntakeRow; detail: AdminIntakeDetail | undefined; onComplete: () => void; completing: boolean }) {
+function IntakeVerificationTab({
+  row,
+  detail,
+  onComplete,
+  completing,
+}: {
+  row: AdminIntakeRow;
+  detail: AdminIntakeDetail | undefined;
+  onComplete: () => void;
+  completing: boolean;
+}) {
   const verification = detail?.intake?.verification ?? row.verification;
-  const checks = [["Identity comparison", verification?.identityMatch], ["Certification comparison", verification?.certificationMatch], ["Grade comparison", verification?.gradeMatch], ["Variant comparison", verification?.variantMatch]] as const;
-  return <section className="physical-intake-workflow-card admin-panel"><header><ShieldCheck aria-hidden="true" /><div><p className="admin-console-eyebrow">Verification workspace</p><h2>{verification ? sentence(verification.status) : "Not started"}</h2></div></header><div className="physical-intake-verification-layout"><div><p>{verification?.note ?? "Compare the received collectible with the accepted submission and canonical identity. Do not overwrite canonical truth from this workspace."}</p><dl className="physical-intake-check-list">{checks.map(([label, value]) => <div key={label}><dt>{label}</dt><dd className={value === true ? "is-pass" : value === false ? "is-fail" : ""}>{value === true ? "Match" : value === false ? "Mismatch" : "Not recorded"}</dd></div>)}</dl>{verification?.completedAt ? <p className="admin-safe-note">Completed {date(verification.completedAt)}</p> : null}{verification?.status === "IN_PROGRESS" ? <button type="button" className="button-primary" onClick={onComplete} disabled={completing}>{completing ? "Saving…" : "Complete verification"}</button> : null}</div><div><p className="admin-console-eyebrow">Expected / received evidence</p><PhysicalIntakeEvidence src={row.thumbnailUrl} title={row.title} /><p className="admin-safe-note">Collector submission evidence and physical intake evidence remain separate.</p></div></div></section>;
+  const checks = [
+    ["Identity comparison", verification?.identityMatch],
+    ["Certification comparison", verification?.certificationMatch],
+    ["Grade comparison", verification?.gradeMatch],
+    ["Variant comparison", verification?.variantMatch],
+  ] as const;
+  return (
+    <section className="physical-intake-workflow-card admin-panel">
+      <header>
+        <ShieldCheck aria-hidden="true" />
+        <div>
+          <p className="admin-console-eyebrow">Verification workspace</p>
+          <h2>{verification ? sentence(verification.status) : "Not started"}</h2>
+        </div>
+      </header>
+      <div className="physical-intake-verification-layout">
+        <div>
+          <p>
+            {verification?.note ??
+              "Compare the received collectible with the accepted submission and canonical identity. Do not overwrite canonical truth from this workspace."}
+          </p>
+          <dl className="physical-intake-check-list">
+            {checks.map(([label, value]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd className={value === true ? "is-pass" : value === false ? "is-fail" : ""}>
+                  {value === true ? "Match" : value === false ? "Mismatch" : "Not recorded"}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          {verification?.completedAt ? (
+            <p className="admin-safe-note">Completed {date(verification.completedAt)}</p>
+          ) : null}
+          {verification?.status === "IN_PROGRESS" ? (
+            <button
+              type="button"
+              className="button-primary"
+              onClick={onComplete}
+              disabled={completing}
+            >
+              {completing ? "Saving…" : "Complete verification"}
+            </button>
+          ) : null}
+        </div>
+        <div>
+          <p className="admin-console-eyebrow">Expected / received evidence</p>
+          <PhysicalIntakeEvidence src={row.thumbnailUrl} title={row.title} />
+          <p className="admin-safe-note">
+            Collector submission evidence and physical intake evidence remain separate.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
 }
 
-function IntakeCustodyTab({ row, detail }: { row: AdminIntakeRow; detail: AdminIntakeDetail | undefined }) {
+function IntakeCustodyTab({
+  row,
+  detail,
+}: {
+  row: AdminIntakeRow;
+  detail: AdminIntakeDetail | undefined;
+}) {
   const custody = detail?.custody;
-  const ready = Boolean(row.receipt && row.verification?.status === "VERIFIED" && !row.issues.length);
-  return <section className="physical-intake-workflow-card admin-panel"><header><Landmark aria-hidden="true" /><div><p className="admin-console-eyebrow">Custody</p><h2>{custody ? sentence(custody.status) : "Not established"}</h2></div></header><div className={`physical-intake-custody-readiness ${ready ? "is-ready" : "is-waiting"}`}><strong>{ready ? "READY FOR CUSTODY" : "CUSTODY NOT READY"}</strong><p>{ready ? "Receipt, verification, and exception prerequisites are satisfied by the current projection." : "Physical receipt, completed verification, and resolved blocking exceptions are required before custody can progress."}</p></div><dl className="physical-intake-detail-facts"><div><dt>Custody destination</dt><dd>{row.vault?.displayName ?? "Not assigned"}</dd></div><div><dt>Storage status</dt><dd>{custody ? sentence(custody.status) : "Not established"}</dd></div><div><dt>Received at</dt><dd>{custody?.receivedAt ? date(custody.receivedAt) : "—"}</dd></div><div><dt>Secured at</dt><dd>{custody?.securedAt ? date(custody.securedAt) : "—"}</dd></div></dl><p className="admin-safe-note">Custody commands are intentionally unavailable until an authoritative custody handoff projection is present. No fake custody or location state is created here.</p></section>;
+  const ready = Boolean(
+    row.receipt && row.verification?.status === "VERIFIED" && !row.issues.length,
+  );
+  return (
+    <section className="physical-intake-workflow-card admin-panel">
+      <header>
+        <Landmark aria-hidden="true" />
+        <div>
+          <p className="admin-console-eyebrow">Custody</p>
+          <h2>{custody ? sentence(custody.status) : "Not established"}</h2>
+        </div>
+      </header>
+      <div className={`physical-intake-custody-readiness ${ready ? "is-ready" : "is-waiting"}`}>
+        <strong>{ready ? "READY FOR CUSTODY" : "CUSTODY NOT READY"}</strong>
+        <p>
+          {ready
+            ? "Receipt, verification, and exception prerequisites are satisfied by the current projection."
+            : "Physical receipt, completed verification, and resolved blocking exceptions are required before custody can progress."}
+        </p>
+      </div>
+      <dl className="physical-intake-detail-facts">
+        <div>
+          <dt>Custody destination</dt>
+          <dd>{row.vault?.displayName ?? "Not assigned"}</dd>
+        </div>
+        <div>
+          <dt>Storage status</dt>
+          <dd>{custody ? sentence(custody.status) : "Not established"}</dd>
+        </div>
+        <div>
+          <dt>Received at</dt>
+          <dd>{custody?.receivedAt ? date(custody.receivedAt) : "—"}</dd>
+        </div>
+        <div>
+          <dt>Secured at</dt>
+          <dd>{custody?.securedAt ? date(custody.securedAt) : "—"}</dd>
+        </div>
+      </dl>
+      <p className="admin-safe-note">
+        Custody commands are intentionally unavailable until an authoritative custody handoff
+        projection is present. No fake custody or location state is created here.
+      </p>
+    </section>
+  );
 }
 
 function IntakeActivityPreview({ detail }: { detail: AdminIntakeDetail | undefined }) {
   const history = detail?.history.slice(0, 4) ?? [];
-  return <section className="physical-intake-detail-card"><div className="physical-intake-card-heading"><div><p className="admin-console-eyebrow">Recent physical activity</p><h2>Latest events</h2></div><Link to="/admin" search={{ section: "intake", intakeTab: "history" }}>View history ↗</Link></div>{history.length ? <ol className="physical-intake-history-list">{history.map((event) => <li key={event.id}><span aria-hidden="true" /><div><strong>{sentence(event.action)}</strong><small>{event.actor ?? "System"} · {date(event.occurredAt)}</small></div></li>)}</ol> : <p className="admin-safe-note">No intake-specific audit history is available in the authorized projection.</p>}</section>;
+  return (
+    <section className="physical-intake-detail-card">
+      <div className="physical-intake-card-heading">
+        <div>
+          <p className="admin-console-eyebrow">Recent physical activity</p>
+          <h2>Latest events</h2>
+        </div>
+        <Link to="/admin" search={{ section: "intake", intakeTab: "history" }}>
+          View history ↗
+        </Link>
+      </div>
+      {history.length ? (
+        <ol className="physical-intake-history-list">
+          {history.map((event) => (
+            <li key={event.id}>
+              <span aria-hidden="true" />
+              <div>
+                <strong>{sentence(event.action)}</strong>
+                <small>
+                  {event.actor ?? "System"} · {date(event.occurredAt)}
+                </small>
+              </div>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="admin-safe-note">
+          No intake-specific audit history is available in the authorized projection.
+        </p>
+      )}
+    </section>
+  );
 }
 
 function IntakeHistoryTab({ detail }: { detail: AdminIntakeDetail | undefined }) {
   const history = detail?.history ?? [];
-  return <section className="physical-intake-workflow-card admin-panel"><header><Clock3 aria-hidden="true" /><div><p className="admin-console-eyebrow">Physical history</p><h2>Immutable operational timeline</h2></div></header>{history.length ? <ol className="physical-intake-history-list">{history.map((event) => <li key={event.id}><span aria-hidden="true" /><div><strong>{sentence(event.action)}</strong><small>{event.actor ?? "System"} · {event.source} · {date(event.occurredAt)}</small></div></li>)}</ol> : <div className="physical-intake-empty-history"><p>No intake-specific audit history is available in the authorized projection.</p></div>}<details className="physical-intake-technical-audit"><summary>View technical audit</summary><p>Technical audit remains available through the Audit workspace and is not mixed into the physical operator timeline.</p><Link to="/admin" search={{ section: "audit" }}>Open Audit Log ↗</Link></details></section>;
+  return (
+    <section className="physical-intake-workflow-card admin-panel">
+      <header>
+        <Clock3 aria-hidden="true" />
+        <div>
+          <p className="admin-console-eyebrow">Physical history</p>
+          <h2>Immutable operational timeline</h2>
+        </div>
+      </header>
+      {history.length ? (
+        <ol className="physical-intake-history-list">
+          {history.map((event) => (
+            <li key={event.id}>
+              <span aria-hidden="true" />
+              <div>
+                <strong>{sentence(event.action)}</strong>
+                <small>
+                  {event.actor ?? "System"} · {event.source} · {date(event.occurredAt)}
+                </small>
+              </div>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <div className="physical-intake-empty-history">
+          <p>No intake-specific audit history is available in the authorized projection.</p>
+        </div>
+      )}
+      <details className="physical-intake-technical-audit">
+        <summary>View technical audit</summary>
+        <p>
+          Technical audit remains available through the Audit workspace and is not mixed into the
+          physical operator timeline.
+        </p>
+        <Link to="/admin" search={{ section: "audit" }}>
+          Open Audit Log ↗
+        </Link>
+      </details>
+    </section>
+  );
 }
 
 function age(value: string) {
@@ -3946,7 +4665,9 @@ function ReviewQueue({
 }) {
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
   const services = useAppServices();
-  const [qualificationTab, setQualificationTab] = useState<"HUMAN_REVIEW_REQUIRED" | "COLLECTOR_ACTION_REQUIRED" | "AUTO_QUALIFIED" | "BLOCKED">("HUMAN_REVIEW_REQUIRED");
+  const [qualificationTab, setQualificationTab] = useState<
+    "HUMAN_REVIEW_REQUIRED" | "COLLECTOR_ACTION_REQUIRED" | "AUTO_QUALIFIED" | "BLOCKED"
+  >("HUMAN_REVIEW_REQUIRED");
   const qualification = useQuery({
     queryKey: ["admin", "qualification", qualificationTab],
     queryFn: () => services.repositories.reviews.listQualification(qualificationTab),
@@ -3960,7 +4681,12 @@ function ReviewQueue({
     queryFn: () => services.repositories.reviews.getQualificationPolicy(),
   });
   const updateQualificationPolicy = useMutation({
-    mutationFn: (input: { enabled?: boolean; autoPreSaleLaunch?: boolean; emergencyDisabled?: boolean; qaSamplingBps?: number }) => services.repositories.reviews.updateQualificationPolicy(input),
+    mutationFn: (input: {
+      enabled?: boolean;
+      autoPreSaleLaunch?: boolean;
+      emergencyDisabled?: boolean;
+      qaSamplingBps?: number;
+    }) => services.repositories.reviews.updateQualificationPolicy(input),
     onSuccess: () => void qualificationPolicy.refetch(),
   });
   const items = data?.items ?? [];
@@ -4111,10 +4837,40 @@ function ReviewQueue({
             </div>
           </div>
           <div className="admin-form-grid">
-            <label className="admin-form-field"><span>Automation enabled</span><input type="checkbox" checked={qualificationPolicy.data.enabled} onChange={(event) => updateQualificationPolicy.mutate({ enabled: event.target.checked })} /></label>
-            <label className="admin-form-field"><span>Auto-launch conditional Pre-Sale</span><input type="checkbox" checked={qualificationPolicy.data.autoPreSaleLaunch} onChange={(event) => updateQualificationPolicy.mutate({ autoPreSaleLaunch: event.target.checked })} /></label>
-            <label className="admin-form-field"><span>Emergency disable</span><input type="checkbox" checked={qualificationPolicy.data.emergencyDisabled} onChange={(event) => updateQualificationPolicy.mutate({ emergencyDisabled: event.target.checked })} /></label>
-            <div className="admin-form-field"><span>QA sample</span><strong>{(qualificationPolicy.data.qaSamplingBps / 100).toFixed(2)}%</strong></div>
+            <label className="admin-form-field">
+              <span>Automation enabled</span>
+              <input
+                type="checkbox"
+                checked={qualificationPolicy.data.enabled}
+                onChange={(event) =>
+                  updateQualificationPolicy.mutate({ enabled: event.target.checked })
+                }
+              />
+            </label>
+            <label className="admin-form-field">
+              <span>Auto-launch conditional Pre-Sale</span>
+              <input
+                type="checkbox"
+                checked={qualificationPolicy.data.autoPreSaleLaunch}
+                onChange={(event) =>
+                  updateQualificationPolicy.mutate({ autoPreSaleLaunch: event.target.checked })
+                }
+              />
+            </label>
+            <label className="admin-form-field">
+              <span>Emergency disable</span>
+              <input
+                type="checkbox"
+                checked={qualificationPolicy.data.emergencyDisabled}
+                onChange={(event) =>
+                  updateQualificationPolicy.mutate({ emergencyDisabled: event.target.checked })
+                }
+              />
+            </label>
+            <div className="admin-form-field">
+              <span>QA sample</span>
+              <strong>{(qualificationPolicy.data.qaSamplingBps / 100).toFixed(2)}%</strong>
+            </div>
           </div>
         </section>
       ) : null}
@@ -4639,7 +5395,9 @@ function QualificationExceptionPanel({
   rerunning,
 }: {
   activeTab: "HUMAN_REVIEW_REQUIRED" | "COLLECTOR_ACTION_REQUIRED" | "AUTO_QUALIFIED" | "BLOCKED";
-  onTabChange: (tab: "HUMAN_REVIEW_REQUIRED" | "COLLECTOR_ACTION_REQUIRED" | "AUTO_QUALIFIED" | "BLOCKED") => void;
+  onTabChange: (
+    tab: "HUMAN_REVIEW_REQUIRED" | "COLLECTOR_ACTION_REQUIRED" | "AUTO_QUALIFIED" | "BLOCKED",
+  ) => void;
   items: QualificationQueueItem[];
   loading: boolean;
   onRerun: (id: string) => void;
@@ -4662,21 +5420,45 @@ function QualificationExceptionPanel({
       </div>
       <div className="admin-review-tabs" role="tablist" aria-label="Qualification outcomes">
         {tabs.map(([value, label]) => (
-          <button key={value} type="button" className={activeTab === value ? "is-active" : ""} onClick={() => onTabChange(value)}>
+          <button
+            key={value}
+            type="button"
+            className={activeTab === value ? "is-active" : ""}
+            onClick={() => onTabChange(value)}
+          >
             {label}
           </button>
         ))}
       </div>
-      {loading ? <p className="admin-muted">Loading qualification runs…</p> : items.length === 0 ? <p className="admin-muted">No qualification runs in this view.</p> : (
+      {loading ? (
+        <p className="admin-muted">Loading qualification runs…</p>
+      ) : items.length === 0 ? (
+        <p className="admin-muted">No qualification runs in this view.</p>
+      ) : (
         <div className="admin-review-qualification-list">
           {items.slice(0, 8).map((item) => (
             <article key={item.runId} className="admin-review-qualification-row">
               <div>
                 <strong>{item.submission.id}</strong>
-                <p>{item.reasons[0] ?? (item.outcome === "AUTO_QUALIFIED" ? "All mandatory checks passed." : "No additional reason recorded.")}</p>
+                <p>
+                  {item.reasons[0] ??
+                    (item.outcome === "AUTO_QUALIFIED"
+                      ? "All mandatory checks passed."
+                      : "No additional reason recorded.")}
+                </p>
               </div>
               <span className="admin-status-chip">{item.outcome.replaceAll("_", " ")}</span>
-              {item.outcome === "HUMAN_REVIEW_REQUIRED" || item.outcome === "COLLECTOR_ACTION_REQUIRED" ? <button type="button" className="admin-review-refresh" onClick={() => onRerun(item.submission.id)} disabled={rerunning}>Rerun</button> : null}
+              {item.outcome === "HUMAN_REVIEW_REQUIRED" ||
+              item.outcome === "COLLECTOR_ACTION_REQUIRED" ? (
+                <button
+                  type="button"
+                  className="admin-review-refresh"
+                  onClick={() => onRerun(item.submission.id)}
+                  disabled={rerunning}
+                >
+                  Rerun
+                </button>
+              ) : null}
             </article>
           ))}
         </div>
@@ -8579,7 +9361,19 @@ function CollectorDirectoryManagement({
             </p>
           ) : null}
           {directory.isPublic ? (
-            <Link to="/collector/$id" params={{ id: directory.slug }} className="admin-detail-link">
+            <Link
+              to="/collector/$id"
+              search={{
+                tab: "catalogue",
+                status: "all",
+                q: "",
+                category: "all",
+                sort: "recent",
+                page: 1,
+              }}
+              params={{ id: directory.slug }}
+              className="admin-detail-link"
+            >
               Open public profile <ArrowRight aria-hidden="true" />
             </Link>
           ) : null}

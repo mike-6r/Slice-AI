@@ -256,6 +256,8 @@ type CollectorDto = {
   featurePriority?: number;
   featuredCaption?: string | null;
   latestPublicListingAt?: string | null;
+  categories?: string[];
+  activity?: import("@/domain").CollectorPublicActivity[];
   liveListingCount?: number;
   preSaleListingCount?: number;
   featuredPreviewAssets?: Array<{
@@ -263,6 +265,8 @@ type CollectorDto = {
     slug: string;
     title: string;
     category: string;
+    year?: number | null;
+    cardNumber?: string | null;
     variant?: string | null;
     grade?: string | null;
     listedAt?: string | null;
@@ -281,6 +285,8 @@ type CollectorDto = {
     slug: string;
     title: string;
     category: string;
+    year?: number | null;
+    cardNumber?: string | null;
     variant?: string | null;
     grade?: string | null;
     listedAt?: string | null;
@@ -312,6 +318,8 @@ const mapCollector = (value: CollectorDto): CollectorProfile => ({
     slug: listing.slug,
     title: listing.title,
     category: listing.category,
+    year: listing.year,
+    cardNumber: listing.cardNumber,
     variant: listing.variant,
     grade: listing.grade,
     listedAt: listing.listedAt,
@@ -331,6 +339,8 @@ const mapCollector = (value: CollectorDto): CollectorProfile => ({
     slug: listing.slug,
     title: listing.title,
     category: listing.category,
+    year: listing.year,
+    cardNumber: listing.cardNumber,
     variant: listing.variant,
     grade: listing.grade,
     listedAt: listing.listedAt,
@@ -342,6 +352,8 @@ const mapCollector = (value: CollectorDto): CollectorProfile => ({
     dataStatus: listing.market?.dataStatus,
     preSale: listing.preSale ?? null,
   })),
+  categories: value.categories ?? [],
+  activity: value.activity ?? [],
 });
 
 const mapCollectorPage = (value: {

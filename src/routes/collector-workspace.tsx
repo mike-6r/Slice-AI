@@ -380,7 +380,18 @@ function WorkspaceTopbar({
         <p>
           {data.collector.username ? `@${data.collector.username}` : "Username not set"}
           {data.collector.publicProfile?.isPublic ? (
-            <Link to="/collector/$id" params={{ id: data.collector.publicProfile.slug }}>
+            <Link
+              to="/collector/$id"
+              search={{
+                tab: "catalogue",
+                status: "all",
+                q: "",
+                category: "all",
+                sort: "recent",
+                page: 1,
+              }}
+              params={{ id: data.collector.publicProfile.slug }}
+            >
               View public profile <ArrowRight aria-hidden="true" />
             </Link>
           ) : null}
@@ -1553,6 +1564,14 @@ function PublicProfileEditor({
             <Link
               className="collector-button"
               to="/collector/$id"
+              search={{
+                tab: "catalogue",
+                status: "all",
+                q: "",
+                category: "all",
+                sort: "recent",
+                page: 1,
+              }}
               params={{ id: data.collector.publicProfile.slug }}
             >
               Preview public profile <ArrowRight aria-hidden="true" />

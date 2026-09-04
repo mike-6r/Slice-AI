@@ -46,7 +46,19 @@ function CollectorAssets() {
     <div className="public-collector-page">
       <section className="public-collector-hero is-listings">
         <div className="collectors-shell">
-          <Link to="/collector/$id" params={{ id }} className="public-collector-back">
+          <Link
+            to="/collector/$id"
+            search={{
+              tab: "catalogue",
+              status: "all",
+              q: "",
+              category: "all",
+              sort: "recent",
+              page: 1,
+            }}
+            params={{ id }}
+            className="public-collector-back"
+          >
             <ChevronLeft aria-hidden="true" /> Back to profile
           </Link>
           <p className="collectors-kicker">Public collector listings</p>
