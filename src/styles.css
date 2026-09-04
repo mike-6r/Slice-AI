@@ -71239,6 +71239,474 @@ body:has(.portfolio-page)
   padding: 0.8rem;
 }
 
+/* Asset detail flow correction. Keep the public asset composition intact, but
+   remove the legacy fixed grid tracks that made later sections paint into one
+   another when a pre-sale ticket or an empty history panel changed height. */
+@media (min-width: 901px) {
+  .asset-detail-page .asset-redesign {
+    grid-template-rows: none !important;
+    grid-auto-rows: auto;
+  }
+
+  .asset-detail-page .asset-redesign > .asset-redesign-hero,
+  .asset-detail-page .asset-redesign > .asset-presale-ownership-overview,
+  .asset-detail-page .asset-redesign > .asset-how-it-works,
+  .asset-detail-page .asset-redesign > .asset-detail-lower-grid,
+  .asset-detail-page .asset-redesign > .asset-presale-summary,
+  .asset-detail-page .asset-redesign > .asset-similar-section {
+    grid-row: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  .asset-detail-page .asset-redesign > .asset-redesign-hero {
+    align-items: start;
+    grid-template-rows: auto;
+    min-height: 0 !important;
+  }
+
+  .asset-detail-page .asset-redesign-hero > .asset-redesign-media,
+  .asset-detail-page .asset-redesign-hero > .asset-reference-identity,
+  .asset-detail-page .asset-redesign-hero > .asset-readiness-card {
+    align-self: start;
+    grid-row: auto;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  .asset-detail-page .asset-redesign-hero > .asset-redesign-media .asset-showcase {
+    height: 24rem !important;
+    min-height: 0 !important;
+  }
+
+  .asset-detail-page .asset-presale-ownership-overview {
+    position: relative;
+    z-index: 0;
+    align-self: start;
+    overflow: visible;
+    box-sizing: border-box;
+  }
+
+  .asset-detail-page .asset-how-it-works {
+    position: relative;
+    z-index: 0;
+    align-self: start;
+    overflow: visible;
+    box-sizing: border-box;
+  }
+
+  .asset-detail-page .asset-detail-lower-grid {
+    align-items: start;
+    grid-auto-flow: row;
+    grid-auto-rows: auto;
+    min-height: 0 !important;
+  }
+
+  .asset-detail-page .asset-detail-lower-grid > * {
+    align-self: start;
+    box-sizing: border-box;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  .asset-detail-page .asset-detail-lower-grid > .asset-price-panel {
+    grid-template-rows: auto auto auto auto;
+    min-height: 0 !important;
+    overflow: hidden;
+  }
+
+  .asset-detail-page .asset-detail-lower-grid .asset-chart-stage,
+  .asset-detail-page .asset-detail-lower-grid .asset-chart-stage.is-empty {
+    height: auto !important;
+    min-height: 14rem !important;
+    padding: 0.9rem 1rem;
+  }
+
+  .asset-detail-page .asset-detail-lower-grid .asset-chart-stage .asset-price-chart {
+    height: 13rem !important;
+    min-height: 13rem !important;
+  }
+
+  .asset-detail-page .asset-detail-lower-grid .asset-empty-history {
+    height: auto !important;
+    min-height: 12rem !important;
+  }
+
+  .asset-detail-page .asset-detail-lower-grid > .asset-details-panel,
+  .asset-detail-page .asset-detail-lower-grid > .asset-slice-grade-panel,
+  .asset-detail-page .asset-detail-lower-grid > .asset-external-panel {
+    overflow: visible;
+  }
+
+  .asset-detail-page .asset-redesign > .asset-presale-summary {
+    grid-column: 1;
+    width: 100%;
+    margin: 0;
+    align-self: start;
+    box-sizing: border-box;
+  }
+
+  .asset-detail-page .asset-presale-summary__grid {
+    align-items: start;
+  }
+}
+
+@media (max-width: 900px) {
+  .asset-detail-page .asset-redesign > .asset-presale-summary {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .asset-detail-page .asset-redesign > .asset-presale-summary {
+    grid-column: 1;
+  }
+}
+
+/* Public directory card v2. This card intentionally has its own namespace:
+   the public collector profile uses similarly named stats, but its larger
+   storefront layout must never dictate the directory card's height. */
+.collector-directory-card {
+  --collector-accent: #25dba4;
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 1.05rem;
+  border: 1px solid color-mix(in srgb, var(--collector-accent) 24%, rgba(145, 176, 186, 0.2));
+  border-radius: 0.85rem;
+  background:
+    radial-gradient(ellipse 90% 55% at 0% 0%, color-mix(in srgb, var(--collector-accent) 8%, transparent), transparent 70%),
+    linear-gradient(155deg, rgba(13, 29, 34, 0.98), rgba(5, 13, 17, 0.99));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 1rem 2rem rgba(0, 0, 0, 0.18);
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.collector-directory-card.is-tone-1 { --collector-accent: #35d4cc; }
+.collector-directory-card.is-tone-2 { --collector-accent: #9b86ef; }
+.collector-directory-card.is-tone-3 { --collector-accent: #d8aa4a; }
+
+.collector-directory-card:hover {
+  border-color: color-mix(in srgb, var(--collector-accent) 52%, rgba(145, 176, 186, 0.2));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 1.35rem 2.5rem rgba(0, 0, 0, 0.28),
+    0 0 2rem color-mix(in srgb, var(--collector-accent) 7%, transparent);
+  transform: translateY(-0.18rem);
+}
+
+.collector-directory-card > header {
+  display: grid;
+  grid-template-columns: 2.45rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.collector-directory-card .collector-avatar {
+  width: 2.45rem;
+  height: 2.45rem;
+  border-color: color-mix(in srgb, var(--collector-accent) 38%, transparent);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--collector-accent) 22%, #092c29), #06211f);
+  color: var(--collector-accent);
+  font-size: 1rem;
+}
+
+.collector-directory-card .collector-card-identity,
+.collector-directory-card .collector-card-identity a {
+  min-width: 0;
+}
+
+.collector-directory-card .collector-card-identity a {
+  display: block;
+  overflow: hidden;
+  color: #edf8f5;
+  font-family: var(--font-display);
+  font-size: 0.86rem;
+  font-weight: 720;
+  letter-spacing: -0.035em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collector-directory-card .collector-card-identity small {
+  display: block;
+  margin-top: 0.16rem;
+  overflow: hidden;
+  color: #86a3a8;
+  font-size: 0.6rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collector-directory-card .collector-public-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  color: var(--collector-accent);
+  font-size: 0.59rem;
+  white-space: nowrap;
+}
+
+.collector-directory-card .collector-public-status svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.collector-directory-card .collector-profile-copy {
+  min-width: 0;
+  margin-top: 0.85rem;
+}
+
+.collector-directory-card .collector-profile-copy strong,
+.collector-directory-card .collector-profile-copy p {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collector-directory-card .collector-profile-copy strong {
+  color: #dff0eb;
+  font-size: 0.73rem;
+  font-weight: 700;
+}
+
+.collector-directory-card .collector-profile-copy p {
+  margin-top: 0.24rem;
+  color: #8faeb2;
+  font-size: 0.65rem;
+}
+
+.collector-directory-card .collector-profile-copy small { display: none; }
+
+.collector-directory-card .collector-directory-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-width: 0;
+  margin-top: 0.85rem;
+  padding: 0.72rem 0;
+  border-top: 1px solid rgba(145, 176, 186, 0.14);
+  border-bottom: 1px solid rgba(145, 176, 186, 0.14);
+}
+
+.collector-directory-card .collector-directory-stats > div {
+  min-width: 0;
+  padding: 0 0.58rem;
+  border-left: 1px solid rgba(145, 176, 186, 0.12);
+}
+
+.collector-directory-card .collector-directory-stats > div:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.collector-directory-card .collector-directory-stats dt {
+  overflow: hidden;
+  color: #79949a;
+  font-size: 0.52rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.collector-directory-card .collector-directory-stats dd {
+  margin-top: 0.28rem;
+  color: #eff8f5;
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.collector-directory-card .collector-card-listings {
+  min-width: 0;
+  margin-top: 0.82rem;
+}
+
+.collector-directory-card .collector-card-listings__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: #9cb4b7;
+  font-size: 0.6rem;
+}
+
+.collector-directory-card .collector-card-listings__heading small {
+  color: #6f8b91;
+  font-size: 0.55rem;
+}
+
+.collector-directory-card .collector-mini-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  min-width: 0;
+  margin-top: 0.48rem;
+}
+
+.collector-directory-card .collector-mini-strip.is-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.collector-directory-card .collector-mini-holding,
+.collector-directory-card .collector-more-assets {
+  display: grid;
+  min-width: 0;
+  height: 4.65rem;
+  overflow: hidden;
+  border: 1px solid rgba(145, 176, 186, 0.16);
+  border-radius: 0.55rem;
+  background: rgba(3, 11, 14, 0.72);
+}
+
+.collector-directory-card .collector-mini-holding {
+  grid-template-columns: 4.2rem minmax(0, 1fr);
+}
+
+.collector-directory-card .collector-mini-holding__media {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  place-items: center;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 90%, color-mix(in srgb, var(--collector-accent) 13%, transparent), transparent 70%), #071216;
+}
+
+.collector-directory-card .collector-mini-holding__media img {
+  width: 100%;
+  height: 100%;
+  padding: 0.25rem;
+  object-fit: contain;
+}
+
+.collector-directory-card .collector-mini-holding__media svg {
+  width: 1.1rem;
+  color: var(--collector-accent);
+}
+
+.collector-directory-card .collector-mini-holding__copy {
+  display: grid;
+  min-width: 0;
+  align-content: center;
+  gap: 0.2rem;
+  padding: 0.45rem 0.55rem;
+}
+
+.collector-directory-card .collector-mini-holding__copy strong,
+.collector-directory-card .collector-mini-holding__copy small,
+.collector-directory-card .collector-mini-holding__copy em {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collector-directory-card .collector-mini-holding__copy strong {
+  color: #e4f2ef;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.collector-directory-card .collector-mini-holding__copy small {
+  color: #9bb2b5;
+  font-size: 0.57rem;
+}
+
+.collector-directory-card .collector-mini-holding__copy em {
+  color: var(--collector-accent);
+  font-size: 0.5rem;
+  font-style: normal;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.collector-directory-card .collector-mini-strip:not(.is-single) .collector-mini-holding {
+  grid-template-columns: 1fr;
+}
+
+.collector-directory-card .collector-mini-strip:not(.is-single) .collector-mini-holding__copy {
+  display: none;
+}
+
+.collector-directory-card .collector-more-assets {
+  place-items: center;
+  color: var(--collector-accent);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.collector-directory-card .collector-card-empty {
+  margin-top: 0.8rem;
+  color: #89a2a7;
+  font-size: 0.65rem;
+}
+
+.collector-directory-card .collector-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+  margin-top: 0.85rem;
+  padding-top: 0.78rem;
+  border-top: 1px solid rgba(145, 176, 186, 0.12);
+}
+
+.collector-directory-card .collector-card-footer a {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.3rem;
+  overflow: hidden;
+  color: #2bdda9;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collector-directory-card .collector-card-footer a:last-child {
+  justify-content: flex-end;
+}
+
+.collector-directory-card .collector-card-footer svg {
+  width: 0.82rem;
+  height: 0.82rem;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 560px) {
+  .collector-directory-card {
+    padding: 0.9rem;
+  }
+
+  .collector-directory-card .collector-directory-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem 0;
+  }
+
+  .collector-directory-card .collector-directory-stats > div:nth-child(3) {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .collector-directory-card .collector-directory-stats > div:nth-child(n + 3) {
+    padding-top: 0.55rem;
+    border-top: 1px solid rgba(145, 176, 186, 0.1);
+  }
+}
+
 .market-card-home-body {
   display: flex;
   min-width: 0;
@@ -72128,5 +72596,102 @@ body:has(.portfolio-page)
   .collector-profile-info-card,
   .collector-profile-activity-panel {
     padding: 1.05rem;
+  }
+}
+
+/* Final approved portfolio density pass. */
+.portfolio-page.portfolio-page--approved .portfolio-overview-content {
+  align-items: start;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--holdings,
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--recent-orders {
+  align-self: start;
+  height: max-content;
+  min-height: 0;
+}
+
+.portfolio-page.portfolio-page--approved
+  .portfolio-overview-content
+  > .portfolio-panel--holdings
+  .portfolio-panel__body,
+.portfolio-page.portfolio-page--approved
+  .portfolio-overview-content
+  > .portfolio-panel--recent-orders
+  .portfolio-panel__body {
+  flex: 0 0 auto;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-compact-holdings {
+  gap: 0.55rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-compact-holding {
+  grid-template-columns: minmax(10rem, 1.05fr) minmax(0, 1.75fr) auto;
+  gap: 0.7rem;
+  padding: 0.58rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-compact-holding--presale {
+  grid-template-columns: minmax(10rem, 1.05fr) minmax(0, 1.75fr);
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-compact-holding .portfolio-asset__icon {
+  flex-basis: 3rem;
+  width: 3rem;
+  height: 4rem;
+  background: rgba(8, 17, 23, 0.82);
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-compact-holding .portfolio-asset__icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-compact-holding__metrics {
+  gap: 0.5rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-compact-holding__metrics dd {
+  margin-top: 0.16rem;
+  font-size: 0.73rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-compact-holding__metrics small {
+  margin-top: 0.1rem;
+  font-size: 0.56rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-compact-holding--presale
+  .portfolio-compact-holding__presale-note {
+  grid-column: 2;
+  margin-top: -0.15rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-recent-orders-table td {
+  padding-block: 0.42rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-recent-order--presale td:first-child {
+  border-left: 2px solid rgba(244, 188, 40, 0.9);
+  padding-left: 0.5rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-recent-order--presale .portfolio-order-status {
+  color: #f4c34c;
+}
+
+@media (max-width: 1180px) {
+  .portfolio-page.portfolio-page--approved .portfolio-compact-holding,
+  .portfolio-page.portfolio-page--approved .portfolio-compact-holding--presale {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-compact-holding--presale
+    .portfolio-compact-holding__presale-note {
+    grid-column: 1;
+    margin-top: 0;
   }
 }

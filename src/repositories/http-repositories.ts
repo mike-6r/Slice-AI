@@ -5050,17 +5050,24 @@ const adminRepository = (client: ApiClient): AdminRepository => {
       );
     },
     async assignIntakeDestination(submissionId, input) {
+      // Keep the wire contract explicit at this boundary. This also protects
+      // the admin flow from stale/runtime values such as SHIPPING while the
+      // public API continues to use SHIPMENT.
+      const body = {
+        vaultId: input.vaultId.trim(),
+        deliveryMethod: input.deliveryMethod === "IN_PERSON" ? "IN_PERSON" : "SHIPMENT",
+        reason: input.reason.trim(),
+      } as const;
       const value = objectField(
         await client.request<unknown>(
           `/admin/intake/submissions/${encodeURIComponent(submissionId)}/destination`,
           {
             method: "POST",
-            headers: { "content-type": "application/json", "Idempotency-Key": idempotencyKey() },
-            // ApiClient serializes object bodies. Passing a pre-serialized
-            // string makes the server receive a JSON string instead of the
-            // destination assignment object and causes schema validation to
-            // fail with HTTP 400.
-            body: input,
+            // ApiClient supplies the JSON content type for object bodies.
+            // Keep only the endpoint-specific idempotency header here so the
+            // browser does not combine duplicate case-variant headers.
+            headers: { "Idempotency-Key": idempotencyKey() },
+            body,
           },
         ),
         "intake destination assignment",

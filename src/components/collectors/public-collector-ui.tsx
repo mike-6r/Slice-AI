@@ -241,7 +241,7 @@ export function CollectorCard({
   const count = collector.publishedListingCount ?? listings.length;
   return (
     <article
-      className={`collector-profile-card is-tone-${toneIndex % 4}${collector.isFeatured ? " is-featured" : ""}`}
+      className={`collector-directory-card is-tone-${toneIndex % 4}${collector.isFeatured ? " is-featured" : ""}`}
     >
       {collector.isFeatured ? (
         <span className="collector-featured-badge">
@@ -282,7 +282,7 @@ export function CollectorCard({
           </small>
         ) : null}
       </div>
-      <dl className="collector-profile-stats">
+      <dl className="collector-directory-stats">
         <div>
           <dt>Published</dt>
           <dd>{count}</dd>
@@ -314,7 +314,7 @@ export function CollectorCard({
             <span>{collector.isFeatured ? "Featured assets" : "Published assets"}</span>
             <small>{count} listed</small>
           </div>
-          <div className="collector-mini-strip">
+          <div className={`collector-mini-strip${listings.length === 1 ? " is-single" : ""}`}>
             {listings.slice(0, 3).map((listing) => (
               <CollectorAssetPreview key={listing.assetId} listing={listing} compact />
             ))}

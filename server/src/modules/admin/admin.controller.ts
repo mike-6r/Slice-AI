@@ -533,7 +533,7 @@ export class AdminController {
       request.actor!,
       submissionId,
       idempotencyKey,
-      this.parse(intakeDestinationAssignment, body),
+      this.parseIntakeDestinationAssignment(body),
       request.requestId ?? 'unknown',
     );
   }
@@ -939,6 +939,32 @@ export class AdminController {
       throw new BadRequestException({
         code: 'VALIDATION_FAILED',
         message: 'Request validation failed.',
+      });
+    return parsed.data;
+  }
+
+  private parseIntakeDestinationAssignment(
+    body: unknown,
+  ): z.output<typeof intakeDestinationAssignment> {
+    // Older admin bundles sent an already JSON-encoded string to the shared
+    // HTTP client. Accept that representation during the rollout, then apply
+    // the same strict object schema so no additional fields are admitted.
+    const candidate =
+      typeof body === 'string'
+        ? (() => {
+            try {
+              return JSON.parse(body) as unknown;
+            } catch {
+              return body;
+            }
+          })()
+        : body;
+    const parsed = intakeDestinationAssignment.safeParse(candidate);
+    if (!parsed.success)
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: 'Request validation failed.',
+        fieldErrors: parsed.error.flatten().fieldErrors,
       });
     return parsed.data;
   }

@@ -254,7 +254,9 @@ export function Portfolio() {
   const assets = useQuery({
     queryKey: [...queryKeys.assets.all, "portfolio-orders"],
     queryFn: () => services.assets.list({ limit: 48, sort: "title" }),
-    enabled: isAuthenticated && (tab === "orders" || tab === "activity"),
+    enabled:
+      isAuthenticated &&
+      (tab === "overview" || tab === "holdings" || tab === "orders" || tab === "activity"),
     staleTime: 30_000,
   });
   const market = useQuery({
@@ -309,6 +311,7 @@ export function Portfolio() {
   if (authRequired) return <PortfolioAccessRequired />;
 
   const holdingsForOrders = displayHoldings;
+  const assetCatalog = assets.data?.items ?? [];
 
   return (
     <main className="portfolio-page portfolio-page--approved">
@@ -408,11 +411,17 @@ export function Portfolio() {
                 }
                 visibleHoldings={visibleHoldings?.slice(0, 5)}
                 preSaleReservations={activeReservations}
+                assets={assetCatalog}
                 compact
               />
               <AllocationPanel query={displaySummaryQuery} />
               <ActivityPanel query={transactions} compact />
-              <RecentOrdersPanel query={orders} holdings={holdingsForOrders} />
+              <RecentOrdersPanel
+                query={orders}
+                holdings={holdingsForOrders}
+                preSaleReservations={activeReservations}
+                assets={assetCatalog}
+              />
               <MarketWatchPanel query={market} />
             </section>
             <PortfolioTrustStrip />
@@ -423,6 +432,7 @@ export function Portfolio() {
             query={holdingsPage}
             holdings={holdingsPage.data?.items ?? []}
             preSaleReservations={visiblePreSaleReservations}
+            assets={assetCatalog}
             totalMatches={(holdingsPage.data?.total ?? 0) + visiblePreSaleReservations.length}
             totalHoldings={displaySummaryQuery.data?.holdings.length ?? displayHoldings.length}
             view={holdingView}
@@ -1379,12 +1389,26 @@ function resolveOrderCategory(
 function RecentOrdersPanel({
   query,
   holdings,
+  preSaleReservations,
+  assets,
 }: {
   query: UseQueryResult<TradingOrderPage>;
   holdings: PortfolioHolding[];
+  preSaleReservations: ActivePreSaleReservation[];
+  assets: Asset[];
 }) {
   const holdingByAsset = new Map(holdings.map((holding) => [holding.assetId, holding]));
-  const items = (query.data?.items ?? []).slice(0, 4);
+  const assetBySlug = new Map(assets.flatMap((asset) => (asset.slug ? [[asset.slug, asset] as const] : [])));
+  const items = [
+    ...(query.data?.items ?? []).map((order) => ({ kind: "order" as const, order })),
+    ...preSaleReservations.map((reservation) => ({ kind: "reservation" as const, reservation })),
+  ]
+    .sort((left, right) => {
+      const leftDate = left.kind === "order" ? left.order.createdAt : left.reservation.createdAt;
+      const rightDate = right.kind === "order" ? right.order.createdAt : right.reservation.createdAt;
+      return new Date(rightDate).getTime() - new Date(leftDate).getTime();
+    })
+    .slice(0, 4);
   return (
     <PortfolioPanel
       title="Recent orders"
@@ -1395,9 +1419,9 @@ function RecentOrdersPanel({
         </Link>
       }
     >
-      {query.isLoading ? (
+      {query.isLoading && !preSaleReservations.length ? (
         <RowsSkeleton rows={3} />
-      ) : query.isError ? (
+      ) : query.isError && !preSaleReservations.length ? (
         <PanelError message="Unable to load orders." retry={() => void query.refetch()} />
       ) : items.length ? (
         <div className="portfolio-recent-orders-table-wrap">
@@ -1413,29 +1437,21 @@ function RecentOrdersPanel({
               </tr>
             </thead>
             <tbody>
-              {items.map((order) => {
-                const holding = holdingByAsset.get(order.assetId);
-                return (
-                  <tr key={order.id}>
-                    <td>
-                      <OrderAssetIdentity order={order} holding={holding} />
-                    </td>
-                    <td>
-                      <span className={order.side === "BUY" ? "is-buy" : "is-sell"}>
-                        {order.side}
-                      </span>
-                    </td>
-                    <td>{order.originalUnits}</td>
-                    <td>{formatPortfolioMoney(order.limitPriceMinor)}</td>
-                    <td>{formatPortfolioMoney(orderNotionalMinor(order))}</td>
-                    <td>
-                      <span className={`portfolio-order-status is-${order.status.toLowerCase()}`}>
-                        {formatPortfolioOrderStatus(order)}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
+              {items.map((item) =>
+                item.kind === "order" ? (
+                  <RecentOrderRow
+                    key={item.order.id}
+                    order={item.order}
+                    holding={holdingByAsset.get(item.order.assetId)}
+                  />
+                ) : (
+                  <RecentPreSaleRow
+                    key={`pre-sale-${item.reservation.id}`}
+                    reservation={item.reservation}
+                    asset={assetBySlug.get(item.reservation.asset.slug)}
+                  />
+                ),
+              )}
             </tbody>
           </table>
         </div>
@@ -1443,6 +1459,63 @@ function RecentOrdersPanel({
         <PanelEmpty message="You don't have any recent orders." />
       )}
     </PortfolioPanel>
+  );
+}
+
+function RecentOrderRow({
+  order,
+  holding,
+}: {
+  order: TradingOrderView;
+  holding?: PortfolioHolding;
+}) {
+  return (
+    <tr>
+      <td>
+        <OrderAssetIdentity order={order} holding={holding} />
+      </td>
+      <td>
+        <span className={order.side === "BUY" ? "is-buy" : "is-sell"}>{order.side}</span>
+      </td>
+      <td>{order.originalUnits}</td>
+      <td>{formatPortfolioMoney(order.limitPriceMinor)}</td>
+      <td>{formatPortfolioMoney(orderNotionalMinor(order))}</td>
+      <td>
+        <span className={`portfolio-order-status is-${order.status.toLowerCase()}`}>
+          {formatPortfolioOrderStatus(order)}
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+function RecentPreSaleRow({
+  reservation,
+  asset,
+}: {
+  reservation: ActivePreSaleReservation;
+  asset?: Asset;
+}) {
+  const thumbnailUrl = frontAssetMedia(asset)?.url;
+  return (
+    <tr className="portfolio-recent-order--presale">
+      <td>
+        <Link to="/asset/$id" params={{ id: reservation.asset.slug }} className="portfolio-order-asset">
+          <span className="portfolio-order-asset__icon" aria-hidden="true">
+            {thumbnailUrl ? <img src={thumbnailUrl} alt="" /> : <ShoppingCart />}
+          </span>
+          <span className="portfolio-order-asset__copy">
+            <strong>{reservation.asset.title}</strong>
+            <small>Pre-Sale reservation · {reservation.units} reserved</small>
+          </span>
+        </Link>
+      </td>
+      <td><span className="is-buy">RESERVE</span></td>
+      <td>{reservation.units}</td>
+      <td>{formatPortfolioMoney(reservation.pricePerUnitMinor)}</td>
+      <td>{formatPortfolioMoney(reservation.grossMinor)}</td>
+      <td><span className="portfolio-order-status is-open">Awaiting intake</span></td>
+    </tr>
   );
 }
 
@@ -2341,6 +2414,7 @@ function HoldingsExperience({
   query,
   holdings,
   preSaleReservations,
+  assets,
   totalMatches,
   totalHoldings,
   view,
@@ -2355,6 +2429,7 @@ function HoldingsExperience({
   query: UseQueryResult<PortfolioHoldingPage>;
   holdings: PortfolioHolding[];
   preSaleReservations: ActivePreSaleReservation[];
+  assets: Asset[];
   totalMatches: number;
   totalHoldings: number;
   view: "list" | "grid";
@@ -2427,7 +2502,11 @@ function HoldingsExperience({
             <HoldingCard key={holding.assetId} holding={holding} />
           ))}
           {preSaleReservations.map((reservation) => (
-            <PreSalePositionCard key={`pre-sale-${reservation.id}`} reservation={reservation} />
+            <PreSalePositionCard
+              key={`pre-sale-${reservation.id}`}
+              reservation={reservation}
+              asset={assets.find((candidate) => candidate.slug === reservation.asset.slug)}
+            />
           ))}
         </div>
       ) : (
@@ -2449,7 +2528,11 @@ function HoldingsExperience({
                 <HoldingRow key={holding.assetId} holding={holding} />
               ))}
               {preSaleReservations.map((reservation) => (
-                <PreSalePositionRow key={`pre-sale-${reservation.id}`} reservation={reservation} />
+                <PreSalePositionRow
+                  key={`pre-sale-${reservation.id}`}
+                  reservation={reservation}
+                  asset={assets.find((candidate) => candidate.slug === reservation.asset.slug)}
+                />
               ))}
             </tbody>
           </table>
@@ -2595,6 +2678,7 @@ function HoldingsPanel({
   onFilterChange,
   visibleHoldings,
   preSaleReservations,
+  assets,
   compact = false,
 }: {
   summary: UseQueryResult<PortfolioSummary>;
@@ -2604,6 +2688,7 @@ function HoldingsPanel({
   onFilterChange: (filter: HoldingFilter) => void;
   visibleHoldings: PortfolioHolding[] | undefined;
   preSaleReservations: ActivePreSaleReservation[];
+  assets: Asset[];
   compact?: boolean;
 }) {
   return (
@@ -2664,6 +2749,7 @@ function HoldingsPanel({
         <CompactHoldingsList
           holdings={visibleHoldings ?? []}
           preSaleReservations={filter === "ALL" ? preSaleReservations : []}
+          assets={assets}
           hasAnyHoldings={Boolean(query.data?.length)}
         />
       ) : (
@@ -2689,6 +2775,7 @@ function HoldingsPanel({
                     <PreSalePositionRow
                       key={`pre-sale-${reservation.id}`}
                       reservation={reservation}
+                      asset={assets.find((candidate) => candidate.slug === reservation.asset.slug)}
                     />
                   )),
                 )
@@ -2726,10 +2813,12 @@ function HoldingsPanel({
 function CompactHoldingsList({
   holdings,
   preSaleReservations,
+  assets,
   hasAnyHoldings,
 }: {
   holdings: PortfolioHolding[];
   preSaleReservations: ActivePreSaleReservation[];
+  assets: Asset[];
   hasAnyHoldings: boolean;
 }) {
   if (!holdings.length && !preSaleReservations.length) {
@@ -2817,6 +2906,7 @@ function CompactHoldingsList({
         <PreSalePositionRowCard
           key={`pre-sale-${reservation.id}`}
           reservation={reservation}
+          asset={assets.find((candidate) => candidate.slug === reservation.asset.slug)}
         />
       ))}
     </div>
@@ -2825,12 +2915,15 @@ function CompactHoldingsList({
 
 function PreSalePositionRowCard({
   reservation,
+  asset,
 }: {
   reservation: ActivePreSaleReservation;
+  asset?: Asset;
 }) {
   const deadline = reservation.deadlineAt
     ? formatRemainingDeadline(reservation.deadlineAt)
     : "Deadline unavailable";
+  const thumbnailUrl = frontAssetMedia(asset)?.url;
   return (
     <article className="portfolio-compact-holding portfolio-compact-holding--presale">
       <div className="portfolio-compact-holding__identity">
@@ -2839,8 +2932,11 @@ function PreSalePositionRowCard({
           params={{ id: reservation.asset.slug }}
           className="portfolio-asset portfolio-asset--link"
         >
-          <span className="portfolio-asset__icon portfolio-asset__icon--presale" aria-hidden="true">
-            <Clock3 />
+          <span
+            className={`portfolio-asset__icon portfolio-asset__icon--presale${thumbnailUrl ? "" : " is-placeholder"}`}
+            aria-hidden="true"
+          >
+            {thumbnailUrl ? <img src={thumbnailUrl} alt="" /> : <Clock3 />}
           </span>
           <span className="portfolio-asset__copy">
             <strong>{reservation.asset.title}</strong>
@@ -2872,11 +2968,19 @@ function PreSalePositionRowCard({
 
 function PreSalePositionCard({
   reservation,
+  asset,
 }: {
   reservation: ActivePreSaleReservation;
+  asset?: Asset;
 }) {
+  const thumbnailUrl = frontAssetMedia(asset)?.url;
   return (
     <article className="portfolio-holding-card portfolio-holding-card--presale">
+      <div className="portfolio-holding-card__media">
+        <span aria-hidden="true">
+          {thumbnailUrl ? <img src={thumbnailUrl} alt="" /> : <Clock3 />}
+        </span>
+      </div>
       <div className="portfolio-holding-card__body">
         <span className="portfolio-position-badge">PRE-SALE</span>
         <h3>{reservation.asset.title}</h3>
@@ -2908,14 +3012,22 @@ function PreSalePositionCard({
 
 function PreSalePositionRow({
   reservation,
+  asset,
 }: {
   reservation: ActivePreSaleReservation;
+  asset?: Asset;
 }) {
+  const thumbnailUrl = frontAssetMedia(asset)?.url;
   return (
     <tr className="portfolio-presale-position-row">
       <td data-label="Asset">
         <Link to="/asset/$id" params={{ id: reservation.asset.slug }} className="portfolio-asset portfolio-asset--link">
-          <span className="portfolio-asset__icon portfolio-asset__icon--presale" aria-hidden="true"><Clock3 /></span>
+          <span
+            className={`portfolio-asset__icon portfolio-asset__icon--presale${thumbnailUrl ? "" : " is-placeholder"}`}
+            aria-hidden="true"
+          >
+            {thumbnailUrl ? <img src={thumbnailUrl} alt="" /> : <Clock3 />}
+          </span>
           <span className="portfolio-asset__copy"><strong>{reservation.asset.title}</strong><small>PRE-SALE · {reservation.units} reserved</small></span>
         </Link>
       </td>

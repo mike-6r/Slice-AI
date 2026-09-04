@@ -89,13 +89,76 @@ export class MarketRefreshService {
     const mappings = await this.db.marketProviderMapping.findMany({
       where: {
         assetId,
-        status: { in: ['AUTO_MATCHED', 'STRONG', 'VERIFIED', 'STAFF_CONFIRMED'] },
+        status: { in: ['AUTO_MATCHED', 'STRONG', 'VERIFIED', 'STAFF_CONFIRMED', 'NEEDS_REVIEW'] },
       },
     });
     const cooldownUntil = new Date(now.getTime() + MANUAL_REFRESH_COOLDOWN_MS);
     let queued = 0;
-    for (const mapping of mappings) {
+    for (const originalMapping of mappings) {
+      let mapping = originalMapping;
       if (mapping.cooldownUntil && mapping.cooldownUntil > now) continue;
+      const provider = this.providers.get(mapping.providerCode);
+      if (provider?.resolveReferenceUrl && mapping.providerUrl) {
+        try {
+          const resolvedId = await provider.resolveReferenceUrl(mapping.providerUrl);
+          if (!resolvedId) continue;
+          const referenceChanged = resolvedId !== mapping.providerExternalId;
+          if (referenceChanged || mapping.status === 'NEEDS_REVIEW' || mapping.matchQuality !== 'EXACT') {
+            const collision = await this.db.marketProviderMapping.findUnique({
+              where: {
+                providerCode_providerExternalId: {
+                  providerCode: mapping.providerCode,
+                  providerExternalId: resolvedId,
+                },
+              },
+              select: { id: true },
+            });
+            if (collision && collision.id !== mapping.id) {
+              await this.db.marketProviderMapping.update({
+                where: { id: mapping.id },
+                data: {
+                  lastFailureAt: now,
+                  lastFailureCode: 'MARKET_REFERENCE_ALREADY_LINKED',
+                  nextRefreshAt: new Date(now.getTime() + MANUAL_REFRESH_COOLDOWN_MS),
+                },
+              });
+              continue;
+            }
+            mapping = await this.db.marketProviderMapping.update({
+              where: { id: mapping.id },
+              data: {
+                providerExternalId: resolvedId,
+                status: 'VERIFIED',
+                matchQuality: 'EXACT',
+                lastVerifiedAt: now,
+                lastFailureAt: null,
+                lastFailureCode: null,
+                ...(referenceChanged
+                  ? {
+                      currentPriceMinor: null,
+                      currentCurrency: null,
+                      currentObservedAt: null,
+                      referenceHistoryStartedAt: null,
+                      referenceMovement24hBps: null,
+                      referenceMovement7dBps: null,
+                      referenceMovement30dBps: null,
+                      referenceMovement90dBps: null,
+                      referenceMovement1yBps: null,
+                    }
+                  : {}),
+                nextRefreshAt: now,
+              },
+            });
+          }
+        } catch (error) {
+          this.logger.warn(
+            { assetId, provider: mapping.providerCode, code: safeErrorCode(error) },
+            'Manual market reference resolution failed',
+          );
+          continue;
+        }
+      }
+      if (mapping.providerCode === 'PRICECHARTING' && !/^\d+$/.test(mapping.providerExternalId)) continue;
       const recentlyQueued = await this.db.marketRefreshJob.findFirst({
         where: {
           mappingId: mapping.id,
@@ -301,12 +364,17 @@ export class MarketRefreshService {
       });
       if (!evidence?.sourceRef) continue;
       const parsed = JSON.parse(evidence.sourceRef) as { listingUrl?: string; externalReference?: string };
-      const providerExternalId = providerIdFromUrl(parsed.listingUrl!) ?? parsed.externalReference;
-      if (!providerExternalId) continue;
       const providerCode = 'PRICECHARTING';
       const identityHash = createHash('sha256').update(JSON.stringify({ category: asset.category.slug, year: asset.year, manufacturer: asset.manufacturer, set: asset.collectibleSet?.slug, cardNumber: asset.cardNumber, title: asset.title, grader: asset.gradeScaleEntry?.company.code, grade: asset.gradeScaleEntry?.grade.toString(), variant: asset.edition })).digest('hex');
       try {
         const existing = await this.db.marketProviderMapping.findUnique({ where: { assetId_providerCode: { assetId: asset.id, providerCode } } });
+      const providerExternalId =
+        (typeof parsed.externalReference === 'string' && /^\d+$/.test(parsed.externalReference)
+          ? parsed.externalReference
+          : null) ??
+        (parsed.listingUrl ? providerIdFromUrl(parsed.listingUrl) : null) ??
+        existing?.providerExternalId;
+      if (!providerExternalId) continue;
       const identityChanged = Boolean(existing && (existing.identityHash !== identityHash || existing.providerExternalId !== providerExternalId));
       await this.db.marketProviderMapping.upsert({
         where: { assetId_providerCode: { assetId: asset.id, providerCode } },
@@ -348,7 +416,14 @@ export class MarketRefreshService {
 }
 
 function providerIdFromUrl(value: string) {
-  try { const parsed = new URL(value); const marker = '/game/'; const index = parsed.pathname.indexOf(marker); return index >= 0 ? parsed.pathname.slice(index + marker.length).replace(/^\/+|\/+$/g, '') : null; } catch { return null; }
+  try {
+    const parsed = new URL(value);
+    const queryId = parsed.searchParams.get('id');
+    if (queryId && /^\d+$/.test(queryId)) return queryId;
+    return parsed.pathname.match(/^\/product\/(\d+)\/?$/i)?.[1] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export function fingerprint(

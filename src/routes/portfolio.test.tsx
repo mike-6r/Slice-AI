@@ -191,6 +191,9 @@ describe("approved portfolio workspace", () => {
     expect(html).toContain("£18.50");
     expect(html).toContain("0.10% ownership reserved");
     expect(html).toContain("Sell unavailable until finalization.");
+    expect(html).toContain("RESERVE");
+    expect(html).toContain("Pre-Sale reservation · 1 reserved");
+    expect(html).toContain("Awaiting intake");
     expect(html).not.toContain("You don't have any positions yet.");
     expect(html).not.toContain("Conditional Positions");
   });

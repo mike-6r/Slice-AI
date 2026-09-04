@@ -1177,8 +1177,9 @@ function AssetPage() {
               </div>
             </dl>
           </section>
-          {asset.preSale ? <PreSaleSummary preSale={asset.preSale} /> : null}
         </section>
+
+        {asset.preSale ? <PreSaleSummary preSale={asset.preSale} /> : null}
 
         <SimilarAssets
           items={similarQuery.data ?? []}
