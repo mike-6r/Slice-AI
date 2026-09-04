@@ -931,6 +931,8 @@ describe("HTTP catalogue mapping", () => {
       region: "Greater Manchester",
       countryCode: "GB",
       city: null,
+      internalName: null,
+      availabilityReason: null,
       activeIntakes: 0,
       updatedAt: "2026-08-29T12:00:00.000Z",
     };
@@ -988,6 +990,41 @@ describe("HTTP catalogue mapping", () => {
       "/admin/intake/locations",
       expect.objectContaining({
         method: "POST",
+        headers: expect.objectContaining({ "Idempotency-Key": expect.any(String) }),
+      }),
+    );
+  });
+
+  it("sends intake destination assignments as an object body", async () => {
+    const request = vi.fn().mockResolvedValue({
+      intakeId: "intake-1",
+      submissionId: "submission-1",
+      status: "SHIPPING_REQUIRED",
+      deliveryMethod: "SHIPMENT",
+      destination: { id: "vault-1", displayName: "Slice Beta Intake" },
+    });
+    const repositories = createHttpRepositories({ get: vi.fn(), request } as unknown as ApiClient);
+
+    await expect(
+      repositories.admin.assignIntakeDestination("submission-1", {
+        vaultId: "vault-1",
+        deliveryMethod: "SHIPMENT",
+        reason: "Assigned by the physical intake operator.",
+      }),
+    ).resolves.toMatchObject({
+      intakeId: "intake-1",
+      destination: { id: "vault-1" },
+    });
+
+    expect(request).toHaveBeenCalledWith(
+      "/admin/intake/submissions/submission-1/destination",
+      expect.objectContaining({
+        method: "POST",
+        body: {
+          vaultId: "vault-1",
+          deliveryMethod: "SHIPMENT",
+          reason: "Assigned by the physical intake operator.",
+        },
         headers: expect.objectContaining({ "Idempotency-Key": expect.any(String) }),
       }),
     );

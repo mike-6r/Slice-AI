@@ -1727,6 +1727,11 @@ function PhysicalIntakeBoard({
         exceptionSaving={exceptionCreate.isPending || exceptionResolve.isPending}
         destinationSaving={destinationAssignment.isPending}
         destinationFailed={destinationAssignment.isError}
+        destinationErrorMessage={
+          destinationAssignment.error instanceof Error
+            ? destinationAssignment.error.message
+            : null
+        }
       />
     );
   }
@@ -2419,6 +2424,7 @@ function PhysicalIntakeDetailPage({
   exceptionSaving,
   destinationSaving,
   destinationFailed,
+  destinationErrorMessage,
 }: {
   row: AdminIntakeRow;
   detail: AdminIntakeDetail | undefined;
@@ -2441,6 +2447,7 @@ function PhysicalIntakeDetailPage({
   exceptionSaving: boolean;
   destinationSaving: boolean;
   destinationFailed: boolean;
+  destinationErrorMessage: string | null;
 }) {
   const services = useAppServices();
   const [dialog, setDialog] = useState<
@@ -2648,7 +2655,7 @@ function PhysicalIntakeDetailPage({
           </div>
           <button
             type="button"
-            className="button-primary"
+            className="admin-primary-button"
             disabled={destinationSaving}
             onClick={() => {
               setDestinationDraft({
@@ -2804,6 +2811,7 @@ function PhysicalIntakeDetailPage({
             <div className="physical-intake-rail-actions">
               <button
                 type="button"
+                className="admin-primary-button"
                 disabled={destinationSaving}
                 onClick={() => {
                   setDestinationDraft({
@@ -3042,7 +3050,8 @@ function PhysicalIntakeDetailPage({
                 ) : null}
                 {destinationFailed ? (
                   <p className="text-negative">
-                    The destination could not be assigned. No state was changed.
+                    {destinationErrorMessage ||
+                      "The destination could not be assigned. No state was changed."}
                   </p>
                 ) : null}
                 <div className="physical-intake-modal-actions">
@@ -3055,7 +3064,7 @@ function PhysicalIntakeDetailPage({
                   </button>
                   <button
                     type="submit"
-                    className="button-primary"
+                    className="admin-primary-button"
                     disabled={
                       destinationSaving ||
                       destinationLocations.isLoading ||

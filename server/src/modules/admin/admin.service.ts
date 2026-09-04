@@ -4165,6 +4165,8 @@ export class AdminService {
           message: 'That destination does not accept this category.',
         });
 
+      const intakeStatus =
+        input.deliveryMethod === 'SHIPMENT' ? 'SHIPPING_REQUIRED' : 'VAULT_SELECTED';
       const intake = await db.submissionIntake.upsert({
         where: { submissionId },
         create: {
@@ -4172,13 +4174,13 @@ export class AdminService {
           vaultId: vault.id,
           deliveryMethod: input.deliveryMethod,
           intakeReference: `SLICE-${submissionId.slice(-8).toUpperCase()}`,
-          status: 'SHIPPING_REQUIRED',
+          status: intakeStatus,
           destinationSnapshot: intakeLocationSnapshot(vault),
         },
         update: {
           vaultId: vault.id,
           deliveryMethod: input.deliveryMethod,
-          status: 'SHIPPING_REQUIRED',
+          status: intakeStatus,
           destinationSnapshot: intakeLocationSnapshot(vault),
           updatedAt: new Date(),
         },

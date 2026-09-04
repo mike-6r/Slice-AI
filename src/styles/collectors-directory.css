@@ -1764,3 +1764,100 @@ body:has(.collectors-page) .collectors-page .collectors-shell {
     gap: 0.45rem;
   }
 }
+
+/* Final public-directory polish. Keep this route on the same readable canvas
+ * as the supplied collector mockup. The earlier showcase pass used a very
+ * wide 118rem frame and a fixed profile-card minimum, which made a single
+ * result look stranded and created unnecessary vertical whitespace. */
+@media (min-width: 721px) {
+  body:has(.collectors-page) .main-navigation > .site-shell,
+  body:has(.collectors-page) .market-tape__shell,
+  body:has(.collectors-page) .slice-footer .site-shell,
+  body:has(.collectors-page) .collectors-page .collectors-shell {
+    width: min(calc(100% - 3rem), 82rem);
+    max-width: 82rem;
+  }
+
+  body:has(.collectors-page) .collectors-hero--directory {
+    grid-template-columns: minmax(0, 1.22fr) minmax(20rem, 0.78fr);
+    gap: clamp(2.5rem, 5vw, 5rem);
+    padding-top: 2.35rem;
+    padding-bottom: 0.8rem;
+  }
+
+  body:has(.collectors-page) .collectors-hero--directory .collectors-hero-copy h1 {
+    max-width: 31rem;
+    font-size: clamp(3.35rem, 4.4vw, 4.25rem);
+  }
+
+  body:has(.collectors-page) .collectors-hero--directory .collectors-hero-copy > p:not(.collectors-kicker) {
+    max-width: 28rem;
+    margin-top: 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  body:has(.collectors-page) .collectors-hero-note {
+    margin-top: 0.55rem;
+  }
+
+  body:has(.collectors-page) .collectors-hero-aside {
+    max-width: 20rem;
+    padding-left: 1.15rem;
+    transform: none;
+  }
+
+  body:has(.collectors-page) .collectors-featured-section,
+  body:has(.collectors-page) .collectors-public-directory {
+    padding-top: 1.25rem;
+  }
+
+  body:has(.collectors-page) .collectors-directory-heading {
+    margin: 1.1rem 0 0.75rem;
+  }
+
+  body:has(.collectors-page) .collectors-directory-grid .collector-profile-card {
+    min-height: 0;
+  }
+
+  body:has(.collectors-page) .collectors-directory-grid .collector-profile-copy {
+    min-height: 2.35rem;
+    margin-top: 0.55rem;
+  }
+
+  body:has(.collectors-page) .collectors-directory-grid .collector-profile-stats {
+    margin-top: 0.35rem;
+    padding-block: 0.48rem;
+  }
+
+  body:has(.collectors-page) .collector-card-listings {
+    margin-top: 0.5rem;
+  }
+
+  body:has(.collectors-page) .collectors-directory-grid .collector-mini-strip {
+    min-height: 4rem;
+  }
+
+  body:has(.collectors-page) .collectors-directory-grid .collector-mini-holding,
+  body:has(.collectors-page) .collectors-directory-grid .collector-more-assets {
+    height: 4rem;
+  }
+
+  body:has(.collectors-page) .collector-card-footer {
+    padding-top: 0.5rem;
+  }
+
+  body:has(.collectors-page) .collectors-directory-grid > :only-child {
+    width: min(100%, 25rem);
+    max-width: 25rem;
+  }
+}
+
+@media (max-width: 720px) {
+  body:has(.collectors-page) .collectors-directory-heading {
+    margin-top: 1rem;
+  }
+
+  body:has(.collectors-page) .collectors-directory-grid .collector-profile-card {
+    min-height: 0;
+  }
+}

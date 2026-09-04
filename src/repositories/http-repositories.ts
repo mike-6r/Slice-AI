@@ -5056,7 +5056,11 @@ const adminRepository = (client: ApiClient): AdminRepository => {
           {
             method: "POST",
             headers: { "content-type": "application/json", "Idempotency-Key": idempotencyKey() },
-            body: JSON.stringify(input),
+            // ApiClient serializes object bodies. Passing a pre-serialized
+            // string makes the server receive a JSON string instead of the
+            // destination assignment object and causes schema validation to
+            // fail with HTTP 400.
+            body: input,
           },
         ),
         "intake destination assignment",
