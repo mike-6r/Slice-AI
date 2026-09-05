@@ -440,6 +440,9 @@ export function SubmissionPage() {
     },
     onSuccess: async (submitted) => {
       saveStopped.current = true;
+      update.reset();
+      create.reset();
+      setLocalError(null);
       setDraft(submitted);
       setNotice("Submission received.");
       await Promise.all([
