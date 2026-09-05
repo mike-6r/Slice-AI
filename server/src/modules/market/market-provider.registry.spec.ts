@@ -90,6 +90,38 @@ describe('PriceChartingProvider', () => {
     expect(String(fetchMock.mock.calls[0]![0])).toContain('/api/products');
   });
 
+  it('rejects observations when the resolved product does not match the asset identity', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: 918273,
+          'product-name': 'A different card #1',
+          'console-name': '2026 Topps All Aces',
+          'manual-only-price': 1850,
+        }),
+        { status: 200 },
+      ),
+    );
+    const provider = new PriceChartingProvider(config());
+
+    await expect(
+      provider.fetchObservations(
+        {
+          category: 'sports-cards',
+          year: 2026,
+          manufacturer: 'Topps',
+          set: '2026 Topps All Aces',
+          cardNumber: '1',
+          title: 'Shohei Ohtani Aa',
+          variant: null,
+          grader: 'PSA',
+          grade: '10',
+        },
+        '918273',
+      ),
+    ).rejects.toThrow('PRICECHARTING_IDENTITY_MISMATCH');
+  });
+
   it('maps documented card condition fields without inventing grader specificity', async () => {
     jest.spyOn(global, 'fetch').mockResolvedValue(
       new Response(

@@ -70,9 +70,9 @@ export class MarketRefreshService {
     return { queued, mappings: mappings.length };
   }
 
-  async runOnce(now = new Date(), workerId = `market-${process.pid}`) {
-    await this.enqueueDue(now);
-    const jobs = await this.claimJobs(now, workerId);
+  async runOnce(now = new Date(), workerId = `market-${process.pid}`, assetId?: string) {
+    if (!assetId) await this.enqueueDue(now);
+    const jobs = await this.claimJobs(now, workerId, assetId);
     for (const job of jobs) await this.processJob(job.id, now, workerId);
     return { claimed: jobs.length };
   }
@@ -101,7 +101,17 @@ export class MarketRefreshService {
       if (provider?.resolveReferenceUrl && mapping.providerUrl) {
         try {
           const resolvedId = await provider.resolveReferenceUrl(mapping.providerUrl);
-          if (!resolvedId) continue;
+          if (!resolvedId) {
+            await this.db.marketProviderMapping.update({
+              where: { id: mapping.id },
+              data: {
+                lastFailureAt: now,
+                lastFailureCode: 'PRICECHARTING_REFERENCE_NOT_RESOLVED',
+                nextRefreshAt: new Date(now.getTime() + MANUAL_REFRESH_COOLDOWN_MS),
+              },
+            });
+            continue;
+          }
           const referenceChanged = resolvedId !== mapping.providerExternalId;
           if (referenceChanged || mapping.status === 'NEEDS_REVIEW' || mapping.matchQuality !== 'EXACT') {
             const collision = await this.db.marketProviderMapping.findUnique({
@@ -188,13 +198,14 @@ export class MarketRefreshService {
    * provider response is visible without waiting for the background heartbeat. */
   async refreshAssetNow(assetId: string, now = new Date()) {
     const queued = await this.refreshAsset(assetId, now);
-    if (queued.queued) await this.runOnce(now, `market-admin-${process.pid}`);
+    if (queued.queued) await this.runOnce(now, `market-admin-${process.pid}`, assetId);
     return queued;
   }
 
-  private async claimJobs(now: Date, workerId: string) {
+  private async claimJobs(now: Date, workerId: string, assetId?: string) {
     const candidates = await this.db.marketRefreshJob.findMany({
       where: {
+        ...(assetId ? { assetId } : {}),
         status: { in: ['QUEUED', 'PROCESSING'] },
         availableAt: { lte: now },
         OR: [{ status: 'QUEUED' }, { leaseExpiresAt: { lt: now } }],
@@ -473,7 +484,7 @@ function deterministicJitter(assetId: string, intervalMs: number) {
   return Math.floor((digest / 0xffffffff) * Math.min(30 * 60 * 1000, Math.floor(intervalMs * 0.1)));
 }
 function isPermanentFailure(code: string) {
-  return ['PRICECHARTING_AUTH_FAILED', 'PRICECHARTING_INVALID_RESPONSE', 'PRICECHARTING_NOT_CONFIGURED', 'PRICECHARTING_REFERENCE_UNAVAILABLE', 'MARKET_PROVIDER_UNSUPPORTED_CATEGORY', 'MARKET_ASSET_NOT_FOUND'].includes(code);
+  return ['PRICECHARTING_AUTH_FAILED', 'PRICECHARTING_INVALID_RESPONSE', 'PRICECHARTING_NOT_CONFIGURED', 'PRICECHARTING_REFERENCE_UNAVAILABLE', 'PRICECHARTING_IDENTITY_MISMATCH', 'MARKET_PROVIDER_UNSUPPORTED_CATEGORY', 'MARKET_ASSET_NOT_FOUND'].includes(code);
 }
 function retryDelay(code: string, attempts: number, base: number, max: number) {
   if (code === 'PRICECHARTING_RATE_LIMITED') return Math.min(max, Math.max(base, 5 * 60 * 1000));

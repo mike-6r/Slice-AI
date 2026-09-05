@@ -98,12 +98,27 @@ export class PriceChartingProvider implements MarketDataProvider {
     const cardNumber = cardSlug?.match(/-(\d+(?:-\d+)?)$/)?.[1] ?? null;
     const cardTitle = (cardSlug ?? '').replace(/-\d+(?:-\d+)?$/, '').replace(/[-_]+/g, ' ').trim();
     const directQuery = `${setSlug ?? ''} ${cardTitle}`.replace(/[\/_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const identity = {
+      title: cardTitle || directQuery,
+      set: setSlug?.replace(/[-_]+/g, ' ') ?? null,
+      cardNumber,
+    };
     const payload = await this.request('products', { q: directQuery });
     const rows = objectArray(payload, 'products')
-      .map((row) => parseCandidate(row, { title: cardTitle || directQuery, set: setSlug?.replace(/[-_]+/g, ' ') ?? null, year: null, manufacturer: null, cardNumber, edition: null, variant: null, grader: null, grade: null, category: 'sports-cards' }))
+      .map((row) => parseCandidate(row, {
+        title: identity.title,
+        set: identity.set,
+        year: null,
+        manufacturer: null,
+        cardNumber: identity.cardNumber,
+        edition: null,
+        variant: null,
+        grader: null,
+        grade: null,
+        category: 'sports-cards',
+      }))
       .filter((row): row is MarketProductCandidate => Boolean(row));
-    const exact = rows.filter((row) => row.matchQuality === 'EXACT');
-    return exact.length === 1 ? exact[0]!.providerProductId : null;
+    return selectExactReference(rows, identity.set, identity.cardNumber);
   }
 
   async getProduct(providerExternalId: string): Promise<PriceChartingProduct> {
@@ -116,6 +131,9 @@ export class PriceChartingProvider implements MarketDataProvider {
     providerExternalId: string,
   ): Promise<ProviderObservation[]> {
     const product = await this.getProduct(providerExternalId);
+    if (!productMatchesIdentity(product, identity)) {
+      throw new Error('PRICECHARTING_IDENTITY_MISMATCH');
+    }
     const observedAt = new Date();
     return product.references.map((reference) => ({
       providerExternalId: product.providerProductId,
@@ -336,12 +354,12 @@ function parseCandidate(
     upc: stringValue(row.upc) ?? null,
     matchQuality: 'NEEDS_CONFIRMATION',
   };
+  const normalizedTitle = normalize(candidate.title);
   const normalized = normalize(`${candidate.title} ${candidate.set ?? ''}`);
   const number = normalize(identity.cardNumber);
-  const titleMatch = normalize(identity.title)
-    .split(' ')
-    .filter(Boolean)
-    .every((part) => normalized.includes(part));
+  const titleMatch = wordTokens(identity.title).every((part) =>
+    normalizedTitle.includes(part),
+  );
   candidate.matchQuality =
     number && normalized.includes(number) && titleMatch
       ? 'EXACT'
@@ -349,6 +367,51 @@ function parseCandidate(
         ? 'STRONG'
         : 'NEEDS_CONFIRMATION';
   return candidate;
+}
+
+function selectExactReference(
+  rows: readonly MarketProductCandidate[],
+  setSlug: string | null,
+  cardNumber: string | null,
+) {
+  const exact = rows.filter((row) => row.matchQuality === 'EXACT');
+  const setTokens = referenceSetTokens(setSlug);
+  const setMatched = exact.filter((row) =>
+    setTokens.every((token) => normalize(row.set).includes(token)),
+  );
+  if (setMatched.length === 1) return setMatched[0]!.providerProductId;
+  if (!cardNumber) return null;
+
+  // SportsCardsPro URLs carry a descriptive set slug. If the provider search
+  // returns more than one exact card, use the stable set tokens to disambiguate
+  // rather than silently linking an arbitrary product.
+  const narrowed = exact.filter((row) => {
+    const candidateSet = normalize(row.set);
+    return setTokens.every((token) => candidateSet.includes(token));
+  });
+  return narrowed.length === 1 ? narrowed[0]!.providerProductId : null;
+}
+
+function productMatchesIdentity(
+  product: PriceChartingProduct,
+  identity: MarketIdentity,
+) {
+  const titleMatches = wordTokens(identity.title).every((token) =>
+    normalize(product.title).includes(token),
+  );
+  if (!titleMatches) return false;
+  if (!identity.set || !product.set) return true;
+  const setTokens = referenceSetTokens(identity.set);
+  return setTokens.every((token) => normalize(product.set).includes(token));
+}
+
+function referenceSetTokens(value: string | null | undefined) {
+  return wordTokens(value)
+    .filter(
+      (token) =>
+        !['baseball', 'cards', 'card', 'football', 'basketball', 'hockey'].includes(token),
+    )
+    .filter((token) => !/^\d{4}$/.test(token));
 }
 
 function conditionMatch(
@@ -454,6 +517,14 @@ function buildSearchQuery(identity: MarketIdentity) {
 
 function normalize(value: string | null | undefined) {
   return (value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function wordTokens(value: string | null | undefined) {
+  return (value ?? '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
 }
 
 function sleep(ms: number) {
