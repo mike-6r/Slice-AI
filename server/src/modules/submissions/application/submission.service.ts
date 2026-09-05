@@ -168,6 +168,7 @@ const metadataAllowedKeys = new Set([
   'offerIntentPercent',
   'collectorExpectedValueMinor',
   'collectorExpectedCurrency',
+  'collectorExpectedSupply',
   'collectorReviewerNotes',
   'aiReviewStatus',
   'customerReference',

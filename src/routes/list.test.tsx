@@ -56,6 +56,7 @@ const detailsForm = {
   offerIntentPercent: "",
   collectorExpectedValue: "",
   collectorExpectedCurrency: "GBP",
+  collectorExpectedSupply: "1000",
   collectorReviewerNotes: "",
   aiReviewSkipped: false,
   customerReference: undefined,
@@ -455,7 +456,13 @@ describe("Document 010 list asset UI", () => {
     const html = renderToStaticMarkup(
       <MarketStep
         ready
-        form={{ ...detailsForm, offerIntentMode: "25", offerIntentPercent: "25" }}
+        form={{
+          ...detailsForm,
+          offerIntentMode: "25",
+          offerIntentPercent: "25",
+          collectorExpectedValue: "162.50",
+          collectorExpectedCurrency: "USD",
+        }}
         category="Pokémon TCG"
         research={research}
         pending={false}
@@ -467,6 +474,9 @@ describe("Document 010 list asset UI", () => {
     expect(html).toContain("Check the market.");
     expect(html).toContain("Market reference value · USD");
     expect(html).toContain("$162.50");
+    expect(html).toContain("Total collectible value");
+    expect(html).toContain("Total shares / supply");
+    expect(html).toContain("1,000 total shares");
     expect(html).not.toContain("£162.50");
     expect(html).toContain("You’d like to offer 25%");
     expect(html).toContain("You’d keep 75%");

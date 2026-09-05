@@ -609,6 +609,7 @@ export interface CreateSubmissionDraft {
     offerIntentPercent?: string;
     collectorExpectedValueMinor?: string;
     collectorExpectedCurrency?: string;
+    collectorExpectedSupply?: string;
     collectorReviewerNotes?: string;
     aiReviewStatus?: "AI_REVIEW_SKIPPED";
     customerReference?: CustomerReference;

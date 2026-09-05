@@ -62596,6 +62596,22 @@ html,
   font-size: 0.79rem;
   line-height: 1.5;
 }
+.list-offer-terms-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.list-offer-terms-grid label {
+  min-width: 0;
+}
+.list-offer-terms-grid input {
+  width: 100%;
+}
+.list-offer-terms-grid .list-field-help {
+  display: block;
+  margin-top: 0.4rem;
+}
 .list-offer-options {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -62732,7 +62748,8 @@ html,
 }
 @media (max-width: 560px) {
   .list-market-summary__body,
-  .list-market-fallback-fields {
+  .list-market-fallback-fields,
+  .list-offer-terms-grid {
     grid-template-columns: 1fr;
   }
   .list-market-summary__thumb {

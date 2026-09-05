@@ -2782,7 +2782,7 @@ function AdminPreSalePanel({
           </p>
           <div className="admin-presale-panel__setup-grid">
             <label className="admin-form-field">
-              Collector estimate (GBP)
+              Collector estimate ({detail?.currency ?? "GBP"})
               <input
                 type="number"
                 min="0.01"

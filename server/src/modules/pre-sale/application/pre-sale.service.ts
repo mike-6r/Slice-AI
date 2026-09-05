@@ -159,7 +159,7 @@ export class PreSaleService {
       if (asset.initialOffering && asset.initialOffering.status !== 'DRAFT') fail('INITIAL_OFFERING_ALREADY_EXISTS', 'An active Initial Offering cannot be replaced by provisional Pre-Sale terms.');
       const metadata = isRecord(asset.submissions[0].declaredMetadata) ? asset.submissions[0].declaredMetadata : {};
       const estimate = input.estimatedValueMinor ?? stringValue(metadata.collectorExpectedValueMinor);
-      const totalUnits = parseUnits(input.totalUnits ?? asset.ownershipSupplyPolicy?.proposedUnits.toString() ?? '1000');
+      const totalUnits = parseUnits(input.totalUnits ?? stringValue(metadata.collectorExpectedSupply) ?? asset.ownershipSupplyPolicy?.proposedUnits.toString() ?? '1000');
       const currency = input.currency ?? stringValue(metadata.collectorExpectedCurrency) ?? 'GBP';
       const preference = input.offeredPercentageBps ?? percentageBps(metadata.offerIntentPercent) ?? 10_000;
       if (!Number.isInteger(preference) || preference < 1 || preference > 10_000) fail('PRESALE_TERMS_INVALID', 'Offered percentage must be between 0.01% and 100%.');
@@ -324,7 +324,7 @@ export class PreSaleService {
     if (!asset) throw notFound('ASSET_NOT_FOUND', 'Asset not found.');
     const submission = asset.submissions[0];
     const metadata = isRecord(submission?.declaredMetadata) ? submission.declaredMetadata : {};
-    const totalSupply = asset.ownershipSupplyPolicy?.proposedUnits.toString() ?? '1000';
+    const totalSupply = stringValue(metadata.collectorExpectedSupply) ?? asset.ownershipSupplyPolicy?.proposedUnits.toString() ?? '1000';
     const estimate = stringValue(metadata.collectorExpectedValueMinor);
     const preference = percentageBps(metadata.offerIntentPercent) ?? 10_000;
     const price = estimate ? (BigInt(estimate) / BigInt(totalSupply)).toString() : null;

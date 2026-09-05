@@ -110,6 +110,7 @@ type ListingForm = {
   offerIntentPercent: string;
   collectorExpectedValue: string;
   collectorExpectedCurrency: string;
+  collectorExpectedSupply: string;
   collectorReviewerNotes: string;
   aiReviewSkipped: boolean;
   customerReference: CreateSubmissionDraft["declaredMetadata"]["customerReference"];
@@ -142,6 +143,7 @@ const blank: ListingForm = {
   offerIntentPercent: "",
   collectorExpectedValue: "",
   collectorExpectedCurrency: "GBP",
+  collectorExpectedSupply: "1000",
   collectorReviewerNotes: "",
   aiReviewSkipped: false,
   customerReference: undefined,
@@ -343,11 +345,18 @@ export function SubmissionPage() {
         refresh: Boolean(marketResearch),
       }),
     onSuccess: (research) => {
+      const reference = marketReference(research);
       setMarketResearch(research);
       setForm((current) => ({
         ...current,
         marketCheckStatus: research.state,
         marketCheckAcknowledged: research.state !== "UNAVAILABLE",
+        ...(reference && !current.collectorExpectedValue.trim()
+          ? {
+              collectorExpectedValue: majorFromMinor(reference.amountMinor),
+              collectorExpectedCurrency: reference.currency,
+            }
+          : {}),
       }));
       setNotice("Market check updated. Save this step to attach it to your draft.");
     },
@@ -548,6 +557,12 @@ export function SubmissionPage() {
         typeof saved.collectorExpectedCurrency === "string"
           ? saved.collectorExpectedCurrency
           : blank.collectorExpectedCurrency,
+      collectorExpectedSupply:
+        typeof saved.collectorExpectedSupply === "string" &&
+        /^\d+$/.test(saved.collectorExpectedSupply) &&
+        BigInt(saved.collectorExpectedSupply) > 0n
+          ? saved.collectorExpectedSupply
+          : blank.collectorExpectedSupply,
       collectorReviewerNotes: text("collectorReviewerNotes"),
       aiReviewSkipped: saved.aiReviewStatus === "AI_REVIEW_SKIPPED",
       customerReference,
@@ -589,6 +604,7 @@ export function SubmissionPage() {
       key !== "offerIntentPercent" &&
       key !== "collectorExpectedValue" &&
       key !== "collectorExpectedCurrency" &&
+      key !== "collectorExpectedSupply" &&
       key !== "collectorReviewerNotes" &&
       key !== "aiReviewSkipped"
     ) {
@@ -1774,6 +1790,8 @@ export function MarketStep({
       | "offerIntentMode"
       | "offerIntentPercent"
       | "collectorExpectedValue"
+      | "collectorExpectedCurrency"
+      | "collectorExpectedSupply"
       | "collectorReviewerNotes",
     value: string,
   ) => void;
@@ -2060,12 +2078,31 @@ function OfferIntent({
   reference,
 }: {
   form: ListingForm;
-  onChange: (key: "offerIntentMode" | "offerIntentPercent", value: string) => void;
+  onChange: (
+    key:
+      | "offerIntentMode"
+      | "offerIntentPercent"
+      | "collectorExpectedValue"
+      | "collectorExpectedCurrency"
+      | "collectorExpectedSupply",
+    value: string,
+  ) => void;
   reference: ReturnType<typeof marketReference>;
 }) {
   const options = ["25", "50", "75", "100", "custom"] as const;
   const percent = Number(form.offerIntentPercent);
   const validPercent = Number.isFinite(percent) && percent > 0 && percent <= 100;
+  const totalMinor = form.collectorExpectedValue
+    ? majorToMinor(form.collectorExpectedValue)
+    : null;
+  const supply = /^\d+$/.test(form.collectorExpectedSupply)
+    ? BigInt(form.collectorExpectedSupply)
+    : 0n;
+  const pricePerShareMinor =
+    totalMinor && supply > 0n ? (BigInt(totalMinor) / supply).toString() : null;
+  const sourceCurrency = form.collectorExpectedValue
+    ? form.collectorExpectedCurrency || reference?.currency || "GBP"
+    : reference?.currency || form.collectorExpectedCurrency || "GBP";
   return (
     <section className="list-market-panel list-offer-intent" aria-labelledby="offer-intent-title">
       <div className="list-market-panel__heading">
@@ -2078,6 +2115,43 @@ function OfferIntent({
       <p>
         Choose the percentage of the collectible you’d eventually like to make available on Slice.
       </p>
+      <div className="list-offer-terms-grid">
+        <label>
+          <span className="list-field-label">
+            Total collectible value{" "}
+            <small>{reference ? "(pre-filled from market reference)" : "(optional)"}</small>
+          </span>
+          <div className="list-market-money-input">
+            <span>{sourceCurrency}</span>
+            <input
+              value={form.collectorExpectedValue}
+              onChange={(event) => onChange("collectorExpectedValue", event.target.value)}
+              placeholder={reference ? majorFromMinor(reference.amountMinor) : "e.g. 10000.00"}
+              inputMode="decimal"
+              aria-describedby="collector-value-help"
+            />
+          </div>
+          <small id="collector-value-help" className="list-field-help">
+            Editable provisional context for the whole collectible. Slice staff set the final valuation.
+          </small>
+        </label>
+        <label>
+          <span className="list-field-label">Total shares / supply</span>
+          <input
+            type="number"
+            min={1}
+            step={1}
+            value={form.collectorExpectedSupply}
+            onChange={(event) => onChange("collectorExpectedSupply", event.target.value)}
+            placeholder="e.g. 10000"
+            inputMode="numeric"
+            aria-describedby="collector-supply-help"
+          />
+          <small id="collector-supply-help" className="list-field-help">
+            Choose how many total Slices the collectible will be divided into.
+          </small>
+        </label>
+      </div>
       <div className="list-offer-options" role="group" aria-label="Offer percentage">
         {options.map((option) => (
           <button
@@ -2122,6 +2196,12 @@ function OfferIntent({
               Illustrative reference portion:{" "}
               {sourceMoney(portionOf(reference.amountMinor, percent), reference.currency)}. This is
               not an offer price.
+            </small>
+          ) : null}
+          {pricePerShareMinor ? (
+            <small>
+              Provisional price per share: {sourceMoney(pricePerShareMinor, sourceCurrency)} across{" "}
+              {supply.toLocaleString()} total shares.
             </small>
           ) : null}
         </div>
@@ -4051,6 +4131,11 @@ export function ReviewStep({
     : null;
   const estimatePortionMinor =
     estimateMinor && validOffer ? portionOf(estimateMinor, offerPercent) : null;
+  const supply = /^\d+$/.test(form.collectorExpectedSupply)
+    ? BigInt(form.collectorExpectedSupply)
+    : 0n;
+  const pricePerShareMinor =
+    estimateMinor && supply > 0n ? (BigInt(estimateMinor) / supply).toString() : null;
   const aiStatus = graded
     ? "Graded card"
     : form.aiReviewSkipped
@@ -4193,6 +4278,15 @@ export function ReviewStep({
                   <p className="list-review-illustrative">
                     Implied offered portion:{" "}
                     {sourceMoney(estimatePortionMinor, form.collectorExpectedCurrency)}
+                  </p>
+                ) : null}
+                {estimateMinor ? (
+                  <p className="list-review-illustrative">
+                    Provisional total value: {sourceMoney(estimateMinor, form.collectorExpectedCurrency)} ·{" "}
+                    {supply.toLocaleString()} total shares
+                    {pricePerShareMinor
+                      ? ` · ${sourceMoney(pricePerShareMinor, form.collectorExpectedCurrency)} per share`
+                      : ""}
                   </p>
                 ) : null}
                 {!reference && estimateMinor ? (
@@ -4768,6 +4862,9 @@ function metadataFromForm(form: ListingForm): CreateSubmissionDraft["declaredMet
           collectorExpectedValueMinor: expectedValueMinor,
           collectorExpectedCurrency: form.collectorExpectedCurrency,
         }
+      : {}),
+    ...(form.collectorExpectedSupply.trim()
+      ? { collectorExpectedSupply: form.collectorExpectedSupply.trim() }
       : {}),
     ...(form.collectorReviewerNotes.trim()
       ? { collectorReviewerNotes: form.collectorReviewerNotes.trim() }
