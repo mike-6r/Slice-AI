@@ -447,6 +447,7 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
       id: item.id,
       url: item.url,
       alt: item.alt,
+      slot: item.slot,
       kind: "image" as const,
       order: index,
     })),

@@ -53,7 +53,7 @@ export type MarketplaceAsset = {
     status: string;
     lastCheckedAt: string | null;
   };
-  media?: Array<{ url: string; alt: string }>;
+  media?: Array<{ url: string; alt: string; slot?: string }>;
   sliceGrade?: SliceGrade;
   ownershipStatus?: string;
   tradingStatus?: string;
@@ -146,7 +146,7 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
   marketReferenceLink: asset.market?.referenceLink,
   media: asset.media
     .filter((item) => item.kind === "image")
-    .map((item) => ({ url: item.url, alt: item.alt })),
+    .map((item) => ({ url: item.url, alt: item.alt, slot: item.slot })),
   ownershipStatus: asset.ownership?.status,
   tradingStatus: asset.trading?.status,
   tradingEnabled: asset.trading?.enabled,

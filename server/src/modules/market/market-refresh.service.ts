@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
@@ -80,10 +80,14 @@ export class MarketRefreshService {
   async refreshAsset(assetId: string, now = new Date()) {
     const asset = await this.db.asset.findUnique({
       where: { id: assetId },
-      select: { status: true, slug: true },
+      select: { slug: true },
     });
-    if (!asset || asset.status !== 'PUBLISHED' || (this.config.isBeta && asset.slug.startsWith('slice-demo-'))) {
-      throw new Error('MARKET_REFRESH_ASSET_NOT_ELIGIBLE');
+    if (!asset) throw new NotFoundException({ code: 'ASSET_NOT_FOUND' });
+    if (this.config.isBeta && asset.slug.startsWith('slice-demo-')) {
+      throw new ConflictException({
+        code: 'MARKET_REFRESH_ASSET_NOT_ELIGIBLE',
+        message: 'Beta fixture assets are excluded from provider refreshes.',
+      });
     }
     await this.ensureMappings(now, assetId);
     const mappings = await this.db.marketProviderMapping.findMany({
@@ -367,11 +371,29 @@ export class MarketRefreshService {
   }
 
   private async ensureMappings(now: Date, assetId?: string) {
-    const assets = await this.db.asset.findMany({ where: { status: 'PUBLISHED', ...(assetId ? { id: assetId } : {}), ...(this.config.isBeta ? { slug: { not: { startsWith: 'slice-demo-' } } } : {}) }, include: { category: true, collectibleSet: true, gradeScaleEntry: { include: { company: true } }, valuationEvidence: { orderBy: { observedAt: 'desc' }, take: 10 } }, take: assetId ? undefined : 200 });
+    const assets = await this.db.asset.findMany({
+      where: {
+        ...(assetId ? { id: assetId } : { status: 'PUBLISHED' }),
+        ...(this.config.isBeta ? { slug: { not: { startsWith: 'slice-demo-' } } } : {}),
+      },
+      include: {
+        category: true,
+        collectibleSet: true,
+        gradeScaleEntry: { include: { company: true } },
+        valuationEvidence: { orderBy: { observedAt: 'desc' }, take: 10 },
+      },
+      take: assetId ? undefined : 200,
+    });
     for (const asset of assets) {
       const evidence = asset.valuationEvidence.find((item) => {
         if (!item.sourceRef) return false;
-        try { const parsed = JSON.parse(item.sourceRef) as Record<string, unknown>; return typeof parsed.listingUrl === 'string' && /pricecharting\.com/i.test(parsed.listingUrl); } catch { return false; }
+        try {
+          const parsed = JSON.parse(item.sourceRef) as Record<string, unknown>;
+          return (
+            typeof parsed.listingUrl === 'string' &&
+            /(pricecharting\.com|sportscardspro\.com)/i.test(parsed.listingUrl)
+          );
+        } catch { return false; }
       });
       if (!evidence?.sourceRef) continue;
       const parsed = JSON.parse(evidence.sourceRef) as { listingUrl?: string; externalReference?: string };

@@ -1,19 +1,40 @@
 import { assetShowcaseMedia } from "./demo-asset-media";
 import type { MarketplaceAsset } from "./market-api-presentation";
 
-export type MarketplaceMedia = { src: string; alt: string };
+export type MarketplaceMedia = { src: string; alt: string; slot?: string };
+
+const mediaRole = (item: { alt: string; slot?: string }) =>
+  `${item.slot ?? ""} ${item.alt}`.trim().toLowerCase();
+
+const isFrontMedia = (item: { alt: string; slot?: string }) => mediaRole(item).includes("front");
+const isBackMedia = (item: { alt: string; slot?: string }) => mediaRole(item).includes("back");
 
 export function resolveMarketplaceMediaGallery(
   asset: Pick<MarketplaceAsset, "media" | "slug">,
 ): MarketplaceMedia[] {
-  const usableMedia = asset.media?.filter((item) => item.url.trim().length > 0) ?? [];
+  const usableMedia =
+    asset.media?.filter((item) => item.url.trim().length > 0 && !mediaRole(item).includes("video")) ??
+    [];
   const ordered = [
-    ...usableMedia.filter((item) => item.alt.toLowerCase().includes("front")),
-    ...usableMedia.filter((item) => !item.alt.toLowerCase().includes("front")),
-  ].map((item) => ({ src: item.url, alt: item.alt }));
+    ...usableMedia.filter(isFrontMedia),
+    ...usableMedia.filter((item) => !isFrontMedia(item)),
+  ].map((item) => ({
+    src: item.url,
+    alt: item.alt,
+    ...(item.slot ? { slot: item.slot } : {}),
+  }));
   if (ordered.length > 0) return ordered;
   const fallback = assetShowcaseMedia(asset.slug);
   return fallback ? [fallback] : [];
+}
+
+export function resolveMarketplaceMediaSides(
+  asset: Pick<MarketplaceAsset, "media" | "slug">,
+): { front?: MarketplaceMedia; back?: MarketplaceMedia } {
+  const gallery = resolveMarketplaceMediaGallery(asset);
+  const front = gallery.find(isFrontMedia) ?? gallery[0];
+  const back = gallery.find(isBackMedia) ?? gallery.find((item) => item !== front);
+  return { front, back };
 }
 
 /**

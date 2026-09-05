@@ -104,6 +104,8 @@ export interface AssetMedia {
   id: string;
   url: string;
   alt: string;
+  /** Public API media slot, when supplied (for example front or back). */
+  slot?: string;
   kind: "image" | "video";
   order: number;
 }

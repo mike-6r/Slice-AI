@@ -27,7 +27,7 @@ import {
   type MarketplaceAsset,
 } from "@/components/marketplace/market-api-presentation";
 import { marketCategoryPresentation } from "@/components/marketplace/marketplace-presentation";
-import { resolveMarketplaceMedia } from "@/components/marketplace/marketplace-layout";
+import { resolveMarketplaceMediaSides } from "@/components/marketplace/marketplace-layout";
 import { asSupportedCurrency, convertMinorForDisplay } from "@/currency/currency-presentation";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 import { formatRelativeTime } from "@/lib/finance";
@@ -570,17 +570,7 @@ function AssetPage() {
     );
 
   const asset = toMarketplaceAsset(assetQuery.data);
-  const imageMedia = asset.media?.filter((item) => !item.alt.toLowerCase().includes("video")) ?? [];
-  const approvedMedia =
-    imageMedia.find((item) => item.alt.toLowerCase().includes("front")) ?? imageMedia[0];
-  const reverseMedia =
-    imageMedia.find((item) => item.alt.toLowerCase().includes("back")) ??
-    imageMedia.find(
-      (item) => item !== approvedMedia && !item.alt.toLowerCase().includes("front"),
-    ) ??
-    imageMedia[1];
-  const media = resolveMarketplaceMedia(asset);
-  const backMedia = reverseMedia ? { src: reverseMedia.url, alt: reverseMedia.alt } : undefined;
+  const { front: media, back: backMedia } = resolveMarketplaceMediaSides(asset);
   const lifecycle = asset.marketLifecycle;
   const initialOffering = asset.initialOffering;
   const history = historyQuery.data ?? [];
@@ -674,6 +664,7 @@ function AssetPage() {
               certificationNumber={asset.certificationNumber}
               media={media}
               backMedia={backMedia}
+              onMediaError={() => void assetQuery.refetch()}
             />
           </div>
 
@@ -795,7 +786,7 @@ function AssetPage() {
               <PreSaleTransactionTicket
                 assetTitle={asset.title}
                 assetSubtitle={[category.label, asset.setName, condition, asset.year].filter(Boolean).join(" · ")}
-                media={approvedMedia ? { src: approvedMedia.url, alt: approvedMedia.alt } : undefined}
+                media={media}
                 preSale={asset.preSale}
                 reservationUnits={reservationUnits}
                 setReservationUnits={setReservationUnits}
@@ -1852,6 +1843,7 @@ function AssetShowcase({
   certificationNumber,
   media,
   backMedia,
+  onMediaError,
 }: {
   title: string;
   categoryLabel: string;
@@ -1861,11 +1853,24 @@ function AssetShowcase({
   certificationNumber?: string;
   media?: { src: string; alt: string };
   backMedia?: { src: string; alt: string };
+  onMediaError?: () => void;
 }) {
   const [manualFlip, setManualFlip] = useState(false);
   const [failedSides, setFailedSides] = useState({ front: false, back: false });
+  const mediaSources = useRef({ front: media?.src, back: backMedia?.src });
   const hasBackMedia = Boolean(backMedia && !failedSides.back);
   const flipped = hasBackMedia && manualFlip;
+
+  useEffect(() => {
+    const nextSources = { front: media?.src, back: backMedia?.src };
+    if (
+      nextSources.front !== mediaSources.current.front ||
+      nextSources.back !== mediaSources.current.back
+    ) {
+      mediaSources.current = nextSources;
+      setFailedSides({ front: false, back: false });
+    }
+  }, [backMedia?.src, media?.src]);
 
   const mediaFallback = (side: "front" | "back") => (
     <div className="asset-showcase-image asset-showcase-image--fallback" role="status">
@@ -1900,7 +1905,10 @@ function AssetShowcase({
               <img
                 src={media.src}
                 alt={media.alt}
-                onError={() => setFailedSides((current) => ({ ...current, front: true }))}
+                onError={() => {
+                  setFailedSides((current) => ({ ...current, front: true }));
+                  onMediaError?.();
+                }}
               />
             ) : (
               mediaFallback("front")
@@ -1912,7 +1920,10 @@ function AssetShowcase({
               <img
                 src={backMedia.src}
                 alt={backMedia.alt}
-                onError={() => setFailedSides((current) => ({ ...current, back: true }))}
+                onError={() => {
+                  setFailedSides((current) => ({ ...current, back: true }));
+                  onMediaError?.();
+                }}
               />
             ) : (
               mediaFallback("back")
