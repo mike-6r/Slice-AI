@@ -1148,4 +1148,35 @@ describe("HTTP catalogue mapping", () => {
       }),
     );
   });
+
+  it("sends intake verification completion as an object body", async () => {
+    const request = vi.fn().mockResolvedValue({
+      intakeId: "intake-1",
+      status: "VERIFIED",
+      completedAt: "2026-09-05T14:00:00.000Z",
+    });
+    const repositories = createHttpRepositories({ get: vi.fn(), request } as unknown as ApiClient);
+    const input = {
+      identityMatch: true,
+      certificationMatch: true,
+      gradeMatch: true,
+      variantMatch: true,
+      note: "Verified against the received collectible.",
+    };
+
+    await expect(repositories.admin.completeIntakeVerification("intake-1", input)).resolves.toEqual({
+      intakeId: "intake-1",
+      status: "VERIFIED",
+      completedAt: "2026-09-05T14:00:00.000Z",
+    });
+
+    expect(request).toHaveBeenCalledWith(
+      "/admin/intake/intake-1/verification/complete",
+      expect.objectContaining({
+        method: "POST",
+        body: input,
+        headers: expect.objectContaining({ "Idempotency-Key": expect.any(String) }),
+      }),
+    );
+  });
 });

@@ -5219,7 +5219,7 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         await client.request<unknown>("/admin/intake/locations", {
           method: "POST",
           headers: { "content-type": "application/json", "Idempotency-Key": idempotencyKey() },
-          body: JSON.stringify(input),
+          body: input,
         }),
         "intake location create",
       );
@@ -5230,7 +5230,7 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         await client.request<unknown>(`/admin/intake/locations/${encodeURIComponent(id)}`, {
           method: "PATCH",
           headers: { "content-type": "application/json", "Idempotency-Key": idempotencyKey() },
-          body: JSON.stringify(input),
+          body: input,
         }),
         "intake location update",
       );
@@ -5241,7 +5241,7 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         await client.request<unknown>(`/admin/intake/locations/${encodeURIComponent(id)}/command`, {
           method: "POST",
           headers: { "content-type": "application/json", "Idempotency-Key": idempotencyKey() },
-          body: JSON.stringify(input),
+          body: input,
         }),
         "intake location command",
       );
@@ -5303,11 +5303,11 @@ const adminRepository = (client: ApiClient): AdminRepository => {
           {
             method: "POST",
             headers: { "content-type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-            body: JSON.stringify({
+            body: {
               fixtureKey: "PIKACHU_OWNER_DEMO_2026",
               confirmation: "COMPLETE_STAGING_DEMO_INTAKE",
               reason: input.reason,
-            }),
+            },
           },
         ),
         "staging demo physical intake",
@@ -5337,7 +5337,7 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         await client.request<unknown>(`/admin/intake/${id}/verification/complete`, {
           method: "POST",
           headers: { "content-type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-          body: JSON.stringify(input),
+          body: input,
         }),
         "intake verification complete",
       );
@@ -5352,7 +5352,7 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         await client.request<unknown>(`/admin/intake/${id}/exceptions`, {
           method: "POST",
           headers: { "content-type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-          body: JSON.stringify(input),
+          body: input,
         }),
         "intake exception",
       );
@@ -5367,7 +5367,7 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         await client.request<unknown>(`/admin/intake/${id}/exceptions/${exceptionId}/resolve`, {
           method: "POST",
           headers: { "content-type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-          body: JSON.stringify(input),
+          body: input,
         }),
         "intake exception resolution",
       );
