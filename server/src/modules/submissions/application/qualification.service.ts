@@ -20,7 +20,7 @@ export class QualificationService {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unexpected qualification error.';
       await this.prisma.assetSubmission.updateMany({ where: { id: submissionId }, data: { status: 'IN_REVIEW', decisionCode: 'HUMAN_REVIEW_REQUIRED', decisionNote: 'Automation paused safely; staff review is required.' } });
-      return { outcome: 'HUMAN_REVIEW_REQUIRED' as const, customerStatus: 'NEEDS_STAFF_REVIEW', reasons: [`Automation exception: ${message.slice(0, 240)}`], actions: [], checks: [], errorCode: 'AUTOMATION_EXCEPTION' };
+      return qualificationResponse({ outcome: 'HUMAN_REVIEW_REQUIRED' as const, customerStatus: 'NEEDS_STAFF_REVIEW', reasons: [`Automation exception: ${message.slice(0, 240)}`], actions: [], checks: [], errorCode: 'AUTOMATION_EXCEPTION' }, null);
     }
   }
 
@@ -44,11 +44,12 @@ export class QualificationService {
     const run = await db.qualificationRun.create({ data: { submissionId, trigger: options.trigger ?? 'SUBMISSION_SUBMITTED', policyVersion: policy.version, status: 'RUNNING', retryOfId: options.retryOfId ?? null, reasons: json(evaluation.reasons) } });
     await db.qualificationCheck.createMany({ data: evaluation.checks.map((check) => ({ runId: run.id, code: check.code, result: check.result, mandatory: check.mandatory, reason: check.reason, details: check.details ? json(check.details) : undefined })) });
     if (evaluation.outcome !== 'AUTO_QUALIFIED') {
-      await db.qualificationRun.update({ where: { id: run.id }, data: { status: 'COMPLETED', outcome: evaluation.outcome, completedAt: new Date(), reasons: json(evaluation.reasons), actions: json([]) } });
+      const completedAt = new Date();
+      await db.qualificationRun.update({ where: { id: run.id }, data: { status: 'COMPLETED', outcome: evaluation.outcome, completedAt, reasons: json(evaluation.reasons), actions: json([]) } });
       await db.assetSubmission.update({ where: { id: submissionId }, data: { status: evaluation.outcome === 'HUMAN_REVIEW_REQUIRED' ? 'IN_REVIEW' : 'SUBMITTED', decisionCode: evaluation.outcome, decisionNote: evaluation.reasons[0] ?? null } });
       await this.audit(db, evaluation.outcome, submissionId, run.id, policy.version, evaluation.reasons);
       await this.notify(db, submission.ownerUserId, submissionId, evaluation.outcome, evaluation.reasons[0]);
-      return { runId: run.id, outcome: evaluation.outcome, customerStatus: qualificationCustomerStatus(evaluation.outcome), policyVersion: policy.version, reasons: evaluation.reasons, actions: [], checks: evaluation.checks };
+      return qualificationResponse({ runId: run.id, outcome: evaluation.outcome, customerStatus: qualificationCustomerStatus(evaluation.outcome), policyVersion: policy.version, reasons: evaluation.reasons, actions: [], checks: evaluation.checks }, completedAt);
     }
     if (!terms || !location || !method) throw new Error('Qualification terms or intake destination disappeared during processing.');
     const title = String(metadata.name ?? metadata.playerOrCharacter ?? '').trim();
@@ -62,9 +63,10 @@ export class QualificationService {
     if (certNumber && grader) await db.gradingCertificationClaim.upsert({ where: { companyCode_normalizedCertificationNumber: { companyCode: grader.toUpperCase(), normalizedCertificationNumber: certNumber.replace(/[^A-Za-z0-9]/g, '').toUpperCase() } }, create: { companyCode: grader.toUpperCase(), normalizedCertificationNumber: certNumber.replace(/[^A-Za-z0-9]/g, '').toUpperCase(), submissionId, assetId: asset.id, status: 'ACTIVE' }, update: { submissionId, assetId: asset.id, status: 'ACTIVE' } });
     for (const [action, resourceType, resourceId, metadataValue] of [['AUTO_QUALIFIED', 'submission', submissionId, { runId: run.id }], ['CANONICAL_ASSET_CREATED_AND_LINKED', 'submission', submissionId, { runId: run.id, assetId: asset.id }], ['PHYSICAL_INTAKE_CREATED', 'submission-intake', intake.id, { runId: run.id, intakeId: intake.id }], ['PRE_SALE_TERMS_AUTO_CONFIGURED', 'pre-sale', sale.id, { runId: run.id, preSaleId: sale.id }], ...(policy.autoPreSaleLaunch ? [['PRE_SALE_LAUNCHED', 'pre-sale', sale.id, { runId: run.id, preSaleId: sale.id }]] : [])] as Array<[string, string, string, Record<string, unknown>]>) await this.audit(db, action, resourceId, run.id, policy.version, [], resourceType, metadataValue);
     const actions = [{ type: 'CANONICAL_ASSET_CREATED', assetId: asset.id }, { type: 'PHYSICAL_INTAKE_CREATED', intakeId: intake.id }, { type: 'PRE_SALE_TERMS_AUTO_CONFIGURED', preSaleId: sale.id }, { type: policy.autoPreSaleLaunch ? 'PRE_SALE_LAUNCHED' : 'PRE_SALE_PREPARED', preSaleId: sale.id, deadlineAt: sale.deadlineAt?.toISOString() ?? null }, { type: 'QA_SAMPLE', sampled: qaSampled, qaBlocking: false }];
-    await db.qualificationRun.update({ where: { id: run.id }, data: { status: 'COMPLETED', outcome: 'AUTO_QUALIFIED', completedAt: new Date(), actions: json(actions), reasons: json([]) } });
+    const completedAt = new Date();
+    await db.qualificationRun.update({ where: { id: run.id }, data: { status: 'COMPLETED', outcome: 'AUTO_QUALIFIED', completedAt, actions: json(actions), reasons: json([]) } });
     await this.notify(db, submission.ownerUserId, submissionId, 'AUTO_QUALIFIED', 'Your collectible passed automated checks and is now available for conditional Pre-Sale reservations.');
-    return { runId: run.id, outcome: 'AUTO_QUALIFIED' as const, customerStatus: 'PRE_SALE_QUALIFIED', policyVersion: policy.version, reasons: [], actions, checks: evaluation.checks };
+    return qualificationResponse({ runId: run.id, outcome: 'AUTO_QUALIFIED' as const, customerStatus: 'PRE_SALE_QUALIFIED', policyVersion: policy.version, reasons: [], actions, checks: evaluation.checks }, completedAt);
   }
 
   async ownerLatest(actor: Actor, submissionId: string) {
@@ -85,4 +87,8 @@ export class QualificationService {
   private projectPolicy(policy: { version: string; enabled: boolean; enabledCategories: string[]; enabledGraders: string[]; qaSamplingBps: number; autoPreSaleLaunch: boolean; defaultPreSaleSupply: bigint; emergencyDisabled: boolean }) { return { ...policy, defaultPreSaleSupply: policy.defaultPreSaleSupply.toString() }; }
   private async audit(db: Db, action: string, resourceId: string, runId: string, policyVersion: string, reasons: string[], resourceType = 'submission', extra: Record<string, unknown> = {}) { await db.auditEvent.create({ data: { actorType: 'SYSTEM', action, resourceType, resourceId, result: 'SUCCESS', metadata: json({ source: 'AUTOMATION', runId, policyVersion, reasons, ...extra }) } }); }
   private async notify(db: Db, userId: string, submissionId: string, outcome: string, body?: string) { await db.notification.create({ data: { userId, type: 'COLLECTOR_ACTIONS', title: outcome === 'AUTO_QUALIFIED' ? 'Your collectible passed automated checks.' : 'Your submission needs attention.', body: body ?? 'Your submission has been routed to the appropriate next step.', resourceType: 'submission', resourceId: submissionId } }); }
+}
+
+export function qualificationResponse<T extends object>(result: T, completedAt: Date | null) {
+  return { ...result, completedAt: completedAt?.toISOString() ?? null };
 }
