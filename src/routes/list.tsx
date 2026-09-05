@@ -922,6 +922,9 @@ export function SubmissionPage() {
     submit.error ??
     runPreGrade.error;
   const fullActionError = actionError ?? verifyCertification.error;
+  const resumableDrafts = (drafts.data?.items ?? []).filter((item) =>
+    canResumeListing(item.status),
+  );
 
   if (submitted && submission) {
     return <SubmissionReceived submission={submission} />;
@@ -945,9 +948,9 @@ export function SubmissionPage() {
           </div>
           <Link
             to="/submissions/$id"
-            params={{ id: drafts.data?.items[0]?.id ?? "" }}
+            params={{ id: resumableDrafts[0]?.id ?? "" }}
             className="list-guided-drafts"
-            disabled={!drafts.data?.items[0]}
+            disabled={!resumableDrafts[0]}
           >
             My submissions <ChevronRight aria-hidden="true" />
           </Link>
@@ -1137,7 +1140,7 @@ export function SubmissionPage() {
           </footer>
         </section>
 
-        <MySubmissions submissions={drafts.data?.items ?? []} />
+        <MySubmissions submissions={resumableDrafts} />
       </div>
     </main>
   );
@@ -4609,43 +4612,30 @@ export function canResumeListing(status: string) {
 }
 
 function MySubmissions({ submissions }: { submissions: AssetSubmission[] }) {
+  const resumableSubmissions = submissions.filter((item) => canResumeListing(item.status));
   return (
     <section className="list-my-submissions">
       <header>
         <div>
           <p className="page-kicker">Your saved drafts</p>
-          <h2>Drafts and submissions will appear here.</h2>
+          <h2>Drafts and incomplete submissions will appear here.</h2>
         </div>
       </header>
-      {submissions.length ? (
+      {resumableSubmissions.length ? (
         <div>
-          {submissions.slice(0, 6).map((item) =>
-            canResumeListing(item.status) ? (
-              <Link key={item.id} to="/list" search={{ draft: item.id }}>
-                <FileImage />
-                <span>
-                  <strong>{submissionName(item.declaredMetadata)}</strong>
-                  <small>
-                    {submissionStatusLabel(item.status)} · Updated {formatDate(item.updatedAt)}
-                  </small>
-                  <b>Continue listing</b>
-                </span>
-                <ChevronRight />
-              </Link>
-            ) : (
-              <Link key={item.id} to="/submissions/$id" params={{ id: item.id }}>
-                <FileImage />
-                <span>
-                  <strong>{submissionName(item.declaredMetadata)}</strong>
-                  <small>
-                    {submissionStatusLabel(item.status)} · Updated {formatDate(item.updatedAt)}
-                  </small>
-                  <b>View submission</b>
-                </span>
-                <ChevronRight />
-              </Link>
-            ),
-          )}
+          {resumableSubmissions.slice(0, 6).map((item) => (
+            <Link key={item.id} to="/list" search={{ draft: item.id }}>
+              <FileImage />
+              <span>
+                <strong>{submissionName(item.declaredMetadata)}</strong>
+                <small>
+                  {submissionStatusLabel(item.status)} · Updated {formatDate(item.updatedAt)}
+                </small>
+                <b>Continue listing</b>
+              </span>
+              <ChevronRight />
+            </Link>
+          ))}
         </div>
       ) : (
         <p>Save your first listing to keep it private and continue whenever you’re ready.</p>
