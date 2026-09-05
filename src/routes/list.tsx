@@ -439,6 +439,7 @@ export function SubmissionPage() {
       return services.repositories.submissions.submit(detail.data.id, detail.data.version);
     },
     onSuccess: async (submitted) => {
+      saveStopped.current = true;
       setDraft(submitted);
       setNotice("Submission received.");
       await Promise.all([
@@ -563,6 +564,7 @@ export function SubmissionPage() {
   useEffect(() => {
     if (
       !draft ||
+      !canResumeListing(draft.status) ||
       !validIdentity ||
       update.isPending ||
       saveStopped.current ||
@@ -867,7 +869,7 @@ export function SubmissionPage() {
     }
     submit.mutate();
   };
-  const submitted = submission?.status === "SUBMITTED" || submission?.status === "APPROVED";
+  const submitted = Boolean(submission && !canResumeListing(submission.status));
   const actionError =
     create.error ??
     update.error ??
@@ -878,7 +880,7 @@ export function SubmissionPage() {
     runPreGrade.error;
   const fullActionError = actionError ?? verifyCertification.error;
 
-  if (submitted) {
+  if (submitted && submission) {
     return <SubmissionReceived submission={submission} />;
   }
 
