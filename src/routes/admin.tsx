@@ -1764,6 +1764,24 @@ function PhysicalIntakeBoard({
         requestRecentAuth(() => custodyTransition.mutate(input));
     },
   });
+  const coverage = useMutation({
+    mutationFn: ({ assetId, insuredValueMinor }: { assetId: string; insuredValueMinor: string }) =>
+      services.repositories.lifecycle.recordCoverage(assetId, {
+        insuredValueMinor,
+        effectiveAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(),
+        status: "ACTIVE",
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "intake"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "intake-detail", selectedIntake] });
+      void queryClient.invalidateQueries({ queryKey: ["asset-operations"] });
+    },
+    onError: (error, input) => {
+      if (error instanceof ApiError && error.code === "RECENT_AUTH_REQUIRED")
+        requestRecentAuth(() => coverage.mutate(input));
+    },
+  });
   const exceptionCreate = useMutation({
     mutationFn: ({
       id,
@@ -1834,6 +1852,10 @@ function PhysicalIntakeBoard({
               providerRef,
             });
           }}
+          onRecordCoverage={async (insuredValueMinor) => {
+            if (!detailRow.assetId) throw new Error("This intake has no linked asset for coverage.");
+            await coverage.mutateAsync({ assetId: detailRow.assetId, insuredValueMinor });
+          }}
           custodyPending={custodyHandoff.isPending || custodyTransition.isPending}
           custodyFailed={custodyHandoff.isError || custodyTransition.isError}
           custodyErrorMessage={
@@ -1841,6 +1863,9 @@ function PhysicalIntakeBoard({
               ? (custodyHandoff.error ?? custodyTransition.error)?.message ?? null
               : null
           }
+          coveragePending={coverage.isPending}
+          coverageFailed={coverage.isError}
+          coverageErrorMessage={coverage.error instanceof Error ? coverage.error.message : null}
           receiptPending={receipt.isPending}
           receiptFailed={receipt.isError}
           receiptErrorMessage={formatAdminMutationError(receipt.error)}
@@ -2587,6 +2612,7 @@ function PhysicalIntakeDetailPage({
   onCompleteDemoIntake,
   onCreateCustodyHandoff,
   onTransitionCustody,
+  onRecordCoverage,
   receiptPending,
   receiptFailed,
   receiptErrorMessage,
@@ -2598,6 +2624,9 @@ function PhysicalIntakeDetailPage({
   custodyPending,
   custodyFailed,
   custodyErrorMessage,
+  coveragePending,
+  coverageFailed,
+  coverageErrorMessage,
   verificationStarting,
   verificationStartFailed,
   verificationStartErrorMessage,
@@ -2624,6 +2653,7 @@ function PhysicalIntakeDetailPage({
   onCompleteDemoIntake: () => void;
   onCreateCustodyHandoff: (providerRef: string) => Promise<void>;
   onTransitionCustody: (toStatus: string, providerRef: string) => Promise<void>;
+  onRecordCoverage: (insuredValueMinor: string) => Promise<void>;
   receiptPending: boolean;
   receiptFailed: boolean;
   receiptErrorMessage: string | null;
@@ -2635,6 +2665,9 @@ function PhysicalIntakeDetailPage({
   custodyPending: boolean;
   custodyFailed: boolean;
   custodyErrorMessage: string | null;
+  coveragePending: boolean;
+  coverageFailed: boolean;
+  coverageErrorMessage: string | null;
   verificationStarting: boolean;
   verificationStartFailed: boolean;
   verificationStartErrorMessage: string | null;
@@ -2946,9 +2979,13 @@ function PhysicalIntakeDetailPage({
               detail={detail}
               onCreateHandoff={onCreateCustodyHandoff}
               onTransition={onTransitionCustody}
+              onRecordCoverage={onRecordCoverage}
               pending={custodyPending}
               failed={custodyFailed}
               errorMessage={custodyErrorMessage}
+              coveragePending={coveragePending}
+              coverageFailed={coverageFailed}
+              coverageErrorMessage={coverageErrorMessage}
             />
           ) : null}
           {activeTab === "history" ? <IntakeHistoryTab detail={detail} /> : null}
@@ -4305,21 +4342,30 @@ function IntakeCustodyTab({
   detail,
   onCreateHandoff,
   onTransition,
+  onRecordCoverage,
   pending,
   failed,
   errorMessage,
+  coveragePending,
+  coverageFailed,
+  coverageErrorMessage,
 }: {
   row: AdminIntakeRow;
   detail: AdminIntakeDetail | undefined;
   onCreateHandoff: (providerRef: string) => Promise<void>;
   onTransition: (toStatus: string, providerRef: string) => Promise<void>;
+  onRecordCoverage: (insuredValueMinor: string) => Promise<void>;
   pending: boolean;
   failed: boolean;
   errorMessage: string | null;
+  coveragePending: boolean;
+  coverageFailed: boolean;
+  coverageErrorMessage: string | null;
 }) {
   const custody = detail?.custody;
   const status = custody?.status ?? row.custodyStatus ?? null;
   const [providerRef, setProviderRef] = useState("");
+  const [coverageMinor, setCoverageMinor] = useState("");
   const verificationStatus = detail?.intake?.verification?.status ?? row.verification?.status;
   const ready = Boolean(
     row.receipt && verificationStatus === "VERIFIED" && !row.issues.length,
@@ -4413,6 +4459,50 @@ function IntakeCustodyTab({
         <p className="text-negative physical-intake-modal-error" role="alert">
           {errorMessage || "Custody could not be updated. No state was changed."}
         </p>
+      ) : null}
+      {status !== "SECURED" && row.assetId ? (
+        <form
+          className="physical-intake-custody-command"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            const value = coverageMinor.trim();
+            if (!value) return;
+            try {
+              await onRecordCoverage(value);
+              setCoverageMinor("");
+            } catch {
+              // Keep the value available so the operator can correct or retry.
+            }
+          }}
+        >
+          <label className="admin-form-field">
+            <span>Active insurance coverage (GBP minor units)</span>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              inputMode="numeric"
+              value={coverageMinor}
+              onChange={(event) => setCoverageMinor(event.target.value)}
+              placeholder="1850000 for £18,500.00"
+              required
+            />
+            <small>Coverage is recorded for one year. £18,500.00 is entered as 1850000.</small>
+          </label>
+          <button
+            type="submit"
+            className="admin-secondary-button"
+            disabled={coveragePending || !coverageMinor.trim()}
+            aria-busy={coveragePending}
+          >
+            {coveragePending ? "Recording coverage…" : "Record active coverage"}
+          </button>
+          {coverageFailed ? (
+            <p className="text-negative physical-intake-modal-error" role="alert">
+              {coverageErrorMessage || "Insurance coverage could not be recorded."}
+            </p>
+          ) : null}
+        </form>
       ) : null}
     </section>
   );
