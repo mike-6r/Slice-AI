@@ -27,6 +27,7 @@ import {
   PhotosStep,
   ReviewStep,
   SubmissionPage,
+  canResumeListing,
   formatGradeDisplay,
   restoreWizardStep,
 } from "./list";
@@ -121,6 +122,13 @@ function renderList() {
 }
 
 describe("resumed listing drafts", () => {
+  it("reopens drafts and change requests in the listing wizard", () => {
+    expect(canResumeListing("DRAFT")).toBe(true);
+    expect(canResumeListing("CHANGES_REQUESTED")).toBe(true);
+    expect(canResumeListing("IN_REVIEW")).toBe(false);
+    expect(canResumeListing("APPROVED")).toBe(false);
+  });
+
   it("uses the saved wizard step when it is valid", () => {
     expect(restoreWizardStep(draftDetail(4))).toBe(4);
   });

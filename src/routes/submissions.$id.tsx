@@ -71,7 +71,11 @@ function SubmissionDetailPage() {
   });
 
   useEffect(() => {
-    if (detail.data?.status !== "DRAFT") return;
+    if (
+      !detail.data ||
+      (detail.data.status !== "DRAFT" && detail.data.status !== "CHANGES_REQUESTED")
+    )
+      return;
     void navigate({
       to: "/list",
       search: { draft: detail.data.id },

@@ -465,7 +465,7 @@ export function SubmissionPage() {
     const savedId = window.sessionStorage.getItem(draftStorageKey);
     const saved = drafts.data.items.find(
       (item) =>
-        item.id === savedId && (item.status === "DRAFT" || item.status === "CHANGES_REQUESTED"),
+        item.id === savedId && canResumeListing(item.status),
     );
     if (!saved) return;
     setDraft(saved);
@@ -474,7 +474,7 @@ export function SubmissionPage() {
   }, [draft, draftStorageKey, drafts.data, requestedDraftId]);
   useEffect(() => {
     if (!requestedDraftId || !detail.data || detail.data.id !== requestedDraftId) return;
-    if (detail.data.status !== "DRAFT") {
+    if (!canResumeListing(detail.data.status)) {
       void navigate({
         to: "/submissions/$id",
         params: { id: detail.data.id },
@@ -816,7 +816,7 @@ export function SubmissionPage() {
         retry={() => void detail.refetch()}
       />
     );
-  if (requestedDraftId && detail.data?.status !== "DRAFT")
+  if (requestedDraftId && detail.data && !canResumeListing(detail.data.status))
     return (
       <ListState title="Opening submission" detail="This record is no longer an editable draft." />
     );
@@ -4481,6 +4481,10 @@ export function restoreWizardStep(submission: SubmissionDetail): number {
   return 7;
 }
 
+export function canResumeListing(status: string) {
+  return status === "DRAFT" || status === "CHANGES_REQUESTED";
+}
+
 function MySubmissions({ submissions }: { submissions: AssetSubmission[] }) {
   return (
     <section className="list-my-submissions">
@@ -4493,7 +4497,7 @@ function MySubmissions({ submissions }: { submissions: AssetSubmission[] }) {
       {submissions.length ? (
         <div>
           {submissions.slice(0, 6).map((item) =>
-            item.status === "DRAFT" ? (
+            canResumeListing(item.status) ? (
               <Link key={item.id} to="/list" search={{ draft: item.id }}>
                 <FileImage />
                 <span>
