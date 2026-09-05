@@ -149,6 +149,21 @@ const intakeReceiptChecklistKeys = [
   'tamperDamageChecked',
   'trackingMatches',
 ] as const;
+const intakeReceiptChecklistAliases: Record<
+  (typeof intakeReceiptChecklistKeys)[number],
+  string[]
+> = {
+  packageReceived: ['packagereceived', 'received', 'packagereceivedby_slice'],
+  correctIntakeReference: ['correctintakereference', 'intakereference', 'correctreference'],
+  correctCollectible: ['correctcollectible', 'collectiblecorrect', 'correctitem'],
+  visibleConditionAcceptable: [
+    'visibleconditionacceptable',
+    'conditionacceptable',
+    'visiblecondition',
+  ],
+  tamperDamageChecked: ['tamperdamagechecked', 'tamperchecked', 'damagedchecked'],
+  trackingMatches: ['trackingmatches', 'trackingmatch', 'trackingcorrect'],
+};
 const intakeCarrierDeliveryConfirmation = z.object({}).strict();
 const intakeDestinationAssignment = z
   .object({
@@ -1031,10 +1046,7 @@ export class AdminController {
     const packageCondition = value.packageCondition === 'GOOD'
       ? 'ACCEPTABLE'
       : value.packageCondition;
-    const checklistRecord =
-      checklist && typeof checklist === 'object' && !Array.isArray(checklist)
-        ? (checklist as Record<string, unknown>)
-        : value;
+    const checklistRecord = this.receiptChecklistRecord(checklist, value);
     const topLevel = Object.fromEntries(
       Object.entries(value).filter(
         ([key]) =>
@@ -1043,7 +1055,7 @@ export class AdminController {
       ),
     );
     const normalizedChecklist = Object.fromEntries(
-      intakeReceiptChecklistKeys.map((key) => [key, checklistRecord[key]]),
+      intakeReceiptChecklistKeys.map((key) => [key, this.receiptChecklistValue(checklistRecord, key)]),
     );
 
     return {
@@ -1063,5 +1075,46 @@ export class AdminController {
       }
     }
     return decoded;
+  }
+
+  private receiptChecklistRecord(
+    checklist: unknown,
+    fallback: Record<string, unknown>,
+  ): Record<string, unknown> {
+    if (Array.isArray(checklist)) {
+      const entries = checklist.flatMap((item) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+        const record = item as Record<string, unknown>;
+        const key = record.key ?? record.name ?? record.id ?? record.field;
+        const checked = record.checked ?? record.value ?? record.selected;
+        return typeof key === 'string' ? [[key, checked] as const] : [];
+      });
+      return Object.fromEntries(entries);
+    }
+    if (checklist && typeof checklist === 'object') {
+      const record = checklist as Record<string, unknown>;
+      for (const nestedKey of ['checks', 'values', 'items', 'data']) {
+        if (record[nestedKey] && typeof record[nestedKey] === 'object')
+          return this.receiptChecklistRecord(record[nestedKey], fallback);
+      }
+      return record;
+    }
+    return fallback;
+  }
+
+  private receiptChecklistValue(
+    record: Record<string, unknown>,
+    key: (typeof intakeReceiptChecklistKeys)[number],
+  ) {
+    const normalized = new Map(
+      Object.entries(record).map(([name, value]) => [
+        name.replace(/[^a-z0-9]/gi, '').toLowerCase(),
+        value,
+      ]),
+    );
+    for (const alias of intakeReceiptChecklistAliases[key]) {
+      if (normalized.has(alias)) return normalized.get(alias);
+    }
+    return undefined;
   }
 }

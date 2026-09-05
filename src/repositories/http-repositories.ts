@@ -5248,14 +5248,6 @@ const adminRepository = (client: ApiClient): AdminRepository => {
       return mapIntakeLocationMutation(value);
     },
     async confirmIntakeReceipt(id, input) {
-      const checklistKeys = [
-        "packageReceived",
-        "correctIntakeReference",
-        "correctCollectible",
-        "visibleConditionAcceptable",
-        "tamperDamageChecked",
-        "trackingMatches",
-      ] as const;
       const packageCondition =
         input?.packageCondition === "ACCEPTABLE" ||
         input?.packageCondition === "DAMAGED" ||
@@ -5264,9 +5256,14 @@ const adminRepository = (client: ApiClient): AdminRepository => {
           : "UNKNOWN";
       const body = {
         packageCondition,
-        checklist: Object.fromEntries(
-          checklistKeys.map((key) => [key, input?.checklist?.[key] === true]),
-        ),
+        checklist: {
+          packageReceived: input?.checklist?.packageReceived === true,
+          correctIntakeReference: input?.checklist?.correctIntakeReference === true,
+          correctCollectible: input?.checklist?.correctCollectible === true,
+          visibleConditionAcceptable: input?.checklist?.visibleConditionAcceptable === true,
+          tamperDamageChecked: input?.checklist?.tamperDamageChecked === true,
+          trackingMatches: input?.checklist?.trackingMatches === true,
+        },
         ...(input?.notes?.trim() ? { notes: input.notes.trim() } : {}),
       };
       const value = objectField(

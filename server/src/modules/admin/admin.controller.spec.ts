@@ -84,4 +84,34 @@ describe('AdminController receipt validation', () => {
       },
     });
   });
+
+  it('accepts legacy checklist aliases and array entries', () => {
+    const payload = {
+      packageCondition: 'ACCEPTABLE',
+      checklist: [
+        { name: 'Package received', checked: true },
+        { name: 'Correct intake reference', checked: true },
+        { name: 'Correct collectible', checked: true },
+        { name: 'Visible condition acceptable', checked: true },
+        { name: 'Tamper / damage checked', checked: true },
+        { name: 'Tracking matches', checked: true },
+      ],
+    };
+
+    expect(
+      (controller as unknown as {
+        parseIntakeReceiptConfirmation(value: unknown): unknown;
+      }).parseIntakeReceiptConfirmation(payload),
+    ).toEqual({
+      packageCondition: 'ACCEPTABLE',
+      checklist: {
+        packageReceived: true,
+        correctIntakeReference: true,
+        correctCollectible: true,
+        visibleConditionAcceptable: true,
+        tamperDamageChecked: true,
+        trackingMatches: true,
+      },
+    });
+  });
 });
