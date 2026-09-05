@@ -588,7 +588,17 @@ export class LifecycleService {
           item.ownership.state === 'CONFIGURED' &&
           item.offering.state === 'APPROVED',
         reviewOffering: !frozen && item.offering.state === 'AWAITING_APPROVAL',
-        publish: !frozen && item.launchReadiness.state === 'READY',
+        // Publication is the first post-physical launch gate. It must not be
+        // held hostage by the later ownership/offering gates, otherwise a
+        // provisional Pre-Sale can leave an asset permanently unable to enter
+        // the launch sequence.
+        publish:
+          !frozen &&
+          item.launchReadiness.blockers.every(
+            (code) =>
+              code !== 'OWNERSHIP_ISSUANCE_REQUIRED' &&
+              code !== 'INITIAL_OFFERING_REQUIRED',
+          ),
         activateMarket: !frozen && issued && !offeringLive,
         openOffering: !frozen && issued && item.offering.state === 'APPROVED',
         configurePreSale: canConfigurePreSale(item.currentStage, frozen),
@@ -1866,7 +1876,7 @@ async function operationsItem(asset: BoardAsset, storage: ObjectStoragePort) {
       asset.custodyRecord?.updatedAt ??
       asset.updatedAt;
     detailTab = 'intake';
-  } else if (preSaleLive) {
+  } else if (preSaleLive && !physicalComplete) {
     currentStage = 'PRE_SALE_LIVE';
     stageSince = asset.initialOffering?.preSale?.openedAt ?? asset.updatedAt;
     detailTab = 'market';

@@ -344,6 +344,52 @@ export class OwnershipPolicyService {
             approvedAt: new Date(),
           },
         });
+        // Automated qualification creates provisional Pre-Sale terms before
+        // the final valuation and supply policy exist. Once the policy is
+        // approved, link that provisional offering to the authoritative
+        // records and move it into the normal staff-review state so the
+        // launch workflow can continue to approval, issuance, and inventory.
+        const provisionalOffering = await db.initialOffering.findUnique({
+          where: { assetId },
+          select: {
+            id: true,
+            status: true,
+            ownershipSupplyPolicyId: true,
+            valuationDecisionId: true,
+            offeredUnits: true,
+          },
+        });
+        if (
+          provisionalOffering?.status === 'DRAFT' &&
+          !provisionalOffering.ownershipSupplyPolicyId &&
+          !provisionalOffering.valuationDecisionId
+        ) {
+          const offeredUnits =
+            provisionalOffering.offeredUnits > updated.proposedUnits
+              ? updated.proposedUnits
+              : provisionalOffering.offeredUnits;
+          await db.initialOffering.update({
+            where: { id: provisionalOffering.id },
+            data: {
+              ownershipSupplyPolicyId: updated.id,
+              valuationDecisionId: decision.id,
+              totalUnits: updated.proposedUnits,
+              offeredUnits,
+              retainedUnits: updated.proposedUnits - offeredUnits,
+              pricePerUnitMinor: updated.pricePerUnitMinor,
+              grossOfferingMinor: offeredUnits * updated.pricePerUnitMinor,
+              currency: updated.valuationCurrency,
+              status: 'AWAITING_APPROVAL',
+              changeRequestReason: null,
+            },
+          });
+          await audit('INITIAL_OFFERING_PREPARED_FOR_REVIEW', {
+            assetId,
+            offeringId: provisionalOffering.id,
+            totalUnits: updated.proposedUnits.toString(),
+            offeredUnits: offeredUnits.toString(),
+          });
+        }
         await audit('OWNERSHIP_SUPPLY_APPROVED', {
           assetId,
           policyCode: updated.policyCode,
