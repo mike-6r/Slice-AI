@@ -12,6 +12,7 @@ import type {
   PriceChartingProduct,
   ProviderObservation,
 } from './market-provider.ports';
+import { gradeValuesMatch } from './market-grade';
 
 @Injectable()
 export class MarketProviderRegistry {
@@ -613,7 +614,7 @@ function conditionMatch(
   }
   if (!reference.exactGrader) return 'WEAK';
   return normalize(identity.grader) === normalize(reference.grader) &&
-    normalize(identity.grade) === normalize(reference.grade)
+    gradeValuesMatch(identity.grade, reference.grade)
     ? 'EXACT'
     : 'WEAK';
 }

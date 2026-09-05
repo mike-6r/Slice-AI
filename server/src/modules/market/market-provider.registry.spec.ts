@@ -103,7 +103,7 @@ describe('PriceChartingProvider', () => {
         title: 'Mega Darkrai ex',
         variant: null,
         grader: 'PSA',
-        grade: '10',
+        grade: '10.00',
       },
       '13644139',
       {

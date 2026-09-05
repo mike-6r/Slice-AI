@@ -13,6 +13,7 @@ import { APP_CONFIG, type AppConfig } from '../../config/app-config';
 import { Inject } from '@nestjs/common';
 import type { Actor } from '../identity/auth/auth.service';
 import { MarketProviderRegistry } from '../market/market-provider.registry';
+import { gradeValuesMatch } from '../market/market-grade';
 import type {
   MarketIdentity,
   ProviderObservation,
@@ -1043,7 +1044,7 @@ function classifyObservation(
   const graderMatch =
     !expectedGraded ||
     (normalize(item.grader ?? '') === normalize(identity.grader ?? '') &&
-      normalize(item.grade ?? '') === normalize(identity.grade ?? ''));
+      gradeValuesMatch(item.grade, identity.grade));
   const rawMismatch = expectedGraded && !item.grader;
   const quality: MatchedObservation['matchQuality'] =
     wrong || !identityMatch || rawMismatch
