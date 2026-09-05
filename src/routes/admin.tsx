@@ -2444,6 +2444,7 @@ function IntakeDetailAction({
   onReceipt,
   onConfirmDelivery,
   onStartVerification,
+  onCompleteVerification,
   onAssignDestination,
   onCompleteDemoIntake,
   verificationStarting,
@@ -2454,6 +2455,7 @@ function IntakeDetailAction({
   onReceipt: () => void;
   onConfirmDelivery: () => void;
   onStartVerification: () => void;
+  onCompleteVerification: () => void;
   onAssignDestination: () => void;
   onCompleteDemoIntake: () => void;
   verificationStarting: boolean;
@@ -2494,6 +2496,12 @@ function IntakeDetailAction({
         onClick={onStartVerification}
       >
         {verificationStarting ? "Starting…" : "Start verification"}
+      </button>
+    );
+  if (row.allowedActions.includes("COMPLETE_VERIFICATION"))
+    return (
+      <button type="button" className="button-primary" onClick={onCompleteVerification}>
+        Complete verification
       </button>
     );
   if (row.stage === "AWAITING_DESTINATION")
@@ -2912,6 +2920,7 @@ function PhysicalIntakeDetailPage({
                 setDialog("destination");
               }}
               onStartVerification={onStartVerification}
+              onCompleteVerification={() => setDialog("verification")}
               onCompleteDemoIntake={() => setDialog("demo")}
               verificationStarting={verificationStarting}
               deliveryPending={deliveryPending}
@@ -3048,12 +3057,22 @@ function PhysicalIntakeDetailPage({
               </button>
               <button
                 type="button"
-                onClick={onStartVerification}
+                onClick={
+                  row.allowedActions.includes("COMPLETE_VERIFICATION")
+                    ? () => setDialog("verification")
+                    : onStartVerification
+                }
                 disabled={
-                  !row.allowedActions.includes("START_VERIFICATION") || verificationStarting
+                  (!row.allowedActions.includes("START_VERIFICATION") &&
+                    !row.allowedActions.includes("COMPLETE_VERIFICATION")) ||
+                  verificationStarting
                 }
               >
-                {verificationStarting ? "Starting verification…" : "Start verification"}
+                {verificationStarting
+                  ? "Starting verification…"
+                  : row.allowedActions.includes("COMPLETE_VERIFICATION")
+                    ? "Complete verification"
+                    : "Start verification"}
               </button>
               <button
                 type="button"
