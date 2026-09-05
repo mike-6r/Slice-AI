@@ -55,6 +55,21 @@ import {
 } from '../domain/grading-certification';
 
 type Db = Prisma.TransactionClient;
+const RESOLVED_CERTIFICATION_STATUSES = [
+  'CLEAR',
+  'VERIFIED',
+  'MANUAL_REVIEW',
+] as const;
+
+export function certificationVerificationResolved(
+  status: string | null | undefined,
+) {
+  return (
+    status !== null &&
+    status !== undefined &&
+    (RESOLVED_CERTIFICATION_STATUSES as readonly string[]).includes(status)
+  );
+}
 type DraftInput = {
   categoryId: string;
   currentStep?: number;
@@ -1242,9 +1257,7 @@ export class SubmissionService {
               orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
             });
           if (
-            !['CLEAR', 'VERIFIED', 'MANUAL_REVIEW'].includes(
-              verification?.status ?? '',
-            )
+            !certificationVerificationResolved(verification?.status)
           )
             throw new UnprocessableEntityException({
               code: 'CERTIFICATION_VERIFICATION_REQUIRED',
@@ -1456,7 +1469,7 @@ export class SubmissionService {
         {
           certificationVerifications: {
             some: {
-              status: { in: ['CLEAR', 'VERIFIED', 'MANUAL_REVIEW'] },
+              status: { in: [...RESOLVED_CERTIFICATION_STATUSES] },
             },
           },
         },
@@ -2142,9 +2155,7 @@ export class SubmissionService {
       ? true
       : Boolean(
           response.collectible.certificationNumber &&
-          ['CLEAR', 'VERIFIED', 'MANUAL_REVIEW'].includes(
-            certification?.status ?? '',
-          ),
+          certificationVerificationResolved(certification?.status),
         );
     const openFindings = submission!.reviewFindings.filter(
       (finding) => finding.status === 'OPEN',
@@ -3001,8 +3012,8 @@ export class SubmissionService {
           ? true
           : Boolean(
               submission!.normalizedCertificationNumber &&
-              ['VERIFIED', 'MANUAL_REVIEW'].includes(
-                submission!.certificationVerifications?.[0]?.status ?? '',
+              certificationVerificationResolved(
+                submission!.certificationVerifications?.[0]?.status,
               ),
             );
         const blockers = [
@@ -5125,7 +5136,7 @@ function reviewQueueProjection(
   );
   const certificationResolved =
     !certificationRequired ||
-    ['CLEAR', 'VERIFIED', 'MANUAL_REVIEW'].includes(certificationStatus ?? '');
+    certificationVerificationResolved(certificationStatus);
   const title =
     submission.asset?.title ??
     stringMetadata(metadata.name) ??
@@ -5464,7 +5475,7 @@ function assertReviewDecisionReady(submission: {
   const certificationStatus = submission.certificationVerifications[0]?.status;
   if (
     certificationRequired &&
-    !['VERIFIED', 'MANUAL_REVIEW'].includes(certificationStatus ?? '')
+    !certificationVerificationResolved(certificationStatus)
   )
     throw new ConflictException({
       code: 'REVIEW_CERTIFICATION_BLOCKED',
