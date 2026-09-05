@@ -274,6 +274,9 @@ export class CollectibleMarketResearchService {
       const providerRows = await provider.fetchObservations(
         marketIdentity,
         selectedId,
+        reference?.normalizedUrl
+          ? { referenceUrl: reference.normalizedUrl }
+          : undefined,
       );
       return {
         observations: providerRows.map((item) => ({

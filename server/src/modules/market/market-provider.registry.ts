@@ -170,10 +170,32 @@ export class PriceChartingProvider implements MarketDataProvider {
   async fetchObservations(
     identity: MarketIdentity,
     providerExternalId: string,
+    options: { referenceUrl?: string } = {},
   ): Promise<ProviderObservation[]> {
-    const product = await this.getProduct(providerExternalId);
+    let product = await this.getProduct(providerExternalId);
     if (!productMatchesIdentity(product, identity)) {
       throw new Error('PRICECHARTING_IDENTITY_MISMATCH');
+    }
+    if (
+      options.referenceUrl &&
+      (product.imageUrl === null || !hasCompatibleReference(product, identity))
+    ) {
+      const page = await this.fetchPublicProductPage(options.referenceUrl);
+      if (page && (!page.productId || page.productId === providerExternalId)) {
+        const references = new Map(
+          product.references.map((reference) => [reference.conditionKey, reference]),
+        );
+        for (const reference of page.references) {
+          if (!references.has(reference.conditionKey)) {
+            references.set(reference.conditionKey, reference);
+          }
+        }
+        product = {
+          ...product,
+          imageUrl: product.imageUrl ?? page.imageUrl,
+          references: [...references.values()],
+        };
+      }
     }
     const observedAt = new Date();
     return product.references.map((reference) => ({
@@ -182,7 +204,9 @@ export class PriceChartingProvider implements MarketDataProvider {
       priceMinor: reference.amountMinor,
       currency: product.currency,
       title: product.title || identity.title,
-      externalUrl: `${this.config.priceChartingBaseUrl ?? 'https://www.pricecharting.com'}/product?id=${encodeURIComponent(product.providerProductId)}`,
+      externalUrl:
+        options.referenceUrl ??
+        `${this.config.priceChartingBaseUrl ?? 'https://www.pricecharting.com'}/product?id=${encodeURIComponent(product.providerProductId)}`,
       grader: reference.grader,
       grade: reference.grade,
       observedAt,
@@ -198,9 +222,53 @@ export class PriceChartingProvider implements MarketDataProvider {
         conditionKey: reference.conditionKey,
         exactGrader: reference.exactGrader,
         sourceCurrency: product.currency,
+        ...(options.referenceUrl ? { originalUrl: options.referenceUrl } : {}),
         ...(product.imageUrl ? { imageUrl: product.imageUrl } : {}),
       },
     }));
+  }
+
+  private async fetchPublicProductPage(url: string): Promise<PublicProductPage | null> {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return null;
+    }
+    if (
+      parsed.protocol !== 'https:' ||
+      ![
+        'pricecharting.com',
+        'www.pricecharting.com',
+        'm.pricecharting.com',
+        'sportscardspro.com',
+        'www.sportscardspro.com',
+        'm.sportscardspro.com',
+      ].includes(parsed.hostname.toLowerCase())
+    )
+      return null;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      this.config.priceChartingRequestTimeoutMs,
+    );
+    try {
+      const response = await fetch(parsed.toString(), {
+        redirect: 'error',
+        headers: {
+          accept: 'text/html,application/xhtml+xml',
+          'user-agent': 'Slice market reference resolver',
+        },
+        signal: controller.signal,
+      });
+      if (!response.ok) return null;
+      return parsePublicProductPage(await response.text(), parsed.toString());
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   private async request(
@@ -338,6 +406,12 @@ const CONDITION_FIELDS = [
   ['condition-18-price', 'SGC 10', 'SGC', '10', true],
 ] as const;
 
+type PublicProductPage = {
+  productId: string | null;
+  imageUrl: string | null;
+  references: PriceChartingProduct['references'];
+};
+
 function parseProduct(
   payload: unknown,
   fallbackId: string,
@@ -376,6 +450,79 @@ function parseProduct(
     imageUrl,
     references,
   };
+}
+
+function parsePublicProductPage(html: string, sourceUrl: string): PublicProductPage {
+  const productId =
+    html.match(/VGPC\.product\s*=\s*\{[\s\S]*?\bid:\s*(\d+)/i)?.[1] ??
+    html.match(/<h1[^>]+id=["']product_name["'][^>]+title=["'](\d+)["']/i)?.[1] ??
+    null;
+  const imageTag = [...html.matchAll(/<img\b[^>]*>/gi)].find((match) =>
+    /\bitemprop=["']image["']/i.test(match[0]),
+  )?.[0];
+  const imageUrl = imageTag
+    ? imageUrlValue(
+        imageTag.match(/\b(?:src|data-src)=["']([^"']+)["']/i)?.[1],
+      ) ?? null
+    : null;
+  const currency =
+    html.match(/<[^>]+id=["']dropdown_selected_currency["'][^>]*>\s*([^<\s]+)/i)?.[1]
+      ?.toUpperCase() ?? 'USD';
+  const references = CONDITION_FIELDS.flatMap(
+    ([conditionKey, label, grader, grade, exactGrader]) => {
+      const pageKey = conditionKey.replace(/-/g, '_');
+      const cell = html.match(
+        new RegExp(
+          `<td\\b[^>]*\\bid=["']${escapeRegExp(pageKey)}["'][^>]*>[\\s\\S]*?<span\\b[^>]*\\bclass=["'][^"']*\\bprice\\b[^"']*["'][^>]*>([\\s\\S]*?)</span>`,
+          'i',
+        ),
+      );
+      const amountMinor = parsePageAmount(cell?.[1]);
+      return amountMinor === null
+        ? []
+        : [
+            {
+              conditionKey,
+              label,
+              amountMinor,
+              grader,
+              grade,
+              exactGrader,
+              sourceUrl,
+              currency,
+            },
+          ];
+    },
+  ).map(({ sourceUrl: _sourceUrl, currency: _currency, ...reference }) => reference);
+  return { productId, imageUrl, references };
+}
+
+function hasCompatibleReference(
+  product: PriceChartingProduct,
+  identity: MarketIdentity,
+) {
+  return product.references.some(
+    (reference) =>
+      conditionMatch(identity, reference) === 'EXACT' && reference.amountMinor > 0n,
+  );
+}
+
+function parsePageAmount(value: string | undefined): bigint | null {
+  if (!value) return null;
+  const normalized = value.replace(/<[^>]+>/g, '').replace(/&nbsp;|\s+/gi, '').replace(/,/g, '');
+  if (!normalized || normalized === '-') return null;
+  const numeric = normalized.match(/\d+(?:\.\d{1,2})?/g)?.[0];
+  if (!numeric) return null;
+  const [whole, fraction = ''] = numeric.split('.');
+  try {
+    return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0').slice(0, 2));
+  } catch {
+    return null;
+  }
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function parseCandidate(

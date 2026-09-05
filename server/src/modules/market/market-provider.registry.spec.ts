@@ -65,6 +65,72 @@ describe('PriceChartingProvider', () => {
     );
   });
 
+  it('enriches missing grade prices and images from the exact provider page', async () => {
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 13644139,
+            'product-name': 'Mega Darkrai ex #116',
+            'console-name': 'Pokemon Pitch Black',
+            currency: 'USD',
+            'loose-price': 23082,
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          `<a id="dropdown_selected_currency">USD</a>
+           <script>VGPC.product = { id: 13644139 };</script>
+           <div class="cover"><img itemprop="image" src="https://images.pricecharting.test/darkrai.jpg"></div>
+           <table>
+             <td id="manual_only_price"><span class="price js-price"> $1,579.00 </span></td>
+           </table>`,
+          { status: 200 },
+        ),
+      );
+    const provider = new PriceChartingProvider(config());
+
+    const observations = await provider.fetchObservations(
+      {
+        category: 'pokemon-tcg',
+        year: 2026,
+        manufacturer: 'The Pokémon Company',
+        set: 'Pokemon Pitch Black',
+        cardNumber: '116',
+        title: 'Mega Darkrai ex',
+        variant: null,
+        grader: 'PSA',
+        grade: '10',
+      },
+      '13644139',
+      {
+        referenceUrl:
+          'https://www.pricecharting.com/game/pokemon-pitch-black/mega-darkrai-ex-116',
+      },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(observations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          priceMinor: 157900n,
+          grader: 'PSA',
+          grade: '10',
+          matchQuality: 'EXACT',
+          externalUrl:
+            'https://www.pricecharting.com/game/pokemon-pitch-black/mega-darkrai-ex-116',
+          provenance: expect.objectContaining({
+            conditionKey: 'manual-only-price',
+            imageUrl: 'https://images.pricecharting.test/darkrai.jpg',
+          }),
+        }),
+      ]),
+    );
+  });
+
   it('resolves a SportsCardsPro game URL before generic identity discovery', async () => {
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(
       new Response(

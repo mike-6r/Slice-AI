@@ -68,6 +68,7 @@ export interface MarketDataProvider {
   fetchObservations(
     identity: MarketIdentity,
     providerExternalId: string,
+    options?: { referenceUrl?: string },
   ): Promise<ProviderObservation[]>;
   searchProducts?(identity: MarketIdentity): Promise<MarketProductCandidate[]>;
   /** Resolve a trusted provider URL before discovery/search is attempted. */

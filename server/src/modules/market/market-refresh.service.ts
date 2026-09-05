@@ -286,7 +286,13 @@ export class MarketRefreshService {
         grade: asset.gradeScaleEntry?.grade.toString() ?? null,
       };
       if (!provider.supports(identity.category)) throw new Error('MARKET_PROVIDER_UNSUPPORTED_CATEGORY');
-      const observations = await provider.fetchObservations(identity, job.mapping.providerExternalId);
+      const observations = await provider.fetchObservations(
+        identity,
+        job.mapping.providerExternalId,
+        job.mapping.providerUrl
+          ? { referenceUrl: job.mapping.providerUrl }
+          : undefined,
+      );
       const current = selectCurrentPriceGuide(observations);
       if (!current) throw new Error('PRICECHARTING_REFERENCE_UNAVAILABLE');
       await this.persistObservations(
