@@ -171,6 +171,7 @@ export function SubmissionPage() {
   const [referenceResult, setReferenceResult] = useState<CollectibleReferenceImport | null>(null);
   const lastSaved = useRef<string | null>(null);
   const version = useRef<number | null>(null);
+  const saveInFlight = useRef<Promise<unknown> | null>(null);
   const saveStopped = useRef(false);
   const revisionRecovery = useRef(false);
   const previewUrls = useRef<Record<string, string>>({});
@@ -336,7 +337,23 @@ export function SubmissionPage() {
     },
     onError: (error) => setLocalError(friendlyError(error)),
   });
-  const saveDraft = update.mutate;
+  const persistCurrentDraft = async () => {
+    if (!draft || version.current === null) return;
+    if (saveInFlight.current) {
+      await saveInFlight.current;
+      if (lastSaved.current === payloadFingerprint) return;
+    }
+    if (lastSaved.current === payloadFingerprint) return;
+
+    const pending = update.mutateAsync({});
+    saveInFlight.current = pending;
+    try {
+      await pending;
+    } finally {
+      if (saveInFlight.current === pending) saveInFlight.current = null;
+    }
+  };
+
   const checkMarket = useMutation({
     mutationFn: () =>
       services.repositories.submissions.checkMarket({
@@ -423,8 +440,15 @@ export function SubmissionPage() {
     onError: (error) => setLocalError(friendlyError(error)),
   });
   const verifyCertification = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (!detail.data) throw new Error("Save your card details before verifying the certificate.");
+      if (!form.certificationNumber.trim())
+        throw new Error("Enter the certification number shown on the slab label.");
+
+      // The form autosaves on a debounce. Persist the latest certificate and
+      // await any save already in flight before asking the API to verify it;
+      // otherwise the API can correctly reject the previous metadata/version.
+      await persistCurrentDraft();
       return services.repositories.submissions.verifyCertification(
         detail.data.id,
         form.certificationNumber,
@@ -589,9 +613,9 @@ export function SubmissionPage() {
       lastSaved.current === payloadFingerprint
     )
       return;
-    const timer = window.setTimeout(() => saveDraft({}), 900);
+    const timer = window.setTimeout(() => void persistCurrentDraft(), 900);
     return () => window.clearTimeout(timer);
-  }, [draft, payloadFingerprint, saveDraft, update.isPending, validIdentity]);
+  }, [draft, payloadFingerprint, persistCurrentDraft, update.isPending, validIdentity]);
 
   const change = <K extends keyof ListingForm>(key: K, value: ListingForm[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
