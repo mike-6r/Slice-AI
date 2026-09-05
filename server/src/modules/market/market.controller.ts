@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Query,
+  StreamableFile,
 } from '@nestjs/common';
 import { z } from 'zod';
 import { MarketService } from './market.service';
@@ -74,6 +75,14 @@ export class MarketController {
       ...input,
       sort: input.sort ?? 'title',
       limit: input.limit ?? 24,
+    });
+  }
+  @Get('assets/:slug/media/:slot')
+  async media(@Param('slug') slug: string, @Param('slot') slot: string) {
+    const result = await this.market.media(slug, slot);
+    return new StreamableFile(result.body, {
+      type: result.mimeType,
+      length: result.body.length,
     });
   }
   @Get('assets/:slug') detail(@Param('slug') slug: string) {

@@ -11485,7 +11485,10 @@ function buildAdminMarketData(
     // resolved to a stable provider record. Keep that distinct from an outage
     // so operators know the link was received but still needs review.
     if (
-      mapping.lastFailureCode !== 'PRICECHARTING_REFERENCE_NOT_RESOLVED' &&
+      ![
+        'PRICECHARTING_REFERENCE_NOT_RESOLVED',
+        'PRICECHARTING_REFERENCE_UNAVAILABLE',
+      ].includes(mapping.lastFailureCode ?? '') &&
       mapping.lastFailureAt &&
       (!mapping.lastSuccessAt || mapping.lastFailureAt > mapping.lastSuccessAt)
     )
@@ -11500,7 +11503,10 @@ function buildAdminMarketData(
   };
   const toReference = (mapping: AdminMarketMapping) => {
     const related = observations
-      .filter((item) => item.mappingId === mapping.id || (item.providerCode === mapping.providerCode && item.providerExternalId === mapping.providerExternalId))
+      .filter((item) =>
+        item.included &&
+        (item.mappingId === mapping.id || (item.providerCode === mapping.providerCode && item.providerExternalId === mapping.providerExternalId)),
+      )
       .sort((left, right) => right.observedAt.getTime() - left.observedAt.getTime());
     const originalUrl = related
       .map((item) => isRecord(item.provenance) && typeof item.provenance.originalUrl === 'string' ? item.provenance.originalUrl : null)
@@ -11525,12 +11531,17 @@ function buildAdminMarketData(
       matchReasons:
         mapping.lastFailureCode === 'PRICECHARTING_REFERENCE_NOT_RESOLVED'
           ? ['The URL was saved, but the provider returned no matching product record.']
+          : mapping.lastFailureCode === 'PRICECHARTING_REFERENCE_UNAVAILABLE'
+            ? ['The provider record matches, but no compatible current price is available for this grade.']
           : mapping.status === 'NEEDS_REVIEW'
             ? ['Provider identity needs staff confirmation.']
             : [],
       lastFailureCode: mapping.lastFailureCode,
       fetchStatus:
-        mapping.lastFailureCode === 'PRICECHARTING_REFERENCE_NOT_RESOLVED'
+        [
+          'PRICECHARTING_REFERENCE_NOT_RESOLVED',
+          'PRICECHARTING_REFERENCE_UNAVAILABLE',
+        ].includes(mapping.lastFailureCode ?? '')
           ? 'NOT_CHECKED'
           : mapping.lastFailureAt &&
               (!mapping.lastSuccessAt || mapping.lastFailureAt > mapping.lastSuccessAt)

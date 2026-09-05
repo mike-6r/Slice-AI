@@ -114,10 +114,11 @@ const priceChartingProductIds: Record<string, string> = {
 };
 
 /**
- * URL-only, provider-specific import. It deliberately never fetches a user
- * supplied URL: no redirects, provider payloads, or arbitrary hosts enter the
- * Slice network. A licensed/API-backed eBay adapter can replace the explicit
- * unavailable response when credentials are configured.
+ * URL-only, provider-specific import. It validates the host before the
+ * PriceCharting adapter performs its exact-page resolution; no redirects,
+ * provider payloads, or arbitrary hosts enter the Slice network. A
+ * licensed/API-backed eBay adapter can replace the explicit unavailable
+ * response when credentials are configured.
  */
 @Injectable()
 export class TrustedReferenceImportService {
@@ -298,7 +299,7 @@ function parseTrustedUrl(
     const provider = trustedHosts.get(parsed.hostname.toLowerCase())!;
     if (provider === 'PRICECHARTING' && !parsed.pathname.startsWith('/game/'))
       return undefined;
-    if (provider === 'PRICECHARTING') {
+    if (provider === 'PRICECHARTING' && !parsed.hostname.toLowerCase().endsWith('sportscardspro.com')) {
       parsed.hostname = 'www.pricecharting.com';
       parsed.hash = '';
       const id = parsed.searchParams.get('id')?.match(/^\d+$/)?.[0];

@@ -38,6 +38,45 @@ function createService(
   return { service, db };
 }
 
+describe('MarketService public media delivery', () => {
+  it('reads approved media server-side for a stable same-origin public image route', async () => {
+    const storage = {
+      head: jest.fn().mockResolvedValue({
+        mimeType: 'application/octet-stream',
+        magicMimeType: 'image/png',
+      }),
+      read: jest.fn().mockResolvedValue(Buffer.from('png-bytes')),
+    };
+    const db = {
+      asset: {
+        findFirst: jest.fn().mockResolvedValue({
+          ...currentAsset,
+          submissions: [
+            {
+              media: [{ slot: 'front', objectKey: 'submissions/card/front' }],
+            },
+          ],
+        }),
+      },
+    };
+    const service = new MarketService(
+      db as never,
+      {} as never,
+      { all: () => [] } as never,
+      { isBeta: false } as never,
+      storage as never,
+    );
+
+    await expect(
+      service.media('shohei-ohtani-aa-b38be808', 'FRONT'),
+    ).resolves.toEqual({
+      body: Buffer.from('png-bytes'),
+      mimeType: 'image/png',
+    });
+    expect(storage.read).toHaveBeenCalledWith('submissions/card/front');
+  });
+});
+
 const baseRow = {
   id: 'similar-asset',
   publicId: 'similar-public-id',

@@ -103,6 +103,8 @@ export class PriceChartingProvider implements MarketDataProvider {
       set: setSlug?.replace(/[-_]+/g, ' ') ?? null,
       cardNumber,
     };
+    const directProductId = await this.resolvePublicProductId(url);
+    if (directProductId) return directProductId;
     const payload = await this.request('products', { q: directQuery });
     const rows = objectArray(payload, 'products')
       .map((row) => parseCandidate(row, {
@@ -118,7 +120,46 @@ export class PriceChartingProvider implements MarketDataProvider {
         category: 'sports-cards',
       }))
       .filter((row): row is MarketProductCandidate => Boolean(row));
-    return selectExactReference(rows, identity.set, identity.cardNumber);
+    const resolved = selectExactReference(rows, identity.set, identity.cardNumber);
+    if (resolved) return resolved;
+
+    // SportsCardsPro pages are served by the PriceCharting catalogue, but a
+    // newly-added card may not be returned by the broad products search yet.
+    // Resolve only the stable product id from the exact public page, then use
+    // the documented product endpoint for identity verification and prices.
+    return this.resolvePublicProductId(url);
+  }
+
+  private async resolvePublicProductId(url: string): Promise<string | null> {
+    const parsed = new URL(url);
+    const urls = [url];
+    if (parsed.hostname.toLowerCase() === 'www.pricecharting.com') {
+      const alternate = new URL(url);
+      alternate.hostname = 'www.sportscardspro.com';
+      urls.push(alternate.toString());
+    }
+    for (const pageUrl of urls) {
+      try {
+        const response = await fetch(pageUrl, {
+          redirect: 'error',
+          headers: {
+            accept: 'text/html,application/xhtml+xml',
+            'user-agent': 'Slice market reference resolver',
+          },
+        });
+        if (!response.ok) continue;
+        const html = await response.text();
+        const productId =
+          html.match(/VGPC\.product\s*=\s*\{[\s\S]*?\bid:\s*(\d+)/i)?.[1] ??
+          html.match(/<h1[^>]+id=["']product_name["'][^>]+title=["'](\d+)["']/i)?.[1] ??
+          null;
+        if (productId) return productId;
+      } catch {
+        // Try the trusted sports-cards alias when the canonical host blocks
+        // automated page access. Prices still come only from the API below.
+      }
+    }
+    return null;
   }
 
   async getProduct(providerExternalId: string): Promise<PriceChartingProduct> {

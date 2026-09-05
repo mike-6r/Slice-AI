@@ -65,7 +65,7 @@ describe('TrustedReferenceImportService', () => {
       customerReference: {
         provider: 'PriceCharting',
         normalizedUrl:
-          'https://www.pricecharting.com/game/baseball-cards-2026-topps-all-aces/shohei-ohtani-aa-1',
+          'https://www.sportscardspro.com/game/baseball-cards-2026-topps-all-aces/shohei-ohtani-aa-1',
         matchQuality: 'PARTIAL_MATCH',
       },
     });

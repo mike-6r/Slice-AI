@@ -2330,25 +2330,30 @@ function AssetManagementView({
     { id: "history", label: "History" },
   ];
   const [section, setSection] = useState<AssetDetailSection>(initialSection);
+  const [openSubmission, setOpenSubmission] = useState(false);
   useEffect(() => setSection(initialSection), [asset.id, initialSection]);
+  useEffect(() => setOpenSubmission(false), [asset.id]);
   const market = marketResearchSummary(asset);
   const lifecycle = detail?.lifecycle ?? lifecycleFallback(asset, detail?.requests?.[0] ?? null);
+  const openAction = (targetRoute?: string) => {
+    const target = targetRoute === "media" ? "media" : "details";
+    if (target === "details") setOpenSubmission(true);
+    onSectionChange(target);
+  };
   const content: Record<AssetDetailSection, ReactNode> = {
     overview: (
       <DetailOverview
         asset={asset}
         lifecycle={lifecycle}
-        onAction={() =>
-          onSectionChange(lifecycle.action?.targetRoute === "media" ? "media" : "details")
-        }
+        onAction={() => openAction(lifecycle.action?.targetRoute)}
       />
     ),
-    details: <DetailsTab asset={asset} />,
-    submission: <DetailsTab asset={asset} />,
+    details: <DetailsTab asset={asset} openSubmission={openSubmission} />,
+    submission: <DetailsTab asset={asset} openSubmission={openSubmission} />,
     "market-data": <MarketTab asset={asset} market={market} />,
     media: <MediaDetail asset={asset} />,
-    valuation: <DetailsTab asset={asset} />,
-    custody: <DetailsTab asset={asset} />,
+    valuation: <DetailsTab asset={asset} openSubmission={openSubmission} />,
+    custody: <DetailsTab asset={asset} openSubmission={openSubmission} />,
     offering: <CollectorInitialOfferingTab asset={asset} />,
     market: <MarketTab asset={asset} market={market} />,
     activity: <HistoryTab asset={asset} activity={detail?.activity ?? []} />,
@@ -2470,7 +2475,7 @@ function AssetManagementView({
         <aside className="collector-detail-rail">
           <DetailMarketRail asset={asset} />
           <DetailMilestone lifecycle={lifecycle} />
-          <RelatedActions actions={detail?.requests ?? []} onSectionChange={onSectionChange} />
+          <RelatedActions actions={detail?.requests ?? []} onAction={openAction} />
           <MembershipRail membership={membership} />
         </aside>
       </div>
@@ -2569,7 +2574,17 @@ function DetailOverview({
   );
 }
 
-function DetailsTab({ asset }: { asset: CollectorWorkspaceAsset }) {
+function DetailsTab({
+  asset,
+  openSubmission = false,
+}: {
+  asset: CollectorWorkspaceAsset;
+  openSubmission?: boolean;
+}) {
+  const [submissionOpen, setSubmissionOpen] = useState(openSubmission);
+  useEffect(() => {
+    if (openSubmission) setSubmissionOpen(true);
+  }, [openSubmission]);
   const essentials = [
     ["Category", asset.category],
     ["Brand", asset.manufacturer],
@@ -2611,7 +2626,11 @@ function DetailsTab({ asset }: { asset: CollectorWorkspaceAsset }) {
           </p>
         ) : null}
       </section>
-      <details className="collector-detail-disclosure">
+      <details
+        className="collector-detail-disclosure"
+        open={submissionOpen}
+        onToggle={(event) => setSubmissionOpen((event.currentTarget as HTMLDetailsElement).open)}
+      >
         <summary>
           <span>
             <strong>Submission &amp; next step</strong>
@@ -2758,10 +2777,10 @@ function DetailMilestone({ lifecycle }: { lifecycle: CollectorWorkspaceLifecycle
 
 function RelatedActions({
   actions,
-  onSectionChange,
+  onAction,
 }: {
   actions: CollectorWorkspaceRequest[];
-  onSectionChange: (section: AssetDetailSection) => void;
+  onAction: (section?: string) => void;
 }) {
   return (
     <section className="collector-panel collector-detail-rail-card">
@@ -2773,7 +2792,7 @@ function RelatedActions({
             <p>{action.reason}</p>
             <button
               className="collector-button"
-              onClick={() => onSectionChange(action.targetRoute === "media" ? "media" : "details")}
+              onClick={() => onAction(action.targetRoute)}
             >
               {action.actionLabel} <ArrowRight aria-hidden="true" />
             </button>
@@ -2908,6 +2927,11 @@ function SubmissionDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
               </small>
             </div>
           ) : null}
+          {selectVault.error ? (
+            <p className="collector-form-error" role="alert">
+              We couldn&apos;t save that destination. Please try again; no intake state was changed.
+            </p>
+          ) : null}
         </div>
       ) : null}
       {asset.intake?.status === "SHIPPING_REQUIRED" &&
@@ -2915,6 +2939,7 @@ function SubmissionDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
       !asset.intake.shipment ? (
         <ShipmentForm
           submitting={addShipment.isPending}
+          error={addShipment.error}
           onSubmit={(input) => addShipment.mutate(input)}
         />
       ) : null}
@@ -2955,9 +2980,11 @@ function SubmissionDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
 
 function ShipmentForm({
   submitting,
+  error,
   onSubmit,
 }: {
   submitting: boolean;
+  error?: unknown;
   onSubmit: (input: { carrier: string; trackingNumber: string; shippedAt: string }) => void;
 }) {
   const [carrier, setCarrier] = useState("");
@@ -2970,19 +2997,35 @@ function ShipmentForm({
         onSubmit({ carrier, trackingNumber, shippedAt: new Date().toISOString() });
       }}
     >
-      <strong>Add shipment details</strong>
+      <div>
+        <strong>Ship your collectible</strong>
+        <small>
+          Enter the carrier and tracking number after handing the package to the carrier.
+        </small>
+      </div>
+      {error ? (
+        <p className="collector-form-error" role="alert">
+          We couldn&apos;t save the shipment details. Please check the values and try again.
+        </p>
+      ) : null}
+      <label>
+        Carrier
       <input
         value={carrier}
         onChange={(event) => setCarrier(event.target.value)}
-        placeholder="Carrier"
+        placeholder="e.g. Royal Mail"
         required
       />
+      </label>
+      <label>
+        Tracking number
       <input
         value={trackingNumber}
         onChange={(event) => setTrackingNumber(event.target.value)}
-        placeholder="Tracking number"
+        placeholder="Enter tracking number"
         required
       />
+      </label>
       <button className="collector-button collector-button--primary" disabled={submitting}>
         {submitting ? "Saving…" : "Mark as shipped"}
       </button>

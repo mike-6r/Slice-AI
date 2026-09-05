@@ -350,7 +350,10 @@ describe("HTTP catalogue mapping", () => {
       ],
     });
 
-    expect(asset.media[0]).toMatchObject({ id: "front", url: "https://example.com/front.jpg" });
+    expect(asset.media[0]).toMatchObject({
+      id: "front",
+      url: "/api/v1/market/assets/charizard/media/front",
+    });
   });
 
   it("keeps Slice Grade supporting evidence separate from official grading", () => {

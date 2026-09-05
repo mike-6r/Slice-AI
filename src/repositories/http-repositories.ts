@@ -445,7 +445,9 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
     })
     .map((item, index) => ({
       id: item.id,
-      url: item.url,
+      // Public media is served through the API so the browser never depends
+      // on an expiring cross-origin object-storage URL.
+      url: `/api/v1/market/assets/${encodeURIComponent(value.slug)}/media/${encodeURIComponent(item.slot)}`,
       alt: item.alt,
       slot: item.slot,
       kind: "image" as const,

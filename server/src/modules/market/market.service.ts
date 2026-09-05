@@ -498,6 +498,34 @@ export class MarketService {
     const asset = await this.asset(slug);
     return assetView(asset, this.storage);
   }
+  async media(slug: string, slot: string) {
+    const asset = await this.asset(slug);
+    const requestedSlot = slot.trim().toLowerCase();
+    const media = asset.submissions?.[0]?.media.find(
+      (item) => item.slot.toLowerCase() === requestedSlot,
+    );
+    if (!media) {
+      throw new NotFoundException({
+        code: 'ASSET_MEDIA_NOT_FOUND',
+        message: 'Resource not found.',
+      });
+    }
+    const [stored, body] = await Promise.all([
+      this.storage.head(media.objectKey),
+      this.storage.read(media.objectKey),
+    ]);
+    if (!body) {
+      throw new NotFoundException({
+        code: 'ASSET_MEDIA_NOT_FOUND',
+        message: 'Resource not found.',
+      });
+    }
+    return {
+      body,
+      mimeType:
+        stored?.magicMimeType ?? stored?.mimeType ?? 'application/octet-stream',
+    };
+  }
   async history(slug: string, range: Range, requestedSeries?: ReferenceSeries) {
     const asset = await this.asset(slug);
     const now = new Date();

@@ -68,15 +68,7 @@ describe('PriceChartingProvider', () => {
   it('resolves a SportsCardsPro game URL before generic identity discovery', async () => {
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(
       new Response(
-        JSON.stringify({
-          products: [
-            {
-              id: 918273,
-              'product-name': 'Shohei Ohtani Aa #1',
-              'console-name': '2026 Topps All Aces',
-            },
-          ],
-        }),
+        '<script>VGPC.product = { id: 918273, is_card: true };</script>',
         { status: 200, headers: { 'content-type': 'application/json' } },
       ),
     );
@@ -87,7 +79,60 @@ describe('PriceChartingProvider', () => {
         'https://www.sportscardspro.com/game/baseball-cards-2026-topps-all-aces/shohei-ohtani-aa-1',
       ),
     ).resolves.toBe('918273');
-    expect(String(fetchMock.mock.calls[0]![0])).toContain('/api/products');
+    expect(String(fetchMock.mock.calls[0]![0])).toContain(
+      'sportscardspro.com/game/',
+    );
+  });
+
+  it('falls back to provider search when an exact page has no embedded id', async () => {
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response('<html><h1>Product page</h1></html>', { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            products: [
+              {
+                id: 11897384,
+                'product-name': 'Shohei Ohtani Aa #1',
+                'console-name': '2026 Topps All Aces',
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      );
+    const provider = new PriceChartingProvider(config());
+
+    await expect(
+      provider.resolveReferenceUrl(
+        'https://www.sportscardspro.com/game/baseball-cards-2026-topps-all-aces/shohei-ohtani-aa-1',
+      ),
+    ).resolves.toBe('11897384');
+    expect(String(fetchMock.mock.calls[1]![0])).toContain('/api/products');
+  });
+
+  it('tries the trusted SportsCardsPro alias when the canonical page is blocked', async () => {
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response('', { status: 403 }))
+      .mockResolvedValueOnce(
+        new Response('<script>VGPC.product = { id: 11897384 };</script>', {
+          status: 200,
+        }),
+      );
+    const provider = new PriceChartingProvider(config());
+
+    await expect(
+      provider.resolveReferenceUrl(
+        'https://www.pricecharting.com/game/baseball-cards-2026-topps-all-aces/shohei-ohtani-aa-1',
+      ),
+    ).resolves.toBe('11897384');
+    expect(String(fetchMock.mock.calls[1]![0])).toContain(
+      'https://www.sportscardspro.com/game/',
+    );
   });
 
   it('rejects observations when the resolved product does not match the asset identity', async () => {
