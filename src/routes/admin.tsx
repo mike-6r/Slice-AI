@@ -68,6 +68,7 @@ import { AdminIntakeLocations } from "@/components/admin/AdminIntakeLocations";
 import "@/styles/admin-workspace-shell.css";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
+import { ApiError } from "@/api/http-client";
 import {
   compactAdminAccountFilters,
   isAdminNavItemActive,
@@ -1800,7 +1801,7 @@ function PhysicalIntakeBoard({
         }
         receiptPending={receipt.isPending}
         receiptFailed={receipt.isError}
-        receiptErrorMessage={receipt.error instanceof Error ? receipt.error.message : null}
+        receiptErrorMessage={formatAdminMutationError(receipt.error)}
         deliveryPending={delivery.isPending}
         deliveryFailed={delivery.isError}
         deliveryErrorMessage={delivery.error instanceof Error ? delivery.error.message : null}
@@ -11235,6 +11236,15 @@ function intakeChecklistLabel(value: string) {
     trackingMatches: "Tracking matches",
   };
   return labels[value] ?? sentence(value.replace(/([a-z])([A-Z])/g, "$1_$2"));
+}
+
+function formatAdminMutationError(error: unknown) {
+  if (!(error instanceof Error)) return null;
+  if (!(error instanceof ApiError) || !error.fieldErrors) return error.message;
+  const fields = Object.entries(error.fieldErrors)
+    .flatMap(([field, messages]) => messages.map((message) => `${field}: ${message}`))
+    .join("; ");
+  return fields ? `${error.message} ${fields}` : error.message;
 }
 function shortId(value: string) {
   return value.slice(0, 8);

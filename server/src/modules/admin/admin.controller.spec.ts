@@ -23,4 +23,33 @@ describe('AdminController receipt validation', () => {
       }).parseIntakeReceiptConfirmation(JSON.stringify(payload)),
     ).toEqual(payload);
   });
+
+  it('normalizes receipt payloads from older admin bundles without inventing attestations', () => {
+    const parse = (value: unknown) =>
+      (controller as unknown as {
+        parseIntakeReceiptConfirmation(input: unknown): unknown;
+      }).parseIntakeReceiptConfirmation(value);
+
+    expect(
+      parse({
+        packageCondition: 'GOOD',
+        packageReceived: true,
+        correctIntakeReference: true,
+        correctCollectible: true,
+        visibleConditionAcceptable: true,
+        tamperDamageChecked: true,
+        trackingMatches: true,
+      }),
+    ).toEqual({
+      packageCondition: 'ACCEPTABLE',
+      checklist: {
+        packageReceived: true,
+        correctIntakeReference: true,
+        correctCollectible: true,
+        visibleConditionAcceptable: true,
+        tamperDamageChecked: true,
+        trackingMatches: true,
+      },
+    });
+  });
 });

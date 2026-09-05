@@ -1,5 +1,9 @@
 export type ApiErrorPayload = {
-  error?: { code?: string; message?: string };
+  error?: {
+    code?: string;
+    message?: string;
+    fieldErrors?: Record<string, string[]>;
+  };
   requestId?: string;
 };
 import { takeQaMutationFailure } from "@/auth/qa-harness";
@@ -10,6 +14,7 @@ export class ApiError extends Error {
     message: string,
     public readonly requestId?: string,
     public readonly status?: number,
+    public readonly fieldErrors?: Record<string, string[]>,
   ) {
     super(message);
     this.name = "ApiError";
@@ -165,6 +170,7 @@ export class ApiClient {
         payload.error?.message ?? "The request could not be completed.",
         payload.requestId ?? requestId,
         response.status,
+        payload.error?.fieldErrors,
       );
     }
     if (body === undefined) {

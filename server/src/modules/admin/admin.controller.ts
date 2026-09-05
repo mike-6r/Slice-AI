@@ -141,6 +141,14 @@ const intakeReceiptConfirmation = z
     notes: z.string().trim().max(2000).optional(),
   })
   .strict();
+const intakeReceiptChecklistKeys = [
+  'packageReceived',
+  'correctIntakeReference',
+  'correctCollectible',
+  'visibleConditionAcceptable',
+  'tamperDamageChecked',
+  'trackingMatches',
+] as const;
 const intakeCarrierDeliveryConfirmation = z.object({}).strict();
 const intakeDestinationAssignment = z
   .object({
@@ -1009,7 +1017,8 @@ export class AdminController {
             }
           })()
         : body;
-    const parsed = intakeReceiptConfirmation.safeParse(candidate);
+    const normalized = this.normalizeIntakeReceiptCandidate(candidate);
+    const parsed = intakeReceiptConfirmation.safeParse(normalized);
     if (!parsed.success)
       throw new BadRequestException({
         code: 'VALIDATION_FAILED',
@@ -1017,5 +1026,46 @@ export class AdminController {
         fieldErrors: parsed.error.flatten().fieldErrors,
       });
     return parsed.data;
+  }
+
+  private normalizeIntakeReceiptCandidate(body: unknown) {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return body;
+
+    const value = body as Record<string, unknown>;
+    let checklist = value.checklist;
+    if (typeof checklist === 'string') {
+      try {
+        checklist = JSON.parse(checklist) as unknown;
+      } catch {
+        // Leave the invalid value in place so Zod returns a useful validation error.
+      }
+    }
+
+    // Older admin bundles used the human-readable condition value and, in one
+    // rollout, placed checklist flags beside the checklist object. Normalize
+    // those wire representations without defaulting any staff attestation.
+    const packageCondition = value.packageCondition === 'GOOD'
+      ? 'ACCEPTABLE'
+      : value.packageCondition;
+    const checklistRecord =
+      checklist && typeof checklist === 'object' && !Array.isArray(checklist)
+        ? (checklist as Record<string, unknown>)
+        : value;
+    const topLevel = Object.fromEntries(
+      Object.entries(value).filter(
+        ([key]) =>
+          key !== 'checklist' &&
+          !intakeReceiptChecklistKeys.some((checklistKey) => checklistKey === key),
+      ),
+    );
+    const normalizedChecklist = Object.fromEntries(
+      intakeReceiptChecklistKeys.map((key) => [key, checklistRecord[key]]),
+    );
+
+    return {
+      ...topLevel,
+      packageCondition,
+      checklist: normalizedChecklist,
+    };
   }
 }

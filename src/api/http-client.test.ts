@@ -50,7 +50,11 @@ describe("ApiClient", () => {
       vi.fn().mockResolvedValue(
         new Response(
           JSON.stringify({
-            error: { code: "RATE_LIMITED", message: "Slow down" },
+            error: {
+              code: "RATE_LIMITED",
+              message: "Slow down",
+              fieldErrors: { checklist: ["must contain all receipt checks"] },
+            },
             requestId: "request-1",
           }),
           { status: 429, headers: { "x-request-id": "header-id" } },
@@ -62,6 +66,7 @@ describe("ApiClient", () => {
         code: "RATE_LIMITED",
         requestId: "request-1",
         status: 429,
+        fieldErrors: { checklist: ["must contain all receipt checks"] },
       }),
     );
   });

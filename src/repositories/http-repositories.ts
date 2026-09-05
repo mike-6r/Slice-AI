@@ -4296,7 +4296,10 @@ const preSaleRepository = (client: ApiClient): import("@/data/repositories").Pre
 };
 
 const adminRepository = (client: ApiClient): AdminRepository => {
-  const idempotencyKey = () => crypto.randomUUID();
+  const idempotencyKey = () =>
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `slice-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   const mapAdminCategory = (raw: unknown): import("@/data/repositories").AdminCatalogueCategory => {
     const value = objectField(raw, "admin catalogue category");
     return {
@@ -5269,7 +5272,7 @@ const adminRepository = (client: ApiClient): AdminRepository => {
       const value = objectField(
         await client.request<unknown>(`/admin/intake/${encodeURIComponent(id)}/receipt`, {
           method: "POST",
-          headers: { "content-type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+          headers: { "content-type": "application/json", "Idempotency-Key": idempotencyKey() },
           body,
         }),
         "intake receipt",
@@ -5284,7 +5287,7 @@ const adminRepository = (client: ApiClient): AdminRepository => {
       const value = objectField(
         await client.request<unknown>(`/admin/intake/${encodeURIComponent(id)}/delivery/confirm`, {
           method: "POST",
-          headers: { "content-type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+          headers: { "content-type": "application/json", "Idempotency-Key": idempotencyKey() },
           body: {},
         }),
         "intake delivery confirmation",
