@@ -79,6 +79,21 @@ export const resolveApiOrigin = (
 const browserApiOrigin = typeof window !== "undefined" ? window.location.origin : undefined;
 export const API_ORIGIN = resolveApiOrigin(import.meta.env.VITE_API_BASE_URL, browserApiOrigin);
 
+const mergeHeaders = (
+  defaults: Record<string, string>,
+  overrides: Record<string, string> | undefined,
+) => {
+  const headers = { ...defaults };
+  for (const [name, value] of Object.entries(overrides ?? {})) {
+    const existingName = Object.keys(headers).find(
+      (candidate) => candidate.toLowerCase() === name.toLowerCase(),
+    );
+    if (existingName) delete headers[existingName];
+    headers[name] = value;
+  }
+  return headers;
+};
+
 const parseBody = async (response: Response): Promise<unknown> => {
   const text = await response.text();
   if (!text) return undefined;
@@ -133,12 +148,14 @@ export class ApiClient {
         cache: "no-store",
         credentials: "include",
         signal: options.signal,
-        headers: {
-          Accept: "application/json",
-          ...(session.token() ? { Authorization: `Bearer ${session.token()}` } : {}),
-          ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
-          ...options.headers,
-        },
+        headers: mergeHeaders(
+          {
+            Accept: "application/json",
+            ...(session.token() ? { Authorization: `Bearer ${session.token()}` } : {}),
+            ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
+          },
+          options.headers,
+        ),
         ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
       });
     } catch (error) {

@@ -44,6 +44,28 @@ describe("ApiClient", () => {
     );
   });
 
+  it("deduplicates case-insensitive headers before sending JSON", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new ApiClient("https://api.slice.test").request("/admin/intake/intake-1/receipt", {
+      method: "POST",
+      body: { checklist: {} },
+      headers: { "content-type": "application/json", "Idempotency-Key": "key-1" },
+    });
+
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    expect(Object.keys(headers).filter((name) => name.toLowerCase() === "content-type")).toHaveLength(
+      1,
+    );
+    expect(headers["content-type"]).toBe("application/json");
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ body: JSON.stringify({ checklist: {} }) }),
+    );
+  });
+
   it("retains canonical error and request IDs", async () => {
     vi.stubGlobal(
       "fetch",
