@@ -3347,6 +3347,7 @@
 
 .admin-market-reference-card__current strong { color: #ecfffb; }
 .admin-market-reference-card__current span:not(.admin-operations-eyebrow) { color: #8da7af; font-size: 12px; }
+.admin-market-reference-card__reason { color: #d9b45a; font-size: 11px; line-height: 1.4; }
 .admin-market-reference-card__current a { display: inline-flex; align-items: center; gap: 6px; color: #36dfb3; white-space: nowrap; }
 .admin-market-reference-card__empty { padding: 18px; margin: 18px 0; border: 1px dashed rgba(142, 175, 185, 0.28); border-radius: 12px; color: #8da7af; }
 .admin-operations-button-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }

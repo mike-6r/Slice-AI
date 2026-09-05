@@ -11481,7 +11481,14 @@ function buildAdminMarketData(
     null;
   const statusFor = (mapping: AdminMarketMapping) => {
     if (mapping.status === 'REMOVED') return 'NOT LINKED';
-    if (mapping.lastFailureAt && (!mapping.lastSuccessAt || mapping.lastFailureAt > mapping.lastSuccessAt))
+    // A configured provider can be healthy while a saved URL still cannot be
+    // resolved to a stable provider record. Keep that distinct from an outage
+    // so operators know the link was received but still needs review.
+    if (
+      mapping.lastFailureCode !== 'PRICECHARTING_REFERENCE_NOT_RESOLVED' &&
+      mapping.lastFailureAt &&
+      (!mapping.lastSuccessAt || mapping.lastFailureAt > mapping.lastSuccessAt)
+    )
       return 'PROVIDER UNAVAILABLE';
     if (mapping.lastSuccessAt && now - mapping.lastSuccessAt.getTime() > 7 * 86_400_000)
       return 'STALE';
@@ -11515,8 +11522,22 @@ function buildAdminMarketData(
       originalUrl,
       canonicalUrl: mapping.providerUrl,
       matchStatus: statusFor(mapping),
-      matchReasons: mapping.status === 'NEEDS_REVIEW' ? ['Provider identity needs staff confirmation.'] : [],
-      fetchStatus: mapping.lastFailureAt && (!mapping.lastSuccessAt || mapping.lastFailureAt > mapping.lastSuccessAt) ? 'UNAVAILABLE' : currentObservation ? 'AVAILABLE' : 'NOT_CHECKED',
+      matchReasons:
+        mapping.lastFailureCode === 'PRICECHARTING_REFERENCE_NOT_RESOLVED'
+          ? ['The URL was saved, but the provider returned no matching product record.']
+          : mapping.status === 'NEEDS_REVIEW'
+            ? ['Provider identity needs staff confirmation.']
+            : [],
+      lastFailureCode: mapping.lastFailureCode,
+      fetchStatus:
+        mapping.lastFailureCode === 'PRICECHARTING_REFERENCE_NOT_RESOLVED'
+          ? 'NOT_CHECKED'
+          : mapping.lastFailureAt &&
+              (!mapping.lastSuccessAt || mapping.lastFailureAt > mapping.lastSuccessAt)
+            ? 'UNAVAILABLE'
+            : currentObservation
+              ? 'AVAILABLE'
+              : 'NOT_CHECKED',
       currentObservation,
       sourceCurrency: mapping.currentCurrency ?? related[0]?.currency ?? null,
       lastCheckedAt: mapping.lastSuccessAt?.toISOString() ?? mapping.lastFailureAt?.toISOString() ?? null,

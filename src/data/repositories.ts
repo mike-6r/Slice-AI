@@ -1875,6 +1875,7 @@ export type AdminMarketReference = {
     | "STALE"
     | "NOT LINKED";
   matchReasons: string[];
+  lastFailureCode: string | null;
   fetchStatus: "AVAILABLE" | "UNAVAILABLE" | "NOT_CHECKED";
   currentObservation: { valueMinor: string; currency: string; observedAt: string } | null;
   sourceCurrency: string | null;

@@ -1322,6 +1322,11 @@ function Valuation({
                   ? `${money(item.valuation.marketData.preferredReference.currentObservation.valueMinor, item.valuation.marketData.preferredReference.currentObservation.currency)} · ${item.valuation.marketData.preferredReference.sourceCurrency}`
                   : "No provider value yet"}
               </span>
+              {item.valuation.marketData.preferredReference.matchReasons[0] ? (
+                <small className="admin-market-reference-card__reason">
+                  {item.valuation.marketData.preferredReference.matchReasons[0]}
+                </small>
+              ) : null}
             </div>
             <div>
               <span className="admin-operations-eyebrow">History</span>
