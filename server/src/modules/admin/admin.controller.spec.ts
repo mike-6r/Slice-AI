@@ -52,4 +52,36 @@ describe('AdminController receipt validation', () => {
       },
     });
   });
+
+  it('decodes a double-encoded checklist from a legacy client', () => {
+    const payload = {
+      packageCondition: 'ACCEPTABLE',
+      checklist: JSON.stringify(
+        JSON.stringify({
+          packageReceived: true,
+          correctIntakeReference: true,
+          correctCollectible: true,
+          visibleConditionAcceptable: true,
+          tamperDamageChecked: true,
+          trackingMatches: true,
+        }),
+      ),
+    };
+
+    expect(
+      (controller as unknown as {
+        parseIntakeReceiptConfirmation(value: unknown): unknown;
+      }).parseIntakeReceiptConfirmation(payload),
+    ).toEqual({
+      packageCondition: 'ACCEPTABLE',
+      checklist: {
+        packageReceived: true,
+        correctIntakeReference: true,
+        correctCollectible: true,
+        visibleConditionAcceptable: true,
+        tamperDamageChecked: true,
+        trackingMatches: true,
+      },
+    });
+  });
 });

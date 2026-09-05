@@ -1007,16 +1007,7 @@ export class AdminController {
     // before handing it to the shared HTTP client. Accept that representation
     // during the rollout, then apply the same strict schema so no additional
     // fields are admitted.
-    const candidate =
-      typeof body === 'string'
-        ? (() => {
-            try {
-              return JSON.parse(body) as unknown;
-            } catch {
-              return body;
-            }
-          })()
-        : body;
+    const candidate = this.decodeReceiptJson(body);
     const normalized = this.normalizeIntakeReceiptCandidate(candidate);
     const parsed = intakeReceiptConfirmation.safeParse(normalized);
     if (!parsed.success)
@@ -1032,14 +1023,7 @@ export class AdminController {
     if (!body || typeof body !== 'object' || Array.isArray(body)) return body;
 
     const value = body as Record<string, unknown>;
-    let checklist = value.checklist;
-    if (typeof checklist === 'string') {
-      try {
-        checklist = JSON.parse(checklist) as unknown;
-      } catch {
-        // Leave the invalid value in place so Zod returns a useful validation error.
-      }
-    }
+    const checklist = this.decodeReceiptJson(value.checklist);
 
     // Older admin bundles used the human-readable condition value and, in one
     // rollout, placed checklist flags beside the checklist object. Normalize
@@ -1067,5 +1051,17 @@ export class AdminController {
       packageCondition,
       checklist: normalizedChecklist,
     };
+  }
+
+  private decodeReceiptJson(value: unknown) {
+    let decoded = value;
+    for (let attempt = 0; attempt < 3 && typeof decoded === 'string'; attempt += 1) {
+      try {
+        decoded = JSON.parse(decoded) as unknown;
+      } catch {
+        break;
+      }
+    }
+    return decoded;
   }
 }
