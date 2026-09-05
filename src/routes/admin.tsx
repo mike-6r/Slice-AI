@@ -47,7 +47,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 
 import { logout } from "@/auth/actions";
@@ -57,7 +57,10 @@ import { Wordmark } from "@/components/layout/MainNavigation";
 import { AdminCollectibleDetail } from "@/components/admin/AdminCollectibleDetail";
 import { AdminCollectibleCatalogue } from "@/components/admin/AdminCollectibleCatalogue";
 import { AdminAssetOperations } from "@/components/admin/AdminAssetOperations";
-import { AdminAssetOperationsDetail } from "@/components/admin/AdminAssetOperationsDetail";
+import {
+  AdminAssetOperationsDetail,
+  AdminRecentAuthDialog,
+} from "@/components/admin/AdminAssetOperationsDetail";
 import { AdminMemberships } from "@/components/admin/AdminMemberships";
 import { AdminMembershipDetail } from "@/components/admin/AdminMembershipDetail";
 import { AdminFinanceTrading } from "@/components/admin/AdminFinanceTrading";
@@ -1567,6 +1570,36 @@ function PhysicalIntakeBoard({
 }) {
   const services = useAppServices();
   const queryClient = useQueryClient();
+  const [recentAuthAction, setRecentAuthAction] = useState<(() => void) | null>(null);
+  const recentAuthActionRef = useRef<(() => void) | null>(null);
+  const [recentAuthPassword, setRecentAuthPassword] = useState("");
+  const recentAuth = useMutation({
+    mutationFn: () => services.repositories.account.confirmRecentAuth(recentAuthPassword),
+  });
+  const requestRecentAuth = (retry: () => void) => {
+    recentAuth.reset();
+    setRecentAuthPassword("");
+    recentAuthActionRef.current = retry;
+    setRecentAuthAction(() => retry);
+  };
+  const confirmRecentAuth = async () => {
+    try {
+      await recentAuth.mutateAsync();
+      const retry = recentAuthActionRef.current;
+      recentAuthActionRef.current = null;
+      setRecentAuthAction(null);
+      setRecentAuthPassword("");
+      retry?.();
+    } catch {
+      // Keep the dialog open so the operator can correct the password.
+    }
+  };
+  const clearRecentAuth = () => {
+    recentAuthActionRef.current = null;
+    recentAuth.reset();
+    setRecentAuthAction(null);
+    setRecentAuthPassword("");
+  };
   const verificationStart = useMutation({
     mutationFn: (id: string) => services.repositories.admin.startIntakeVerification(id),
     onSuccess: () => {
@@ -1709,6 +1742,10 @@ function PhysicalIntakeBoard({
       void queryClient.invalidateQueries({ queryKey: ["admin", "intake-detail", selectedIntake] });
       void queryClient.invalidateQueries({ queryKey: ["asset-operations"] });
     },
+    onError: (error, input) => {
+      if (error instanceof ApiError && error.code === "RECENT_AUTH_REQUIRED")
+        requestRecentAuth(() => custodyHandoff.mutate(input));
+    },
   });
   const custodyTransition = useMutation({
     mutationFn: ({ assetId, toStatus, providerRef }: {
@@ -1721,6 +1758,10 @@ function PhysicalIntakeBoard({
       void queryClient.invalidateQueries({ queryKey: ["admin", "intake"] });
       void queryClient.invalidateQueries({ queryKey: ["admin", "intake-detail", selectedIntake] });
       void queryClient.invalidateQueries({ queryKey: ["asset-operations"] });
+    },
+    onError: (error, input) => {
+      if (error instanceof ApiError && error.code === "RECENT_AUTH_REQUIRED")
+        requestRecentAuth(() => custodyTransition.mutate(input));
     },
   });
   const exceptionCreate = useMutation({
@@ -1749,83 +1790,95 @@ function PhysicalIntakeBoard({
   const detailRow = intakeDetail.data?.row ?? selectedRow;
   if (selectedIntake && detailRow) {
     return (
-      <PhysicalIntakeDetailPage
-        row={detailRow}
-        detail={intakeDetail.data}
-        tab={intakeTab}
-        onClose={closeIntake}
-        onSelectTab={selectIntakeTab}
-        onReceipt={async (input) => {
-          await receipt.mutateAsync({ id: detailRow.id, input });
-        }}
-        onConfirmDelivery={() => delivery.mutate(detailRow.id)}
-        onAssignDestination={async (input) => {
-          await destinationAssignment.mutateAsync({
-            submissionId: detailRow.submissionId,
-            input,
-          });
-        }}
-        onStartVerification={() => verificationStart.mutate(detailRow.id)}
-        onCompleteVerification={async (input) => {
-          await verificationComplete.mutateAsync({ id: detailRow.id, input });
-        }}
-        onCreateException={(input) => exceptionCreate.mutate({ id: detailRow.id, input })}
-        onResolveException={(exceptionId, note) =>
-          exceptionResolve.mutate({ id: detailRow.id, exceptionId, note })
-        }
-        onCompleteDemoIntake={() => demoIntake.mutate(detailRow)}
-        onCreateCustodyHandoff={async (providerRef) => {
-          if (!detailRow.assetId) throw new Error("This intake has no linked asset for custody.");
-          const facilityCode = detailRow.vault?.code ?? detailRow.vault?.id;
-          if (!facilityCode) throw new Error("Assign a receiving destination before custody handoff.");
-          await custodyHandoff.mutateAsync({
-            assetId: detailRow.assetId,
-            providerRef,
-            facilityCode,
-          });
-        }}
-        onTransitionCustody={async (toStatus, providerRef) => {
-          if (!detailRow.assetId) throw new Error("This intake has no linked asset for custody.");
-          await custodyTransition.mutateAsync({
-            assetId: detailRow.assetId,
-            toStatus,
-            providerRef,
-          });
-        }}
-        custodyPending={custodyHandoff.isPending || custodyTransition.isPending}
-        custodyFailed={custodyHandoff.isError || custodyTransition.isError}
-        custodyErrorMessage={
-          (custodyHandoff.error ?? custodyTransition.error) instanceof Error
-            ? (custodyHandoff.error ?? custodyTransition.error)?.message ?? null
-            : null
-        }
-        receiptPending={receipt.isPending}
-        receiptFailed={receipt.isError}
-        receiptErrorMessage={formatAdminMutationError(receipt.error)}
-        deliveryPending={delivery.isPending}
-        deliveryFailed={delivery.isError}
-        deliveryErrorMessage={delivery.error instanceof Error ? delivery.error.message : null}
-        demoPending={demoIntake.isPending}
-        demoFailed={demoIntake.isError}
-        verificationStarting={verificationStart.isPending}
-        verificationStartFailed={verificationStart.isError}
-        verificationStartErrorMessage={
-          verificationStart.error instanceof Error ? verificationStart.error.message : null
-        }
-        verificationCompleting={verificationComplete.isPending}
-        verificationCompleteFailed={verificationComplete.isError}
-        verificationCompleteErrorMessage={
-          verificationComplete.error instanceof Error ? verificationComplete.error.message : null
-        }
-        exceptionSaving={exceptionCreate.isPending || exceptionResolve.isPending}
-        destinationSaving={destinationAssignment.isPending}
-        destinationFailed={destinationAssignment.isError}
-        destinationErrorMessage={
-          destinationAssignment.error instanceof Error
-            ? destinationAssignment.error.message
-            : null
-        }
-      />
+      <>
+        <PhysicalIntakeDetailPage
+          row={detailRow}
+          detail={intakeDetail.data}
+          tab={intakeTab}
+          onClose={closeIntake}
+          onSelectTab={selectIntakeTab}
+          onReceipt={async (input) => {
+            await receipt.mutateAsync({ id: detailRow.id, input });
+          }}
+          onConfirmDelivery={() => delivery.mutate(detailRow.id)}
+          onAssignDestination={async (input) => {
+            await destinationAssignment.mutateAsync({
+              submissionId: detailRow.submissionId,
+              input,
+            });
+          }}
+          onStartVerification={() => verificationStart.mutate(detailRow.id)}
+          onCompleteVerification={async (input) => {
+            await verificationComplete.mutateAsync({ id: detailRow.id, input });
+          }}
+          onCreateException={(input) => exceptionCreate.mutate({ id: detailRow.id, input })}
+          onResolveException={(exceptionId, note) =>
+            exceptionResolve.mutate({ id: detailRow.id, exceptionId, note })
+          }
+          onCompleteDemoIntake={() => demoIntake.mutate(detailRow)}
+          onCreateCustodyHandoff={async (providerRef) => {
+            if (!detailRow.assetId) throw new Error("This intake has no linked asset for custody.");
+            const facilityCode = detailRow.vault?.code ?? detailRow.vault?.id;
+            if (!facilityCode) throw new Error("Assign a receiving destination before custody handoff.");
+            await custodyHandoff.mutateAsync({
+              assetId: detailRow.assetId,
+              providerRef,
+              facilityCode,
+            });
+          }}
+          onTransitionCustody={async (toStatus, providerRef) => {
+            if (!detailRow.assetId) throw new Error("This intake has no linked asset for custody.");
+            await custodyTransition.mutateAsync({
+              assetId: detailRow.assetId,
+              toStatus,
+              providerRef,
+            });
+          }}
+          custodyPending={custodyHandoff.isPending || custodyTransition.isPending}
+          custodyFailed={custodyHandoff.isError || custodyTransition.isError}
+          custodyErrorMessage={
+            (custodyHandoff.error ?? custodyTransition.error) instanceof Error
+              ? (custodyHandoff.error ?? custodyTransition.error)?.message ?? null
+              : null
+          }
+          receiptPending={receipt.isPending}
+          receiptFailed={receipt.isError}
+          receiptErrorMessage={formatAdminMutationError(receipt.error)}
+          deliveryPending={delivery.isPending}
+          deliveryFailed={delivery.isError}
+          deliveryErrorMessage={delivery.error instanceof Error ? delivery.error.message : null}
+          demoPending={demoIntake.isPending}
+          demoFailed={demoIntake.isError}
+          verificationStarting={verificationStart.isPending}
+          verificationStartFailed={verificationStart.isError}
+          verificationStartErrorMessage={
+            verificationStart.error instanceof Error ? verificationStart.error.message : null
+          }
+          verificationCompleting={verificationComplete.isPending}
+          verificationCompleteFailed={verificationComplete.isError}
+          verificationCompleteErrorMessage={
+            verificationComplete.error instanceof Error ? verificationComplete.error.message : null
+          }
+          exceptionSaving={exceptionCreate.isPending || exceptionResolve.isPending}
+          destinationSaving={destinationAssignment.isPending}
+          destinationFailed={destinationAssignment.isError}
+          destinationErrorMessage={
+            destinationAssignment.error instanceof Error
+              ? destinationAssignment.error.message
+              : null
+          }
+        />
+        {recentAuthAction ? (
+          <AdminRecentAuthDialog
+            password={recentAuthPassword}
+            setPassword={setRecentAuthPassword}
+            busy={recentAuth.isPending}
+            error={recentAuth.error}
+            close={clearRecentAuth}
+            onConfirm={() => void confirmRecentAuth()}
+          />
+        ) : null}
+      </>
     );
   }
   if (selectedIntake) {

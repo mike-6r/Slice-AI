@@ -627,7 +627,7 @@ export function AdminAssetOperationsDetail({
   );
 }
 
-function AdminRecentAuthDialog({
+export function AdminRecentAuthDialog({
   password,
   setPassword,
   busy,
