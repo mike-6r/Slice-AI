@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   LockKeyhole,
   MoreVertical,
+  Plus,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -15,9 +16,13 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import type { AdminCatalogueAsset, AdminCatalogueResponse } from "@/data/repositories";
+import type {
+  AdminCatalogueAsset,
+  AdminCatalogueCategory,
+  AdminCatalogueResponse,
+} from "@/data/repositories";
 import { useAppServices } from "@/providers/AppServicesProvider";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import "@/styles/admin-catalogue.css";
 
 export type CatalogueFilters = {
@@ -74,6 +79,7 @@ export function AdminCollectibleCatalogue({
 }) {
   const services = useAppServices();
   const [search, setSearch] = useState(query);
+  const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
   const catalogue = useQuery({
     queryKey: ["admin", "catalogue", query, status, page, filters],
     queryFn: () =>
@@ -86,6 +92,15 @@ export function AdminCollectibleCatalogue({
       }),
     staleTime: 20_000,
   });
+  const categories = useQuery({
+    queryKey: ["admin", "catalogue", "categories"],
+    queryFn: () => services.repositories.admin.listCatalogueCategories(),
+    enabled: categoryManagerOpen,
+    staleTime: 60_000,
+  });
+  const refreshCategories = () => {
+    void categories.refetch();
+  };
   useEffect(() => setSearch(query), [query]);
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -136,7 +151,153 @@ export function AdminCollectibleCatalogue({
       onOpen={onOpen}
       onOpenIntake={onOpenIntake}
       onOpenCollector={onOpenCollector}
+      categoryManagerOpen={categoryManagerOpen}
+      onToggleCategoryManager={() => setCategoryManagerOpen((open) => !open)}
+      categories={categories.data ?? []}
+      categoriesLoading={categories.isLoading}
+      categoriesError={categories.isError}
+      onRetryCategories={refreshCategories}
+      onRefreshCategories={refreshCategories}
+      onRefreshCatalogue={() => void catalogue.refetch()}
     />
+  );
+}
+
+function CategoryManager({
+  categories,
+  loading,
+  error,
+  onRetry,
+  onCreated,
+  onUpdated,
+}: {
+  categories: AdminCatalogueCategory[];
+  loading: boolean;
+  error: boolean;
+  onRetry: () => void;
+  onCreated: () => void;
+  onUpdated: () => void;
+}) {
+  const services = useAppServices();
+  const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [description, setDescription] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+  const create = useMutation({
+    mutationFn: () =>
+      services.repositories.admin.createCatalogueCategory({
+        name: name.trim(),
+        slug: slug.trim() || undefined,
+        description: description.trim() || null,
+        sortOrder: (Math.max(0, ...categories.map((category) => category.sortOrder)) || 0) + 10,
+      }),
+    onSuccess: () => {
+      setName("");
+      setSlug("");
+      setDescription("");
+      setFormError(null);
+      onCreated();
+    },
+    onError: (reason) =>
+      setFormError(reason instanceof Error ? reason.message : "Category could not be created."),
+  });
+  const update = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: "ACTIVE" | "ARCHIVED" }) =>
+      services.repositories.admin.updateCatalogueCategory(id, { status }),
+    onSuccess: onUpdated,
+    onError: (reason) =>
+      setFormError(reason instanceof Error ? reason.message : "Category could not be updated."),
+  });
+
+  return (
+    <section className="admin-category-manager" aria-labelledby="category-manager-title">
+      <div className="admin-category-manager__intro">
+        <div>
+          <p className="admin-catalogue-eyebrow">Taxonomy control</p>
+          <h3 id="category-manager-title">Category library</h3>
+          <p>
+            Keep collector-facing choices specific and recognizable. Archived categories stay on
+            existing records but disappear from new submissions.
+          </p>
+        </div>
+        <span className="admin-category-manager__count">
+          {categories.filter((category) => category.status === "ACTIVE").length} active
+        </span>
+      </div>
+      {loading ? <p className="admin-category-manager__notice">Loading category library…</p> : null}
+      {error ? (
+        <div className="admin-category-manager__notice is-error">
+          <span>Category management requires catalogue permission.</span>
+          <button type="button" onClick={onRetry}>Try again</button>
+        </div>
+      ) : null}
+      {!loading && !error ? (
+        <>
+          <div className="admin-category-manager__chips">
+            {categories.map((category) => (
+              <div
+                className={`admin-category-chip${category.status === "ARCHIVED" ? " is-archived" : ""}`}
+                key={category.id}
+              >
+                <span>
+                  <strong>{category.name}</strong>
+                  <small>{category.slug}</small>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => update.mutate({
+                    id: category.id,
+                    status: category.status === "ACTIVE" ? "ARCHIVED" : "ACTIVE",
+                  })}
+                  disabled={update.isPending}
+                  aria-label={`${category.status === "ACTIVE" ? "Archive" : "Restore"} ${category.name}`}
+                >
+                  {category.status === "ACTIVE" ? "Archive" : "Restore"}
+                </button>
+              </div>
+            ))}
+          </div>
+          <form
+            className="admin-category-manager__form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!name.trim()) {
+                setFormError("Give the category a clear customer-facing name.");
+                return;
+              }
+              setFormError(null);
+              create.mutate();
+            }}
+          >
+            <div className="admin-category-manager__form-heading">
+              <div>
+                <strong>Add a category</strong>
+                <span>Use a dedicated category for a recognizable collecting vertical.</span>
+              </div>
+              <button type="submit" className="admin-primary-button" disabled={create.isPending}>
+                <Plus size={15} aria-hidden="true" />
+                {create.isPending ? "Adding…" : "Add category"}
+              </button>
+            </div>
+            <div className="admin-category-manager__fields">
+              <label>
+                Name
+                <input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Star Wars Unlimited" maxLength={120} />
+              </label>
+              <label>
+                Slug <span>(optional)</span>
+                <input value={slug} onChange={(event) => setSlug(event.target.value)} placeholder="star-wars-unlimited" maxLength={96} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" />
+              </label>
+              <label className="admin-category-manager__description-field">
+                Description <span>(optional)</span>
+                <input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What belongs in this category" maxLength={500} />
+              </label>
+            </div>
+            {formError ? <p className="admin-category-manager__error">{formError}</p> : null}
+          </form>
+        </>
+      ) : null}
+    </section>
   );
 }
 
@@ -154,6 +315,14 @@ function CatalogueContent({
   onOpen,
   onOpenIntake,
   onOpenCollector,
+  categoryManagerOpen,
+  onToggleCategoryManager,
+  categories,
+  categoriesLoading,
+  categoriesError,
+  onRetryCategories,
+  onRefreshCategories,
+  onRefreshCatalogue,
 }: {
   data: AdminCatalogueResponse;
   search: string;
@@ -168,6 +337,14 @@ function CatalogueContent({
   onOpen: (id: string) => void;
   onOpenIntake: (submissionId: string) => void;
   onOpenCollector: (collectorId: string) => void;
+  categoryManagerOpen: boolean;
+  onToggleCategoryManager: () => void;
+  categories: AdminCatalogueCategory[];
+  categoriesLoading: boolean;
+  categoriesError: boolean;
+  onRetryCategories: () => void;
+  onRefreshCategories: () => void;
+  onRefreshCatalogue: () => void;
 }) {
   const activeFilterCount =
     Object.entries(filters).filter(([key, value]) => {
@@ -200,8 +377,32 @@ function CatalogueContent({
           <button type="button" className="admin-catalogue-refresh" onClick={onRefresh}>
             <RefreshCw size={15} aria-hidden="true" /> Refresh
           </button>
+          <button
+            type="button"
+            className={`admin-catalogue-category-toggle${categoryManagerOpen ? " is-open" : ""}`}
+            onClick={onToggleCategoryManager}
+            aria-expanded={categoryManagerOpen}
+          >
+            <Plus size={15} aria-hidden="true" /> Manage categories
+          </button>
         </div>
       </header>
+      {categoryManagerOpen ? (
+        <CategoryManager
+          categories={categories}
+          loading={categoriesLoading}
+          error={categoriesError}
+          onRetry={onRetryCategories}
+          onCreated={() => {
+            onRefreshCategories();
+            onRefreshCatalogue();
+          }}
+          onUpdated={() => {
+            onRefreshCategories();
+            onRefreshCatalogue();
+          }}
+        />
+      ) : null}
       <section className="admin-catalogue-summary" aria-label="Catalogue summary">
         <Metric label="Total collectibles" value={data.summary.total} icon={<Box />} />
         <Metric

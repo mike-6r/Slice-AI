@@ -141,6 +141,7 @@ const intakeReceiptConfirmation = z
     notes: z.string().trim().max(2000).optional(),
   })
   .strict();
+const intakeCarrierDeliveryConfirmation = z.object({}).strict();
 const intakeDestinationAssignment = z
   .object({
     vaultId: z.string().trim().min(1).max(80),
@@ -615,6 +616,28 @@ export class AdminController {
       intakeId,
       idempotencyKey,
       this.parse(intakeReceiptConfirmation, body ?? {}),
+    );
+  }
+
+  @Post('intake/:id/delivery/confirm')
+  @RequirePermission('custody.manage')
+  confirmDelivery(
+    @Param('id') intakeId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    if (!idempotencyKey || !/^[\x21-\x7e]{1,128}$/.test(idempotencyKey))
+      throw new BadRequestException({
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+        message: 'A valid Idempotency-Key header is required.',
+      });
+    this.parse(intakeCarrierDeliveryConfirmation, body ?? {});
+    return this.admin.confirmIntakeDelivery(
+      request.actor!,
+      intakeId,
+      idempotencyKey,
+      request.requestId ?? 'unknown',
     );
   }
 

@@ -203,6 +203,16 @@ export function intakeNextAction(
       actor: 'STAFF',
       needsStaffAction: true,
     };
+  if (
+    item.intake.shipment &&
+    ['SHIPPED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY'].includes(item.intake.shipment.status) &&
+    !item.intake.receipt
+  )
+    return {
+      label: 'Confirm carrier delivery',
+      actor: 'STAFF',
+      needsStaffAction: true,
+    };
   if (!item.intake.shipment)
     return {
       label: 'Await collector shipment',
@@ -404,6 +414,7 @@ export function intakeAllowedActions(item: IntakeState & { stage: string }) {
         {
           'Resolve exception': ['RESOLVE_EXCEPTION'],
           'Confirm in-person receipt': ['CONFIRM_RECEIPT'],
+          'Confirm carrier delivery': ['CONFIRM_DELIVERY'],
           'Confirm physical receipt': ['CONFIRM_RECEIPT'],
           'Begin verification': ['START_VERIFICATION'],
           'Complete verification': ['COMPLETE_VERIFICATION'],

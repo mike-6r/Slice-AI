@@ -123,6 +123,26 @@ describe('admin intake projections', () => {
     expect(intakeStageReason(received)).toContain('Physical receipt confirmed');
   });
 
+  it('gives staff a delivery confirmation action when tracking is present', () => {
+    const item = base({
+      intake: {
+        status: 'IN_TRANSIT',
+        shipment: { status: 'IN_TRANSIT' },
+        receipt: null,
+        verification: null,
+        exceptions: [],
+      },
+    });
+    const stage = intakeStage(item);
+
+    expect(intakeNextAction({ ...item, stage })).toEqual({
+      label: 'Confirm carrier delivery',
+      actor: 'STAFF',
+      needsStaffAction: true,
+    });
+    expect(intakeAllowedActions({ ...item, stage })).toContain('CONFIRM_DELIVERY');
+  });
+
   it('makes active exceptions staff-owned and counts only staff-owned work as needs action', () => {
     const exception = base({
       intake: {

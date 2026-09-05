@@ -65,6 +65,48 @@ const dto = {
 };
 
 describe("HTTP catalogue mapping", () => {
+  it("maps the admin category library and keeps category mutations scoped to catalogue endpoints", async () => {
+    const get = vi.fn().mockResolvedValue({
+      items: [
+        {
+          id: "category-1",
+          slug: "pokemon-tcg",
+          name: "Pokémon TCG",
+          iconKey: "pokemon",
+          description: "Pokémon cards.",
+          status: "ACTIVE",
+          sortOrder: 10,
+        },
+      ],
+    });
+    const request = vi.fn().mockResolvedValue({
+      id: "category-2",
+      slug: "star-wars-unlimited",
+      name: "Star Wars Unlimited",
+      iconKey: null,
+      description: null,
+      status: "ACTIVE",
+      sortOrder: 20,
+    });
+    const repositories = createHttpRepositories({ get, request } as unknown as ApiClient);
+
+    await expect(repositories.admin.listCatalogueCategories()).resolves.toMatchObject([
+      { id: "category-1", name: "Pokémon TCG", status: "ACTIVE" },
+    ]);
+    await repositories.admin.createCatalogueCategory({ name: "Star Wars Unlimited" });
+    await repositories.admin.updateCatalogueCategory("category-1", { status: "ARCHIVED" });
+    expect(request).toHaveBeenNthCalledWith(
+      1,
+      "/admin/categories",
+      expect.objectContaining({ method: "POST", body: { name: "Star Wars Unlimited" } }),
+    );
+    expect(request).toHaveBeenNthCalledWith(
+      2,
+      "/admin/categories/category-1",
+      expect.objectContaining({ method: "PATCH", body: { status: "ARCHIVED" } }),
+    );
+  });
+
   it("keeps the account identifier in the history path, not the strict query", async () => {
     const get = vi
       .fn()
@@ -1028,6 +1070,31 @@ describe("HTTP catalogue mapping", () => {
           deliveryMethod: "SHIPMENT",
           reason: "Assigned by the physical intake operator.",
         },
+        headers: expect.objectContaining({ "Idempotency-Key": expect.any(String) }),
+      }),
+    );
+  });
+
+  it("confirms carrier delivery through the admin intake authority", async () => {
+    const request = vi.fn().mockResolvedValue({
+      intakeId: "intake-1",
+      status: "DELIVERED",
+      deliveredAt: "2026-09-05T14:00:00.000Z",
+      replayed: false,
+    });
+    const repositories = createHttpRepositories({ get: vi.fn(), request } as unknown as ApiClient);
+
+    await expect(repositories.admin.confirmIntakeDelivery("intake-1")).resolves.toEqual({
+      intakeId: "intake-1",
+      status: "DELIVERED",
+      deliveredAt: "2026-09-05T14:00:00.000Z",
+      replayed: false,
+    });
+    expect(request).toHaveBeenCalledWith(
+      "/admin/intake/intake-1/delivery/confirm",
+      expect.objectContaining({
+        method: "POST",
+        body: "{}",
         headers: expect.objectContaining({ "Idempotency-Key": expect.any(String) }),
       }),
     );

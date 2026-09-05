@@ -83,6 +83,15 @@ const total = (money: Money, units: number) => gbp((money.amount / 100) * units)
 
 export const mockRepositories: AppRepositories = {
   admin: {
+    async listCatalogueCategories() {
+      return [];
+    },
+    async createCatalogueCategory() {
+      throw new Error("Catalogue management requires the API service.");
+    },
+    async updateCatalogueCategory() {
+      throw new Error("Catalogue management requires the API service.");
+    },
     async getPreSale() {
       throw new Error("Pre-Sale requires the API service.");
     },
@@ -307,6 +316,9 @@ export const mockRepositories: AppRepositories = {
       throw new Error("Intake location management requires the API service.");
     },
     async confirmIntakeReceipt() {
+      throw new Error("Physical intake requires the API service.");
+    },
+    async confirmIntakeDelivery() {
       throw new Error("Physical intake requires the API service.");
     },
     async completeStagingDemoPhysicalIntake() {

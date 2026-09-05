@@ -96,6 +96,9 @@ export class CatalogueService {
       }),
     );
   }
+  async adminCategories() {
+    return (await this.catalogue.listCategories(true)).map(adminCategory);
+  }
   async sets(categorySlug: string, cursor: string | undefined, limit: number) {
     if (!parseCursor(cursor) && cursor)
       throw new ConflictException({

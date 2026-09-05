@@ -61,6 +61,8 @@ import { isExplicitPikachuOwnerDemoSubmission } from '../lifecycle/domain/stagin
 import { MarketRefreshService } from '../market/market-refresh.service';
 import { TrustedReferenceImportService } from '../market-research/trusted-reference-import.service';
 import { publicDiscoverableAssetWhere } from '../public-discovery/public-asset-visibility';
+import { OutboxWriter } from '../outbox/application/outbox-writer.service';
+import { customerResourceEvent, eventType } from '../outbox/domain/domain-event';
 
 type IntakeLocationManagementInput = {
   displayName: string;
@@ -240,6 +242,7 @@ export class AdminService {
     private readonly ownershipPolicy: OwnershipPolicyService,
     private readonly platformRevenue: PlatformRevenueSettlementService,
     private readonly withdrawalPreflight: WithdrawalPreflightService,
+    @Optional() private readonly outbox?: OutboxWriter,
     @Optional() private readonly marketRefresh?: MarketRefreshService,
     @Optional() private readonly referenceImports?: TrustedReferenceImportService,
   ) {}
@@ -4219,18 +4222,42 @@ export class AdminService {
   async intakeDetail(actor: Actor, submissionId: string) {
     await this.authorization.authorize(actor, 'admin.console.read');
 
+    // Detail links historically used both identifiers: the current queue
+    // emits the submission id, while older links used SubmissionIntake.id.
+    // Resolve either form before asking the projection for its authoritative
+    // row so a valid intake does not appear to be missing merely because a
+    // bookmarked link carries the intake id.
+    const requestedId = submissionId.trim();
+    const identifierMatch = await this.db.assetSubmission.findFirst({
+      where: {
+        AND: [
+          { OR: [{ id: requestedId }, { intake: { id: requestedId } }] },
+          { OR: [{ status: 'APPROVED' }, { intake: { isNot: null } }] },
+          activeIntakeRecordWhere(),
+        ],
+      },
+      select: { id: true },
+    });
+    const canonicalSubmissionId = identifierMatch?.id;
+
     // Reuse the queue projection for the displayed state, next actor, and
     // available staff actions. That prevents the detail view from inventing a
     // second lifecycle interpretation.
+    if (!canonicalSubmissionId)
+      throw new NotFoundException({
+        code: 'INTAKE_NOT_FOUND',
+        message:
+          'The requested intake is not available in the authorized intake projection.',
+      });
     const queue = await this.listIntake(actor, {
-      q: submissionId,
+      q: canonicalSubmissionId,
       fixture: 'ALL',
       workType: 'ALL',
       page: 1,
       pageSize: 100,
       limit: 100,
     });
-    const row = queue.items.find((item) => item.submissionId === submissionId);
+    const row = queue.items.find((item) => item.submissionId === canonicalSubmissionId);
     if (!row)
       throw new NotFoundException({
         code: 'INTAKE_NOT_FOUND',
@@ -4240,7 +4267,7 @@ export class AdminService {
 
     const submission = await this.db.assetSubmission.findFirst({
       where: {
-        id: submissionId,
+        id: canonicalSubmissionId,
         OR: [{ status: 'APPROVED' }, { intake: { isNot: null } }],
       },
       select: {
@@ -4476,7 +4503,7 @@ export class AdminService {
         availableCommands,
         revision: submission.intake?.updatedAt.toISOString() ?? row.updatedAt,
         deepLinks: {
-          submissionReview: `/operations/submissions?submission=${encodeURIComponent(submissionId)}&tab=Overview`,
+          submissionReview: `/operations/submissions?submission=${encodeURIComponent(canonicalSubmissionId)}&tab=Overview`,
           collectorAccount: row.collector?.id
             ? `/admin?section=users&user=${encodeURIComponent(row.collector.id)}`
             : null,
@@ -5547,6 +5574,109 @@ export class AdminService {
         confirmedAt: now.toISOString(),
         confirmedById: actor.userId,
         receiptId: receipt.id,
+      };
+    });
+  }
+
+  async confirmIntakeDelivery(
+    actor: Actor,
+    intakeId: string,
+    idempotencyKey: string,
+    requestId: string,
+  ) {
+    await this.authorization.authorize(
+      actor,
+      'custody.manage',
+      undefined,
+      undefined,
+      requestId,
+    );
+    return this.db.$transaction(async (db) => {
+      const intake = await db.submissionIntake.findUnique({
+        where: { id: intakeId },
+        include: { shipment: true, receipt: true },
+      });
+      if (!intake)
+        throw new NotFoundException({
+          code: 'INTAKE_NOT_FOUND',
+          message: 'Intake record not found.',
+        });
+      if (!intake.shipment)
+        throw new ConflictException({
+          code: 'SHIPMENT_REQUIRED',
+          message: 'Shipment tracking must be recorded before confirming delivery.',
+        });
+      if (intake.receipt)
+        throw new ConflictException({
+          code: 'RECEIPT_ALREADY_CONFIRMED',
+          message: 'Physical receipt is already confirmed for this intake.',
+        });
+      if (intake.shipment.status === 'DELIVERED')
+        return {
+          intakeId,
+          status: 'DELIVERED',
+          deliveredAt: (
+            intake.shipment.deliveredAt ??
+            intake.deliveredAt ??
+            intake.updatedAt
+          ).toISOString(),
+          replayed: true,
+        };
+      if (
+        !['SHIPPED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY'].includes(
+          intake.shipment.status,
+        )
+      )
+        throw new ConflictException({
+          code: 'SHIPMENT_NOT_DELIVERABLE',
+          message: 'This shipment status cannot be manually marked as delivered.',
+        });
+
+      const now = new Date();
+      const shipment = await db.intakeShipment.update({
+        where: { intakeId },
+        data: { status: 'DELIVERED', deliveredAt: now, lastCheckedAt: now },
+      });
+      await db.submissionIntake.update({
+        where: { id: intakeId },
+        data: { status: 'DELIVERED', deliveredAt: now },
+      });
+      await db.auditEvent.create({
+        data: {
+          id: randomUUID(),
+          actorUserId: actor.userId,
+          actorType: 'USER',
+          action: 'INTAKE_CARRIER_DELIVERY_CONFIRMED',
+          resourceType: 'submission-intake',
+          resourceId: intakeId,
+          requestId,
+          result: 'SUCCESS',
+          metadata: {
+            idempotencyKey,
+            shipmentId: shipment.id,
+            trackingNumber: shipment.trackingNumber,
+            source: 'MANUAL_STAFF_CONFIRMATION',
+          },
+        },
+      });
+      if (this.outbox)
+        await this.outbox.append(
+          db,
+          customerResourceEvent({
+            eventType: eventType.shipmentCarrierDelivered,
+            submissionId: intake.submissionId,
+            intakeId,
+            status: 'DELIVERED',
+            actorUserId: actor.userId,
+            correlationId: idempotencyKey,
+            occurredAt: now,
+          }),
+        );
+      return {
+        intakeId,
+        status: 'DELIVERED',
+        deliveredAt: now.toISOString(),
+        replayed: false,
       };
     });
   }

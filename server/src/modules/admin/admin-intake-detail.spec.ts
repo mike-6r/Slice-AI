@@ -117,8 +117,10 @@ describe('admin intake detail projection', () => {
     } as never);
 
     const detail = await service.intakeDetail(actor, 'submission-1');
+    const detailFromLegacyIntakeLink = await service.intakeDetail(actor, 'intake-1');
 
     expect(detail.row.title).toBe('Canonical card');
+    expect(detailFromLegacyIntakeLink.row.title).toBe('Canonical card');
     expect(detail.intake).toMatchObject({
       id: 'intake-1',
       reference: 'SLICE-00000001',

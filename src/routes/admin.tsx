@@ -1615,6 +1615,14 @@ function PhysicalIntakeBoard({
       void queryClient.invalidateQueries({ queryKey: ["admin", "intake-detail", selectedIntake] });
     },
   });
+  const delivery = useMutation({
+    mutationFn: (id: string) => services.repositories.admin.confirmIntakeDelivery(id),
+    onSuccess: () => {
+      updateSearch({ page: "1" });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "intake"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "intake-detail", selectedIntake] });
+    },
+  });
   const demoIntake = useMutation({
     mutationFn: (row: AdminIntakeRow) =>
       services.repositories.admin.completeStagingDemoPhysicalIntake(row.submissionId, {
@@ -1654,6 +1662,11 @@ function PhysicalIntakeBoard({
     queryKey: ["admin", "intake-detail", selectedIntake],
     queryFn: () => services.repositories.admin.getIntakeDetail(selectedIntake!),
     enabled: Boolean(selectedIntake),
+    // A missing/stale intake is a terminal state for this URL. Retrying it
+    // only produces three identical 404s and obscures the actual auth/API
+    // issue in the browser console; the page already exposes a manual retry
+    // through the live intake queue.
+    retry: false,
   });
   const verificationComplete = useMutation({
     mutationFn: ({
@@ -1705,6 +1718,7 @@ function PhysicalIntakeBoard({
         onClose={closeIntake}
         onSelectTab={selectIntakeTab}
         onReceipt={(input) => receipt.mutate({ id: detailRow.id, input })}
+        onConfirmDelivery={() => delivery.mutate(detailRow.id)}
         onAssignDestination={async (input) => {
           await destinationAssignment.mutateAsync({
             submissionId: detailRow.submissionId,
@@ -1720,6 +1734,9 @@ function PhysicalIntakeBoard({
         onCompleteDemoIntake={() => demoIntake.mutate(detailRow)}
         receiptPending={receipt.isPending}
         receiptFailed={receipt.isError}
+        deliveryPending={delivery.isPending}
+        deliveryFailed={delivery.isError}
+        deliveryErrorMessage={delivery.error instanceof Error ? delivery.error.message : null}
         demoPending={demoIntake.isPending}
         demoFailed={demoIntake.isError}
         verificationStarting={verificationStart.isPending}
@@ -2349,18 +2366,22 @@ type IntakeDestinationInput = {
 function IntakeDetailAction({
   row,
   onReceipt,
+  onConfirmDelivery,
   onStartVerification,
   onAssignDestination,
   onCompleteDemoIntake,
   verificationStarting,
+  deliveryPending,
   destinationSaving,
 }: {
   row: AdminIntakeRow;
   onReceipt: () => void;
+  onConfirmDelivery: () => void;
   onStartVerification: () => void;
   onAssignDestination: () => void;
   onCompleteDemoIntake: () => void;
   verificationStarting: boolean;
+  deliveryPending: boolean;
   destinationSaving: boolean;
 }) {
   if (row.allowedActions.includes("COMPLETE_DEMO_INTAKE"))
@@ -2375,6 +2396,17 @@ function IntakeDetailAction({
         {row.deliveryMethod === "IN_PERSON"
           ? "Confirm in-person receipt"
           : "Confirm physical receipt"}
+      </button>
+    );
+  if (row.allowedActions.includes("CONFIRM_DELIVERY"))
+    return (
+      <button
+        type="button"
+        className="button-primary"
+        disabled={deliveryPending}
+        onClick={onConfirmDelivery}
+      >
+        {deliveryPending ? "Confirming delivery…" : "Confirm carrier delivery"}
       </button>
     );
   if (row.allowedActions.includes("START_VERIFICATION"))
@@ -2409,6 +2441,7 @@ function PhysicalIntakeDetailPage({
   onClose,
   onSelectTab,
   onReceipt,
+  onConfirmDelivery,
   onAssignDestination,
   onStartVerification,
   onCompleteVerification,
@@ -2417,6 +2450,9 @@ function PhysicalIntakeDetailPage({
   onCompleteDemoIntake,
   receiptPending,
   receiptFailed,
+  deliveryPending,
+  deliveryFailed,
+  deliveryErrorMessage,
   demoPending,
   demoFailed,
   verificationStarting,
@@ -2432,6 +2468,7 @@ function PhysicalIntakeDetailPage({
   onClose: () => void;
   onSelectTab: (tab: IntakeDetailTab) => void;
   onReceipt: (input: IntakeReceiptInput) => void;
+  onConfirmDelivery: () => void;
   onAssignDestination: (input: IntakeDestinationInput) => Promise<void>;
   onStartVerification: () => void;
   onCompleteVerification: (input: IntakeVerificationInput) => void;
@@ -2440,6 +2477,9 @@ function PhysicalIntakeDetailPage({
   onCompleteDemoIntake: () => void;
   receiptPending: boolean;
   receiptFailed: boolean;
+  deliveryPending: boolean;
+  deliveryFailed: boolean;
+  deliveryErrorMessage: string | null;
   demoPending: boolean;
   demoFailed: boolean;
   verificationStarting: boolean;
@@ -2705,6 +2745,8 @@ function PhysicalIntakeDetailPage({
               detail={detail}
               contributors={contributors}
               onOpenReceipt={() => setDialog("receipt")}
+              onConfirmDelivery={onConfirmDelivery}
+              deliveryPending={deliveryPending}
               onOpenException={() => setDialog("exception")}
             />
           ) : null}
@@ -2720,6 +2762,8 @@ function PhysicalIntakeDetailPage({
                 });
                 setDialog("destination");
               }}
+              onConfirmDelivery={onConfirmDelivery}
+              deliveryPending={deliveryPending}
               destinationSaving={destinationSaving}
               onOpenException={() => setDialog("exception")}
             />
@@ -2752,6 +2796,7 @@ function PhysicalIntakeDetailPage({
             <IntakeDetailAction
               row={row}
               onReceipt={() => setDialog("receipt")}
+              onConfirmDelivery={onConfirmDelivery}
               onAssignDestination={() => {
                 setDestinationDraft({
                   vaultId: row.vault?.id ?? "",
@@ -2763,6 +2808,7 @@ function PhysicalIntakeDetailPage({
               onStartVerification={onStartVerification}
               onCompleteDemoIntake={() => setDialog("demo")}
               verificationStarting={verificationStarting}
+              deliveryPending={deliveryPending}
               destinationSaving={destinationSaving}
             />
             {row.stage === "AWAITING_DESTINATION" ? (
@@ -2770,6 +2816,12 @@ function PhysicalIntakeDetailPage({
                 Assign an approved receiving destination before the collector can ship or arrange
                 drop-off.
               </small>
+            ) : null}
+            {deliveryFailed ? (
+              <p className="text-negative">
+                {deliveryErrorMessage ||
+                  "Carrier delivery could not be confirmed. No state was changed."}
+              </p>
             ) : null}
           </section>
           <section className="physical-intake-detail-card physical-intake-rail-status-card">
@@ -2812,6 +2864,23 @@ function PhysicalIntakeDetailPage({
               <button
                 type="button"
                 className="admin-primary-button"
+                onClick={onConfirmDelivery}
+                disabled={!row.allowedActions.includes("CONFIRM_DELIVERY") || deliveryPending}
+                title={
+                  row.allowedActions.includes("CONFIRM_DELIVERY")
+                    ? "Confirm that the carrier delivered the shipment to the assigned destination."
+                    : "Carrier delivery is already confirmed or shipment tracking is not present."
+                }
+              >
+                {deliveryPending
+                  ? "Confirming delivery…"
+                  : row.allowedActions.includes("CONFIRM_DELIVERY")
+                    ? "Confirm carrier delivery"
+                    : "Carrier delivery confirmed"}
+              </button>
+              <button
+                type="button"
+                className="admin-primary-button"
                 disabled={destinationSaving}
                 onClick={() => {
                   setDestinationDraft({
@@ -2844,14 +2913,14 @@ function PhysicalIntakeDetailPage({
               <button
                 type="button"
                 onClick={() => onSelectTab("movement")}
-                disabled={!row.allowedActions.includes("MANAGE_TRACKING")}
+                disabled={!row.allowedActions.includes("CONFIRM_DELIVERY")}
                 title={
-                  !row.allowedActions.includes("MANAGE_TRACKING")
-                    ? "Shipment mutation authority is not present in the current intake projection."
+                  !row.allowedActions.includes("CONFIRM_DELIVERY")
+                    ? "Carrier delivery is already confirmed or shipment tracking is not present."
                     : undefined
                 }
               >
-                Manage shipment
+                Confirm delivery
               </button>
               <button
                 type="button"
@@ -2859,7 +2928,7 @@ function PhysicalIntakeDetailPage({
                 disabled={!row.allowedActions.includes("CONFIRM_RECEIPT")}
                 title={
                   !row.allowedActions.includes("CONFIRM_RECEIPT")
-                    ? "Receipt is not currently an allowed action for this intake."
+                    ? "Confirm carrier delivery before recording physical receipt."
                     : undefined
                 }
               >
@@ -3563,12 +3632,16 @@ function IntakeOverviewTab({
   detail,
   contributors,
   onOpenReceipt,
+  onConfirmDelivery,
+  deliveryPending,
   onOpenException,
 }: {
   row: AdminIntakeRow;
   detail: AdminIntakeDetail | undefined;
   contributors: string[];
   onOpenReceipt: () => void;
+  onConfirmDelivery: () => void;
+  deliveryPending: boolean;
   onOpenException: () => void;
 }) {
   const intake = detail?.intake;
@@ -3661,6 +3734,16 @@ function IntakeOverviewTab({
           </div>
         </dl>
         <div className="physical-intake-command-row">
+          {row.allowedActions.includes("CONFIRM_DELIVERY") ? (
+            <button
+              type="button"
+              className="admin-primary-button"
+              onClick={onConfirmDelivery}
+              disabled={deliveryPending}
+            >
+              {deliveryPending ? "Confirming delivery…" : "Confirm carrier delivery"}
+            </button>
+          ) : null}
           <button
             type="button"
             className="admin-secondary-button"
@@ -3683,12 +3766,16 @@ function IntakeMovementTab({
   row,
   detail,
   onAssignDestination,
+  onConfirmDelivery,
+  deliveryPending,
   destinationSaving,
   onOpenException,
 }: {
   row: AdminIntakeRow;
   detail: AdminIntakeDetail | undefined;
   onAssignDestination: () => void;
+  onConfirmDelivery: () => void;
+  deliveryPending: boolean;
   destinationSaving: boolean;
   onOpenException: () => void;
 }) {
@@ -3792,6 +3879,24 @@ function IntakeMovementTab({
             </dl>
           </div>
         )}
+        {row.allowedActions.includes("CONFIRM_DELIVERY") ? (
+          <div className="physical-intake-inline-callout is-actionable">
+            <strong>Ready to confirm delivery</strong>
+            <p>
+              Tracking is recorded, but the carrier delivery event has not been confirmed. Confirm
+              it when the package has arrived at the assigned Slice destination; physical receipt is
+              the next separate step.
+            </p>
+            <button
+              type="button"
+              className="admin-primary-button"
+              onClick={onConfirmDelivery}
+              disabled={deliveryPending}
+            >
+              {deliveryPending ? "Confirming delivery…" : "Confirm carrier delivery"}
+            </button>
+          </div>
+        ) : null}
       </section>
       <section className="physical-intake-detail-card">
         <div className="physical-intake-card-heading">
@@ -3813,10 +3918,19 @@ function IntakeMovementTab({
           <button
             type="button"
             className="admin-secondary-button"
-            disabled
-            title="No shipment mutation command is available in the current projection."
+            onClick={onConfirmDelivery}
+            disabled={!row.allowedActions.includes("CONFIRM_DELIVERY") || deliveryPending}
+            title={
+              row.allowedActions.includes("CONFIRM_DELIVERY")
+                ? "Confirm that the carrier delivered the shipment to the assigned destination."
+                : "Carrier delivery is already confirmed or shipment tracking is not present."
+            }
           >
-            Manage tracking
+            {deliveryPending
+              ? "Confirming delivery…"
+              : row.allowedActions.includes("CONFIRM_DELIVERY")
+                ? "Confirm carrier delivery"
+                : "Carrier delivery confirmed"}
           </button>
           <button type="button" className="admin-secondary-button" onClick={onOpenException}>
             Add movement exception

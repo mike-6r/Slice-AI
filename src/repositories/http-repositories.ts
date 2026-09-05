@@ -4297,7 +4297,44 @@ const preSaleRepository = (client: ApiClient): import("@/data/repositories").Pre
 
 const adminRepository = (client: ApiClient): AdminRepository => {
   const idempotencyKey = () => crypto.randomUUID();
+  const mapAdminCategory = (raw: unknown): import("@/data/repositories").AdminCatalogueCategory => {
+    const value = objectField(raw, "admin catalogue category");
+    return {
+      id: stringField(value.id, "admin catalogue category.id"),
+      slug: stringField(value.slug, "admin catalogue category.slug"),
+      name: stringField(value.name, "admin catalogue category.name"),
+      iconKey: nullableString(value.iconKey, "admin catalogue category.iconKey"),
+      description: nullableString(value.description, "admin catalogue category.description"),
+      status: value.status === "ARCHIVED" ? "ARCHIVED" : "ACTIVE",
+      sortOrder: Number(value.sortOrder ?? 0),
+    };
+  };
   return {
+    async listCatalogueCategories() {
+      const value = objectField(
+        await client.get<unknown>("/admin/categories"),
+        "admin catalogue categories",
+      );
+      return Array.isArray(value.items) ? value.items.map(mapAdminCategory) : [];
+    },
+    async createCatalogueCategory(input) {
+      return mapAdminCategory(
+        await client.request<unknown>("/admin/categories", {
+          method: "POST",
+          body: input,
+          headers: { "Idempotency-Key": idempotencyKey() },
+        }),
+      );
+    },
+    async updateCatalogueCategory(id, input) {
+      return mapAdminCategory(
+        await client.request<unknown>(`/admin/categories/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          body: input,
+          headers: { "Idempotency-Key": idempotencyKey() },
+        }),
+      );
+    },
     async getPreSale(assetId) {
       return client.get(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale`);
     },
@@ -5220,6 +5257,22 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         intakeId: stringField(value.intakeId, "intake receipt.intakeId"),
         status: stringField(value.status, "intake receipt.status"),
         confirmedAt: stringField(value.confirmedAt, "intake receipt.confirmedAt"),
+      };
+    },
+    async confirmIntakeDelivery(id) {
+      const value = objectField(
+        await client.request<unknown>(`/admin/intake/${encodeURIComponent(id)}/delivery/confirm`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+          body: "{}",
+        }),
+        "intake delivery confirmation",
+      );
+      return {
+        intakeId: stringField(value.intakeId, "intake delivery.intakeId"),
+        status: stringField(value.status, "intake delivery.status"),
+        deliveredAt: stringField(value.deliveredAt, "intake delivery.deliveredAt"),
+        replayed: Boolean(value.replayed),
       };
     },
     async completeStagingDemoPhysicalIntake(submissionId, input) {

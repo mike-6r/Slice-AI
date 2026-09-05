@@ -2318,6 +2318,16 @@ export type AdminCatalogueResponse = {
   };
 };
 
+export type AdminCatalogueCategory = {
+  id: string;
+  slug: string;
+  name: string;
+  iconKey: string | null;
+  description: string | null;
+  status: "ACTIVE" | "ARCHIVED";
+  sortOrder: number;
+};
+
 export type InitialOfferingProjection = {
   offeringId: string;
   assetId: string;
@@ -2368,6 +2378,24 @@ export type InitialOfferingPreview = Omit<
 > & { valuationMinor: string; feePolicyStatus: string };
 
 export interface AdminRepository {
+  listCatalogueCategories(): Promise<AdminCatalogueCategory[]>;
+  createCatalogueCategory(input: {
+    name: string;
+    slug?: string;
+    iconKey?: string | null;
+    description?: string | null;
+    sortOrder?: number;
+  }): Promise<AdminCatalogueCategory>;
+  updateCatalogueCategory(
+    id: string,
+    input: Partial<{
+      name: string;
+      iconKey: string | null;
+      description: string | null;
+      sortOrder: number;
+      status: "ACTIVE" | "ARCHIVED";
+    }>,
+  ): Promise<AdminCatalogueCategory>;
   getPreSale(assetId: string): Promise<PreSaleDetail>;
   configurePreSale(
     assetId: string,
@@ -2520,6 +2548,9 @@ export interface AdminRepository {
       notes?: string;
     },
   ): Promise<{ intakeId: string; status: string; confirmedAt: string }>;
+  confirmIntakeDelivery(
+    id: string,
+  ): Promise<{ intakeId: string; status: string; deliveredAt: string; replayed: boolean }>;
   completeStagingDemoPhysicalIntake(
     submissionId: string,
     input: { assetId?: string; reason: string },

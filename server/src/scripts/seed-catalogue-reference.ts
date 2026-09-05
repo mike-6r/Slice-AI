@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 
 /** Versioned, non-economic reference data only. It creates no assets, prices, or ownership. */
-export const CATALOGUE_REFERENCE_SEED_VERSION = 'catalogue-reference-v1';
+export const CATALOGUE_REFERENCE_SEED_VERSION = 'catalogue-reference-v2';
 
 export async function seedCatalogueReference(prisma: PrismaClient) {
   const categories = [
@@ -9,19 +9,92 @@ export async function seedCatalogueReference(prisma: PrismaClient) {
       slug: 'pokemon-tcg',
       name: 'Pokémon TCG',
       iconKey: 'pokemon',
+      description: 'Pokémon trading cards, including modern and vintage sets.',
       sortOrder: 10,
     },
     {
       slug: 'sports-cards',
       name: 'Sports Cards',
       iconKey: 'sports',
+      description: 'Baseball, basketball, football, hockey, soccer, and other sports cards.',
       sortOrder: 20,
     },
     {
       slug: 'trading-card-games',
       name: 'Trading Card Games',
       iconKey: 'tcg',
+      description: 'Collectible card games not yet assigned to a dedicated game category.',
       sortOrder: 30,
+    },
+    {
+      slug: 'magic-the-gathering',
+      name: 'Magic: The Gathering',
+      iconKey: 'magic',
+      description: 'Magic: The Gathering cards across sets, formats, and treatments.',
+      sortOrder: 40,
+    },
+    {
+      slug: 'yu-gi-oh-tcg',
+      name: 'Yu-Gi-Oh! TCG',
+      iconKey: 'yu-gi-oh',
+      description: 'Yu-Gi-Oh! trading cards, rarities, and tournament releases.',
+      sortOrder: 50,
+    },
+    {
+      slug: 'one-piece-card-game',
+      name: 'One Piece Card Game',
+      iconKey: 'one-piece',
+      description: 'One Piece Card Game booster sets, leaders, and promos.',
+      sortOrder: 60,
+    },
+    {
+      slug: 'disney-lorcana',
+      name: 'Disney Lorcana',
+      iconKey: 'lorcana',
+      description: 'Disney Lorcana cards, enchanted treatments, and promos.',
+      sortOrder: 70,
+    },
+    {
+      slug: 'digimon-card-game',
+      name: 'Digimon Card Game',
+      iconKey: 'digimon',
+      description: 'Digimon Card Game sets, alternate arts, and tournament promos.',
+      sortOrder: 80,
+    },
+    {
+      slug: 'dragon-ball-super-card-game',
+      name: 'Dragon Ball Super Card Game',
+      iconKey: 'dragon-ball',
+      description: 'Dragon Ball Super Card Game and Fusion World collectibles.',
+      sortOrder: 90,
+    },
+    {
+      slug: 'flesh-and-blood',
+      name: 'Flesh and Blood',
+      iconKey: 'flesh-and-blood',
+      description: 'Flesh and Blood trading cards, cold foils, and promos.',
+      sortOrder: 100,
+    },
+    {
+      slug: 'non-sport-entertainment',
+      name: 'Non-Sport & Entertainment Cards',
+      iconKey: 'non-sport',
+      description: 'Film, television, music, gaming, and other entertainment cards.',
+      sortOrder: 110,
+    },
+    {
+      slug: 'comics',
+      name: 'Comics',
+      iconKey: 'comics',
+      description: 'Comic books, key issues, and graded comic collectibles.',
+      sortOrder: 120,
+    },
+    {
+      slug: 'memorabilia',
+      name: 'Memorabilia',
+      iconKey: 'memorabilia',
+      description: 'Authenticated signed items, equipment, and display pieces.',
+      sortOrder: 130,
     },
   ];
   for (const category of categories) {

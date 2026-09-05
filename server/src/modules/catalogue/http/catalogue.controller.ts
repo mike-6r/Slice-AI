@@ -168,6 +168,12 @@ export class CatalogueController {
       items: await this.catalogue.categories(),
     });
   }
+  @Get('admin/categories')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('catalogue.manage')
+  async adminCategories() {
+    return { items: await this.catalogue.adminCategories() };
+  }
   @Get('categories/:slug/sets') async sets(
     @Param('slug') slug: string,
     @Query() query: unknown,

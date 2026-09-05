@@ -13,9 +13,10 @@ import { MarketModule } from '../market/market.module';
 import { FinanceModule } from '../finance/finance.module';
 import { ProvidersModule } from '../providers/providers.module';
 import { MarketResearchModule } from '../market-research/market-research.module';
+import { OutboxModule } from '../outbox/outbox.module';
 
 @Module({
-  imports: [DatabaseModule, AuthModule, AccessControlModule, ConfigModule, SubmissionsModule, OwnershipModule, MarketModule, MarketResearchModule, FinanceModule, ProvidersModule],
+  imports: [DatabaseModule, AuthModule, AccessControlModule, ConfigModule, SubmissionsModule, OwnershipModule, MarketModule, MarketResearchModule, FinanceModule, ProvidersModule, OutboxModule],
   controllers: [AdminController, AdminAccountControlController],
   providers: [AdminService, AdminAccountControlService],
   exports: [AdminService],
