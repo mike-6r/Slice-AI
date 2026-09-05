@@ -77,7 +77,12 @@ export class MarketRefreshService {
     return { claimed: jobs.length };
   }
 
-  async refreshAsset(assetId: string, now = new Date()) {
+  async refreshAsset(
+    assetId: string,
+    now = new Date(),
+    options: { force?: boolean } = {},
+  ) {
+    const force = options.force === true;
     const asset = await this.db.asset.findUnique({
       where: { id: assetId },
       select: { slug: true },
@@ -100,9 +105,15 @@ export class MarketRefreshService {
     let queued = 0;
     for (const originalMapping of mappings) {
       let mapping = originalMapping;
-      if (mapping.cooldownUntil && mapping.cooldownUntil > now) continue;
+      if (!force && mapping.cooldownUntil && mapping.cooldownUntil > now) continue;
       const provider = this.providers.get(mapping.providerCode);
-      if (provider?.resolveReferenceUrl && mapping.providerUrl) {
+      const needsReferenceResolution =
+        Boolean(provider?.resolveReferenceUrl && mapping.providerUrl) &&
+        (mapping.status === 'NEEDS_REVIEW' ||
+          mapping.matchQuality !== 'EXACT' ||
+          (mapping.providerCode === 'PRICECHARTING' &&
+            !/^\d+$/.test(mapping.providerExternalId)));
+      if (needsReferenceResolution && provider?.resolveReferenceUrl && mapping.providerUrl) {
         try {
           const resolvedId = await provider.resolveReferenceUrl(mapping.providerUrl);
           if (!resolvedId) {
@@ -165,24 +176,43 @@ export class MarketRefreshService {
             });
           }
         } catch (error) {
+          const failureCode = safeErrorCode(error);
+          await this.db.marketProviderMapping.update({
+            where: { id: mapping.id },
+            data: {
+              lastFailureAt: now,
+              lastFailureCode: failureCode,
+              nextRefreshAt: new Date(now.getTime() + MANUAL_REFRESH_COOLDOWN_MS),
+            },
+          });
           this.logger.warn(
-            { assetId, provider: mapping.providerCode, code: safeErrorCode(error) },
+            { assetId, provider: mapping.providerCode, code: failureCode },
             'Manual market reference resolution failed',
           );
           continue;
         }
       }
       if (mapping.providerCode === 'PRICECHARTING' && !/^\d+$/.test(mapping.providerExternalId)) continue;
-      const recentlyQueued = await this.db.marketRefreshJob.findFirst({
-        where: {
-          mappingId: mapping.id,
-          createdAt: { gte: new Date(now.getTime() - MANUAL_REFRESH_COOLDOWN_MS) },
-        },
-        orderBy: { createdAt: 'desc' },
-        select: { createdAt: true },
-      });
-      if (recentlyQueued) continue;
-      const idempotencyKey = `market-refresh:manual:${assetId}:${mapping.providerCode}:${Math.floor(now.getTime() / MANUAL_REFRESH_COOLDOWN_MS)}`;
+      if (force) {
+        const activeJob = await this.db.marketRefreshJob.findFirst({
+          where: { mappingId: mapping.id, status: { in: ['QUEUED', 'PROCESSING'] } },
+          select: { id: true },
+        });
+        if (activeJob) continue;
+      } else {
+        const recentlyQueued = await this.db.marketRefreshJob.findFirst({
+          where: {
+            mappingId: mapping.id,
+            createdAt: { gte: new Date(now.getTime() - MANUAL_REFRESH_COOLDOWN_MS) },
+          },
+          orderBy: { createdAt: 'desc' },
+          select: { createdAt: true },
+        });
+        if (recentlyQueued) continue;
+      }
+      const idempotencyKey = force
+        ? `market-refresh:manual:${assetId}:${mapping.providerCode}:${randomUUID()}`
+        : `market-refresh:manual:${assetId}:${mapping.providerCode}:${Math.floor(now.getTime() / MANUAL_REFRESH_COOLDOWN_MS)}`;
       const existing = await this.db.marketRefreshJob.findUnique({ where: { idempotencyKey } });
       if (existing) continue;
       try {
@@ -201,7 +231,7 @@ export class MarketRefreshService {
    * enqueue the durable job, then drain the due batch once so a successful
    * provider response is visible without waiting for the background heartbeat. */
   async refreshAssetNow(assetId: string, now = new Date()) {
-    const queued = await this.refreshAsset(assetId, now);
+    const queued = await this.refreshAsset(assetId, now, { force: true });
     if (queued.queued) await this.runOnce(now, `market-admin-${process.pid}`, assetId);
     return queued;
   }

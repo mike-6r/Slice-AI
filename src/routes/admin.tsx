@@ -3285,6 +3285,7 @@ function PhysicalIntakeDetailPage({
               </>
             ) : dialog === "receipt" ? (
               <form
+                className="physical-intake-receipt-form"
                 onSubmit={async (event) => {
                   event.preventDefault();
                   try {
@@ -3342,7 +3343,7 @@ function PhysicalIntakeDetailPage({
                           }))
                         }
                       />
-                      <span>{sentence(key)}</span>
+                      <span>{intakeChecklistLabel(key)}</span>
                     </label>
                   ))}
                 </div>
@@ -11223,6 +11224,17 @@ function sentence(value: string) {
     .replaceAll("_", " ")
     .toLowerCase()
     .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+function intakeChecklistLabel(value: string) {
+  const labels: Record<string, string> = {
+    packageReceived: "Package received",
+    correctIntakeReference: "Correct intake reference",
+    correctCollectible: "Correct collectible",
+    visibleConditionAcceptable: "Visible condition acceptable",
+    tamperDamageChecked: "Tamper / damage checked",
+    trackingMatches: "Tracking matches",
+  };
+  return labels[value] ?? sentence(value.replace(/([a-z])([A-Z])/g, "$1_$2"));
 }
 function shortId(value: string) {
   return value.slice(0, 8);

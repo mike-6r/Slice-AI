@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { KeyRound, Mail, MessageSquareText, ShieldCheck, Smartphone } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { ApiClient, ApiError } from "@/api/http-client";
@@ -28,6 +29,7 @@ function LoginPage() {
   const [recoverySubmitting, setRecoverySubmitting] = useState(false);
   const [twoFactorChallenge, setTwoFactorChallenge] = useState<string | null>(null);
   const [twoFactorMethod, setTwoFactorMethod] = useState<"TOTP" | "SMS" | null>(null);
+  const [twoFactorPhone, setTwoFactorPhone] = useState<string | null>(null);
   const [resendAvailableAt, setResendAvailableAt] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [twoFactorCode, setTwoFactorCode] = useState("");
@@ -91,7 +93,10 @@ function LoginPage() {
               if ("requiresTwoFactor" in result) {
                 setTwoFactorChallenge(result.challenge);
                 setTwoFactorMethod(result.method);
+                setTwoFactorPhone(result.phone);
                 setResendAvailableAt(result.resendAvailableAt);
+                setTwoFactorCode("");
+                setUseRecoveryCode(false);
                 return;
               }
               session.set(result.accessToken);
@@ -200,7 +205,7 @@ function LoginPage() {
               ) : null}
             </div>
           )}
-          {error && (
+          {error && !twoFactorChallenge && (
             <p role="alert" className="form-error">
               {error}
             </p>
@@ -214,7 +219,7 @@ function LoginPage() {
         </form>
         {twoFactorChallenge ? (
           <form
-            className="mt-5 space-y-4 rounded-lg border border-border bg-surface/50 p-4"
+            className="login-two-factor mt-5"
             onSubmit={async (event) => {
               event.preventDefault();
               setSubmitting(true);
@@ -242,20 +247,64 @@ function LoginPage() {
               }
             }}
           >
-            <h3 className="font-semibold">
-              {twoFactorMethod === "SMS" ? "Enter your SMS code" : "Two-factor authentication"}
-            </h3>
-            <p className="text-sm text-subtle">
-              {twoFactorMethod === "SMS"
-                ? "Slice sent a one-time code to your verified phone."
-                : "Enter a code from your authenticator app or a saved recovery code."}
-            </p>
+            <div className="login-two-factor__header">
+              <span className="login-two-factor__icon" aria-hidden="true">
+                <ShieldCheck />
+              </span>
+              <div>
+                <p className="login-two-factor__eyebrow">Step 2 of 2 · Secure sign-in</p>
+                <h3>Verify it&apos;s you</h3>
+                <p>
+                  Choose the code source for this sign-in. Your password was accepted; your account
+                  still needs a second factor.
+                </p>
+              </div>
+            </div>
+            <div className="login-factor-grid" aria-label="Verification methods">
+              <div className="login-factor-card is-selected">
+                <span className="login-factor-card__icon" aria-hidden="true">
+                  {twoFactorMethod === "SMS" ? <Smartphone /> : <KeyRound />}
+                </span>
+                <span>
+                  <strong>{twoFactorMethod === "SMS" ? "Text message" : "Authenticator app"}</strong>
+                  <small>
+                    {twoFactorMethod === "SMS"
+                      ? `Code sent to ${twoFactorPhone ?? "your verified phone"}.`
+                      : "Use the six-digit code shown in your authenticator app."}
+                  </small>
+                </span>
+                <em>Active method</em>
+              </div>
+              <button
+                type="button"
+                className={`login-factor-card ${useRecoveryCode ? "is-selected" : ""}`}
+                onClick={() => {
+                  setUseRecoveryCode(true);
+                  setTwoFactorCode("");
+                }}
+              >
+                <span className="login-factor-card__icon" aria-hidden="true">
+                  <KeyRound />
+                </span>
+                <span>
+                  <strong>Recovery code</strong>
+                  <small>Use one of your saved backup codes.</small>
+                </span>
+                {useRecoveryCode ? <em>Selected</em> : null}
+              </button>
+              <div className="login-factor-card is-unavailable">
+                <span className="login-factor-card__icon" aria-hidden="true">
+                  <Mail />
+                </span>
+                <span>
+                  <strong>Email confirmation</strong>
+                  <small>Email verification is separate from sign-in 2FA.</small>
+                </span>
+                <em>Unavailable</em>
+              </div>
+            </div>
             <label className="form-field text-sm font-medium">
-              {useRecoveryCode
-                ? "Recovery code"
-                : twoFactorMethod === "SMS"
-                  ? "SMS code"
-                  : "Authenticator code"}
+              <span>{useRecoveryCode ? "Recovery code" : twoFactorMethod === "SMS" ? "SMS code" : "Authenticator code"}</span>
               <input
                 type="text"
                 inputMode={useRecoveryCode ? "text" : "numeric"}
@@ -270,22 +319,25 @@ function LoginPage() {
                 }
                 className="form-control mt-2"
                 required
+                autoFocus
               />
             </label>
-            <button
-              type="button"
-              onClick={() => {
-                setUseRecoveryCode((value) => !value);
-                setTwoFactorCode("");
-              }}
-              className="text-sm text-accent hover:underline"
-            >
-              {useRecoveryCode ? "Use an authenticator code" : "Use a recovery code"}
-            </button>
+            {useRecoveryCode ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setUseRecoveryCode(false);
+                  setTwoFactorCode("");
+                }}
+                className="login-two-factor__switch"
+              >
+                <MessageSquareText aria-hidden="true" /> Use your {twoFactorMethod === "SMS" ? "SMS" : "authenticator"} code instead
+              </button>
+            ) : null}
             {twoFactorMethod === "SMS" && !useRecoveryCode ? (
               <button
                 type="button"
-                className="text-sm text-accent hover:underline disabled:opacity-50"
+                className="login-two-factor__resend text-sm text-accent hover:underline disabled:opacity-50"
                 disabled={resendSeconds > 0 || submitting}
                 onClick={async () => {
                   try {
@@ -308,10 +360,15 @@ function LoginPage() {
               >
                 {resendSeconds > 0 ? `Resend in ${resendSeconds}s` : "Resend SMS code"}
               </button>
+              ) : null}
+            {error && twoFactorChallenge ? (
+              <p role="alert" className="login-two-factor__error">
+                {error}
+              </p>
             ) : null}
             <button
               disabled={!twoFactorCode || submitting}
-              className="primary-action w-full rounded-md px-4 py-3 text-sm font-semibold text-background disabled:cursor-not-allowed disabled:opacity-40"
+              className="primary-action login-two-factor__submit w-full rounded-md px-4 py-3 text-sm font-semibold text-background disabled:cursor-not-allowed disabled:opacity-40"
             >
               {submitting ? "Verifying…" : "Verify and sign in"}
             </button>

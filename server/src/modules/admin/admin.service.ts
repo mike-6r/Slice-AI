@@ -346,9 +346,9 @@ export class AdminService {
         createdAt: now,
       },
     });
-    const refresh = asset.status === 'PUBLISHED'
-      ? await this.marketRefresh.refreshAssetNow(assetId, now)
-      : { assetId, queued: 0, cooldownUntil: null };
+    // Provider research is advisory and must be available before publication
+    // too; linking an exact external record should always attempt its refresh.
+    const refresh = await this.marketRefresh.refreshAssetNow(assetId, now);
     return {
       assetId,
       mappingId: mapping.id,

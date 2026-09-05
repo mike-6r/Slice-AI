@@ -5245,11 +5245,32 @@ const adminRepository = (client: ApiClient): AdminRepository => {
       return mapIntakeLocationMutation(value);
     },
     async confirmIntakeReceipt(id, input) {
+      const checklistKeys = [
+        "packageReceived",
+        "correctIntakeReference",
+        "correctCollectible",
+        "visibleConditionAcceptable",
+        "tamperDamageChecked",
+        "trackingMatches",
+      ] as const;
+      const packageCondition =
+        input?.packageCondition === "ACCEPTABLE" ||
+        input?.packageCondition === "DAMAGED" ||
+        input?.packageCondition === "UNKNOWN"
+          ? input.packageCondition
+          : "UNKNOWN";
+      const body = {
+        packageCondition,
+        checklist: Object.fromEntries(
+          checklistKeys.map((key) => [key, input?.checklist?.[key] === true]),
+        ),
+        ...(input?.notes?.trim() ? { notes: input.notes.trim() } : {}),
+      };
       const value = objectField(
-        await client.request<unknown>(`/admin/intake/${id}/receipt`, {
+        await client.request<unknown>(`/admin/intake/${encodeURIComponent(id)}/receipt`, {
           method: "POST",
           headers: { "content-type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-          body: JSON.stringify(input ?? {}),
+          body,
         }),
         "intake receipt",
       );
@@ -5264,7 +5285,7 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         await client.request<unknown>(`/admin/intake/${encodeURIComponent(id)}/delivery/confirm`, {
           method: "POST",
           headers: { "content-type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-          body: "{}",
+          body: {},
         }),
         "intake delivery confirmation",
       );

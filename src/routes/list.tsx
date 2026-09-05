@@ -4711,6 +4711,23 @@ function metadataFromForm(form: ListingForm): CreateSubmissionDraft["declaredMet
   const expectedValueMinor = form.collectorExpectedValue
     ? majorToMinor(form.collectorExpectedValue)
     : null;
+  const customerReference = form.customerReference
+    ? {
+        provider: form.customerReference.provider,
+        externalReferenceId: form.customerReference.externalReferenceId,
+        normalizedUrl: form.customerReference.normalizedUrl,
+        originalTitle: form.customerReference.originalTitle,
+        ...(form.customerReference.imageUrl
+          ? { imageUrl: form.customerReference.imageUrl }
+          : {}),
+        ...(form.customerReference.observedAskingPrice
+          ? { observedAskingPrice: form.customerReference.observedAskingPrice }
+          : {}),
+        importedAt: form.customerReference.importedAt,
+        matchQuality: form.customerReference.matchQuality,
+        extractedIdentity: form.customerReference.extractedIdentity,
+      }
+    : undefined;
   return {
     name: value("name"),
     ...optional("manufacturer"),
@@ -4747,7 +4764,7 @@ function metadataFromForm(form: ListingForm): CreateSubmissionDraft["declaredMet
       ? { collectorReviewerNotes: form.collectorReviewerNotes.trim() }
       : {}),
     ...(form.aiReviewSkipped ? { aiReviewStatus: "AI_REVIEW_SKIPPED" as const } : {}),
-    ...(form.customerReference ? { customerReference: form.customerReference } : {}),
+    ...(customerReference ? { customerReference } : {}),
     termsAcknowledged: form.termsAcknowledged,
   };
 }

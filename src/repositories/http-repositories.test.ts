@@ -1094,7 +1094,56 @@ describe("HTTP catalogue mapping", () => {
       "/admin/intake/intake-1/delivery/confirm",
       expect.objectContaining({
         method: "POST",
-        body: "{}",
+        body: {},
+        headers: expect.objectContaining({ "Idempotency-Key": expect.any(String) }),
+      }),
+    );
+  });
+
+  it("sends physical receipt confirmation as the validated object contract", async () => {
+    const request = vi.fn().mockResolvedValue({
+      intakeId: "intake-1",
+      status: "RECEIVED",
+      confirmedAt: "2026-09-05T14:00:00.000Z",
+    });
+    const repositories = createHttpRepositories({ get: vi.fn(), request } as unknown as ApiClient);
+
+    await expect(
+      repositories.admin.confirmIntakeReceipt("intake-1", {
+        packageCondition: "ACCEPTABLE",
+        checklist: {
+          packageReceived: true,
+          correctIntakeReference: true,
+          correctCollectible: true,
+          visibleConditionAcceptable: true,
+          tamperDamageChecked: true,
+          trackingMatches: true,
+          staleField: true,
+        },
+        notes: "  Received intact.  ",
+      }),
+    ).resolves.toEqual({
+      intakeId: "intake-1",
+      status: "RECEIVED",
+      confirmedAt: "2026-09-05T14:00:00.000Z",
+    });
+
+    expect(request).toHaveBeenCalledWith(
+      "/admin/intake/intake-1/receipt",
+      expect.objectContaining({
+        method: "POST",
+        body: {
+          packageCondition: "ACCEPTABLE",
+          checklist: {
+            packageReceived: true,
+            correctIntakeReference: true,
+            correctCollectible: true,
+            visibleConditionAcceptable: true,
+            tamperDamageChecked: true,
+            trackingMatches: true,
+          },
+          notes: "Received intact.",
+        },
         headers: expect.objectContaining({ "Idempotency-Key": expect.any(String) }),
       }),
     );
