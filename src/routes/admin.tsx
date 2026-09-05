@@ -48,7 +48,7 @@ import {
   X,
 } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
-import type { ReactNode } from "react";
+import type { FormEvent, ReactNode } from "react";
 
 import { logout } from "@/auth/actions";
 import { canAccessAdmin } from "@/auth/workspace-access";
@@ -1569,7 +1569,8 @@ function PhysicalIntakeBoard({
   const verificationStart = useMutation({
     mutationFn: (id: string) => services.repositories.admin.startIntakeVerification(id),
     onSuccess: () => {
-      updateSearch({ page: "1" });
+      updateSearch({ page: "1", intakeTab: "verification" });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "intake"] });
       void queryClient.invalidateQueries({ queryKey: ["admin", "intake-detail", selectedIntake] });
     },
   });
@@ -1612,6 +1613,7 @@ function PhysicalIntakeBoard({
     onSuccess: () => {
       setReceiptRow(null);
       updateSearch({ page: "1" });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "intake"] });
       void queryClient.invalidateQueries({ queryKey: ["admin", "intake-detail", selectedIntake] });
     },
   });
@@ -1633,6 +1635,7 @@ function PhysicalIntakeBoard({
     onSuccess: () => {
       setDemoRow(null);
       updateSearch({ page: "1" });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "intake"] });
       void queryClient.invalidateQueries({ queryKey: ["admin", "intake-detail", selectedIntake] });
     },
   });
@@ -1683,8 +1686,40 @@ function PhysicalIntakeBoard({
       };
     }) => services.repositories.admin.completeIntakeVerification(id, input),
     onSuccess: () => {
+      updateSearch({ page: "1", intakeTab: "custody" });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "intake"] });
       void queryClient.invalidateQueries({ queryKey: ["admin", "intake-detail", selectedIntake] });
-      updateSearch({ page: "1" });
+    },
+  });
+  const custodyHandoff = useMutation({
+    mutationFn: ({ assetId, providerRef, facilityCode }: {
+      assetId: string;
+      providerRef: string;
+      facilityCode: string;
+    }) =>
+      services.repositories.lifecycle.handoff(assetId, {
+        providerCode: "SLICE",
+        facilityCode,
+        providerRef,
+      }),
+    onSuccess: () => {
+      updateSearch({ page: "1", intakeTab: "custody" });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "intake"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "intake-detail", selectedIntake] });
+      void queryClient.invalidateQueries({ queryKey: ["asset-operations"] });
+    },
+  });
+  const custodyTransition = useMutation({
+    mutationFn: ({ assetId, toStatus, providerRef }: {
+      assetId: string;
+      toStatus: string;
+      providerRef: string;
+    }) => services.repositories.lifecycle.transitionCustody(assetId, toStatus, providerRef),
+    onSuccess: () => {
+      updateSearch({ page: "1", intakeTab: "custody" });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "intake"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "intake-detail", selectedIntake] });
+      void queryClient.invalidateQueries({ queryKey: ["asset-operations"] });
     },
   });
   const exceptionCreate = useMutation({
@@ -1696,6 +1731,7 @@ function PhysicalIntakeBoard({
       input: { code: string; severity: "LOW" | "MEDIUM" | "HIGH"; notes: string };
     }) => services.repositories.admin.createIntakeException(id, input),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "intake"] });
       void queryClient.invalidateQueries({ queryKey: ["admin", "intake-detail", selectedIntake] });
       updateSearch({ page: "1" });
     },
@@ -1704,6 +1740,7 @@ function PhysicalIntakeBoard({
     mutationFn: ({ id, exceptionId, note }: { id: string; exceptionId: string; note: string }) =>
       services.repositories.admin.resolveIntakeException(id, exceptionId, { note }),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "intake"] });
       void queryClient.invalidateQueries({ queryKey: ["admin", "intake-detail", selectedIntake] });
       updateSearch({ page: "1" });
     },
@@ -1717,7 +1754,9 @@ function PhysicalIntakeBoard({
         tab={intakeTab}
         onClose={closeIntake}
         onSelectTab={selectIntakeTab}
-        onReceipt={(input) => receipt.mutate({ id: detailRow.id, input })}
+        onReceipt={async (input) => {
+          await receipt.mutateAsync({ id: detailRow.id, input });
+        }}
         onConfirmDelivery={() => delivery.mutate(detailRow.id)}
         onAssignDestination={async (input) => {
           await destinationAssignment.mutateAsync({
@@ -1726,21 +1765,57 @@ function PhysicalIntakeBoard({
           });
         }}
         onStartVerification={() => verificationStart.mutate(detailRow.id)}
-        onCompleteVerification={(input) => verificationComplete.mutate({ id: detailRow.id, input })}
+        onCompleteVerification={async (input) => {
+          await verificationComplete.mutateAsync({ id: detailRow.id, input });
+        }}
         onCreateException={(input) => exceptionCreate.mutate({ id: detailRow.id, input })}
         onResolveException={(exceptionId, note) =>
           exceptionResolve.mutate({ id: detailRow.id, exceptionId, note })
         }
         onCompleteDemoIntake={() => demoIntake.mutate(detailRow)}
+        onCreateCustodyHandoff={async (providerRef) => {
+          if (!detailRow.assetId) throw new Error("This intake has no linked asset for custody.");
+          const facilityCode = detailRow.vault?.code ?? detailRow.vault?.id;
+          if (!facilityCode) throw new Error("Assign a receiving destination before custody handoff.");
+          await custodyHandoff.mutateAsync({
+            assetId: detailRow.assetId,
+            providerRef,
+            facilityCode,
+          });
+        }}
+        onTransitionCustody={async (toStatus, providerRef) => {
+          if (!detailRow.assetId) throw new Error("This intake has no linked asset for custody.");
+          await custodyTransition.mutateAsync({
+            assetId: detailRow.assetId,
+            toStatus,
+            providerRef,
+          });
+        }}
+        custodyPending={custodyHandoff.isPending || custodyTransition.isPending}
+        custodyFailed={custodyHandoff.isError || custodyTransition.isError}
+        custodyErrorMessage={
+          (custodyHandoff.error ?? custodyTransition.error) instanceof Error
+            ? (custodyHandoff.error ?? custodyTransition.error)?.message ?? null
+            : null
+        }
         receiptPending={receipt.isPending}
         receiptFailed={receipt.isError}
+        receiptErrorMessage={receipt.error instanceof Error ? receipt.error.message : null}
         deliveryPending={delivery.isPending}
         deliveryFailed={delivery.isError}
         deliveryErrorMessage={delivery.error instanceof Error ? delivery.error.message : null}
         demoPending={demoIntake.isPending}
         demoFailed={demoIntake.isError}
         verificationStarting={verificationStart.isPending}
+        verificationStartFailed={verificationStart.isError}
+        verificationStartErrorMessage={
+          verificationStart.error instanceof Error ? verificationStart.error.message : null
+        }
         verificationCompleting={verificationComplete.isPending}
+        verificationCompleteFailed={verificationComplete.isError}
+        verificationCompleteErrorMessage={
+          verificationComplete.error instanceof Error ? verificationComplete.error.message : null
+        }
         exceptionSaving={exceptionCreate.isPending || exceptionResolve.isPending}
         destinationSaving={destinationAssignment.isPending}
         destinationFailed={destinationAssignment.isError}
@@ -2448,15 +2523,25 @@ function PhysicalIntakeDetailPage({
   onCreateException,
   onResolveException,
   onCompleteDemoIntake,
+  onCreateCustodyHandoff,
+  onTransitionCustody,
   receiptPending,
   receiptFailed,
+  receiptErrorMessage,
   deliveryPending,
   deliveryFailed,
   deliveryErrorMessage,
   demoPending,
   demoFailed,
+  custodyPending,
+  custodyFailed,
+  custodyErrorMessage,
   verificationStarting,
+  verificationStartFailed,
+  verificationStartErrorMessage,
   verificationCompleting,
+  verificationCompleteFailed,
+  verificationCompleteErrorMessage,
   exceptionSaving,
   destinationSaving,
   destinationFailed,
@@ -2467,23 +2552,33 @@ function PhysicalIntakeDetailPage({
   tab: string | undefined;
   onClose: () => void;
   onSelectTab: (tab: IntakeDetailTab) => void;
-  onReceipt: (input: IntakeReceiptInput) => void;
+  onReceipt: (input: IntakeReceiptInput) => Promise<void>;
   onConfirmDelivery: () => void;
   onAssignDestination: (input: IntakeDestinationInput) => Promise<void>;
   onStartVerification: () => void;
-  onCompleteVerification: (input: IntakeVerificationInput) => void;
+  onCompleteVerification: (input: IntakeVerificationInput) => Promise<void>;
   onCreateException: (input: IntakeExceptionInput) => void;
   onResolveException: (exceptionId: string, note: string) => void;
   onCompleteDemoIntake: () => void;
+  onCreateCustodyHandoff: (providerRef: string) => Promise<void>;
+  onTransitionCustody: (toStatus: string, providerRef: string) => Promise<void>;
   receiptPending: boolean;
   receiptFailed: boolean;
+  receiptErrorMessage: string | null;
   deliveryPending: boolean;
   deliveryFailed: boolean;
   deliveryErrorMessage: string | null;
   demoPending: boolean;
   demoFailed: boolean;
+  custodyPending: boolean;
+  custodyFailed: boolean;
+  custodyErrorMessage: string | null;
   verificationStarting: boolean;
+  verificationStartFailed: boolean;
+  verificationStartErrorMessage: string | null;
   verificationCompleting: boolean;
+  verificationCompleteFailed: boolean;
+  verificationCompleteErrorMessage: string | null;
   exceptionSaving: boolean;
   destinationSaving: boolean;
   destinationFailed: boolean;
@@ -2783,7 +2878,17 @@ function PhysicalIntakeDetailPage({
               completing={verificationCompleting}
             />
           ) : null}
-          {activeTab === "custody" ? <IntakeCustodyTab row={row} detail={detail} /> : null}
+          {activeTab === "custody" ? (
+            <IntakeCustodyTab
+              row={row}
+              detail={detail}
+              onCreateHandoff={onCreateCustodyHandoff}
+              onTransition={onTransitionCustody}
+              pending={custodyPending}
+              failed={custodyFailed}
+              errorMessage={custodyErrorMessage}
+            />
+          ) : null}
           {activeTab === "history" ? <IntakeHistoryTab detail={detail} /> : null}
         </main>
         <aside className="physical-intake-detail-rail">
@@ -2821,6 +2926,12 @@ function PhysicalIntakeDetailPage({
               <p className="text-negative">
                 {deliveryErrorMessage ||
                   "Carrier delivery could not be confirmed. No state was changed."}
+              </p>
+            ) : null}
+            {verificationStartFailed ? (
+              <p className="text-negative" role="alert">
+                {verificationStartErrorMessage ||
+                  "Verification could not be started. No state was changed."}
               </p>
             ) : null}
           </section>
@@ -3174,10 +3285,14 @@ function PhysicalIntakeDetailPage({
               </>
             ) : dialog === "receipt" ? (
               <form
-                onSubmit={(event) => {
+                onSubmit={async (event) => {
                   event.preventDefault();
-                  onReceipt(receiptDraft);
-                  setDialog(null);
+                  try {
+                    await onReceipt(receiptDraft);
+                    setDialog(null);
+                  } catch {
+                    // Keep the dialog open so the operator can see the API error and correct or retry.
+                  }
                 }}
               >
                 <h2>Confirm physical receipt</h2>
@@ -3227,7 +3342,7 @@ function PhysicalIntakeDetailPage({
                           }))
                         }
                       />
-                      {sentence(key)}
+                      <span>{sentence(key)}</span>
                     </label>
                   ))}
                 </div>
@@ -3239,17 +3354,26 @@ function PhysicalIntakeDetailPage({
                   >
                     Cancel
                   </button>
-                  <button type="submit" className="button-primary" disabled={receiptPending}>
+                  <button
+                    type="submit"
+                    className="admin-primary-button"
+                    disabled={receiptPending}
+                    aria-busy={receiptPending}
+                  >
                     {receiptPending ? "Confirming…" : "Confirm physical receipt"}
                   </button>
                 </div>
               </form>
             ) : dialog === "verification" ? (
               <form
-                onSubmit={(event) => {
+                onSubmit={async (event) => {
                   event.preventDefault();
-                  onCompleteVerification(verificationDraft);
-                  setDialog(null);
+                  try {
+                    await onCompleteVerification(verificationDraft);
+                    setDialog(null);
+                  } catch {
+                    // Keep the dialog open so the operator can see the API error and retry.
+                  }
                 }}
               >
                 <h2>Complete verification</h2>
@@ -3275,7 +3399,7 @@ function PhysicalIntakeDetailPage({
                           }))
                         }
                       />
-                      {label}
+                      <span>{label}</span>
                     </label>
                   ))}
                 </div>
@@ -3298,8 +3422,9 @@ function PhysicalIntakeDetailPage({
                   </button>
                   <button
                     type="submit"
-                    className="button-primary"
+                    className="admin-primary-button"
                     disabled={verificationCompleting}
+                    aria-busy={verificationCompleting}
                   >
                     {verificationCompleting ? "Saving…" : "Complete verification"}
                   </button>
@@ -3410,7 +3535,19 @@ function PhysicalIntakeDetailPage({
                 </div>
               </form>
             )}
-            {(dialog === "receipt" && receiptFailed) || (dialog === "demo" && demoFailed) ? (
+            {dialog === "receipt" && receiptFailed ? (
+              <p className="text-negative physical-intake-modal-error" role="alert">
+                {receiptErrorMessage ||
+                  "The physical receipt could not be recorded. No state was changed."}
+              </p>
+            ) : null}
+            {dialog === "verification" && verificationCompleteFailed ? (
+              <p className="text-negative physical-intake-modal-error" role="alert">
+                {verificationCompleteErrorMessage ||
+                  "Verification could not be completed. No state was changed."}
+              </p>
+            ) : null}
+            {dialog === "demo" && demoFailed ? (
               <p className="text-negative">
                 The authorized intake action could not be completed. No additional frontend state
                 was created.
@@ -4092,21 +4229,56 @@ function IntakeVerificationTab({
 function IntakeCustodyTab({
   row,
   detail,
+  onCreateHandoff,
+  onTransition,
+  pending,
+  failed,
+  errorMessage,
 }: {
   row: AdminIntakeRow;
   detail: AdminIntakeDetail | undefined;
+  onCreateHandoff: (providerRef: string) => Promise<void>;
+  onTransition: (toStatus: string, providerRef: string) => Promise<void>;
+  pending: boolean;
+  failed: boolean;
+  errorMessage: string | null;
 }) {
   const custody = detail?.custody;
+  const status = custody?.status ?? row.custodyStatus ?? null;
+  const [providerRef, setProviderRef] = useState("");
+  const verificationStatus = detail?.intake?.verification?.status ?? row.verification?.status;
   const ready = Boolean(
-    row.receipt && row.verification?.status === "VERIFIED" && !row.issues.length,
+    row.receipt && verificationStatus === "VERIFIED" && !row.issues.length,
   );
+  const nextStatus =
+    status === "EXPECTED" ? "RECEIVED" : status === "RECEIVED" ? "INSPECTED" : "SECURED";
+  const actionLabel =
+    !status
+      ? "Start vault custody"
+      : nextStatus === "RECEIVED"
+        ? "Mark vault received"
+        : nextStatus === "INSPECTED"
+          ? "Mark inspected"
+          : "Secure in vault";
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const reference = providerRef.trim();
+    if (!reference) return;
+    try {
+      if (!status) await onCreateHandoff(reference);
+      else await onTransition(nextStatus, reference);
+      setProviderRef("");
+    } catch {
+      // Keep the reference available so the operator can correct or retry.
+    }
+  };
   return (
     <section className="physical-intake-workflow-card admin-panel">
       <header>
         <Landmark aria-hidden="true" />
         <div>
           <p className="admin-console-eyebrow">Custody</p>
-          <h2>{custody ? sentence(custody.status) : "Not established"}</h2>
+          <h2>{status ? sentence(status) : "Not established"}</h2>
         </div>
       </header>
       <div className={`physical-intake-custody-readiness ${ready ? "is-ready" : "is-waiting"}`}>
@@ -4124,7 +4296,7 @@ function IntakeCustodyTab({
         </div>
         <div>
           <dt>Storage status</dt>
-          <dd>{custody ? sentence(custody.status) : "Not established"}</dd>
+          <dd>{status ? sentence(status) : "Not established"}</dd>
         </div>
         <div>
           <dt>Received at</dt>
@@ -4135,10 +4307,39 @@ function IntakeCustodyTab({
           <dd>{custody?.securedAt ? date(custody.securedAt) : "—"}</dd>
         </div>
       </dl>
-      <p className="admin-safe-note">
-        Custody commands are intentionally unavailable until an authoritative custody handoff
-        projection is present. No fake custody or location state is created here.
-      </p>
+      {!status || status !== "SECURED" ? (
+        <form className="physical-intake-custody-command" onSubmit={submit}>
+          <label className="admin-form-field">
+            <span>Vault evidence / operator reference</span>
+            <input
+              value={providerRef}
+              onChange={(event) => setProviderRef(event.target.value)}
+              placeholder="Enter the real vault receipt or operator reference"
+              maxLength={160}
+              required
+            />
+          </label>
+          <button
+            type="submit"
+            className="admin-primary-button"
+            disabled={pending || (!status && !ready) || !row.assetId}
+            aria-busy={pending}
+            title={!status && !ready ? "Receipt, verification, and resolved exceptions are required." : undefined}
+          >
+            {pending ? "Saving…" : actionLabel}
+          </button>
+          {!status && !ready ? (
+            <p className="admin-safe-note">
+              Complete physical receipt, verification, and all exception resolution before starting custody.
+            </p>
+          ) : null}
+        </form>
+      ) : null}
+      {failed ? (
+        <p className="text-negative physical-intake-modal-error" role="alert">
+          {errorMessage || "Custody could not be updated. No state was changed."}
+        </p>
+      ) : null}
     </section>
   );
 }

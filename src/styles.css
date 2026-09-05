@@ -72075,6 +72075,32 @@ body:has(.portfolio-page)
   min-width: 9.5rem;
 }
 
+.physical-intake-modal .physical-intake-modal-error {
+  margin: 0.15rem 0 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(255, 126, 130, 0.3);
+  border-radius: 0.45rem;
+  color: #ffb6b8;
+  background: rgba(108, 28, 38, 0.2);
+  line-height: 1.45;
+}
+
+.physical-intake-detail-page .physical-intake-custody-command {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.9rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid rgba(89, 130, 138, 0.14);
+}
+
+.physical-intake-detail-page .physical-intake-custody-command .admin-form-field {
+  margin-top: 0;
+}
+
+.physical-intake-detail-page .physical-intake-custody-command .admin-primary-button {
+  justify-self: start;
+}
+
 @media (max-width: 760px) {
   .physical-intake-detail-page .physical-intake-blocker-banner > .admin-primary-button {
     width: 100%;
