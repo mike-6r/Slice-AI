@@ -104,6 +104,12 @@ export async function seedCatalogueReference(prisma: PrismaClient) {
       create: category,
     });
   }
+  // These early staging aliases are retained for historical asset lineage,
+  // but the dedicated catalogue entries above are the choices for new work.
+  await prisma.category.updateMany({
+    where: { slug: { in: ['one-piece', 'poke-mon', 'yu-gi-oh'] } },
+    data: { status: 'ARCHIVED' },
+  });
   const companies = [
     ['PSA', 'Professional Sports Authenticator', 'PSA', 'https://www.psacard.com/cert', 'PSA cert number'],
     ['BGS', 'Beckett Grading Services', 'Beckett (BGS)', 'https://www.beckett.com/grading/card-lookup', 'Beckett cert number'],
