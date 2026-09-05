@@ -615,7 +615,7 @@ export class AdminController {
       request.actor!,
       intakeId,
       idempotencyKey,
-      this.parse(intakeReceiptConfirmation, body ?? {}),
+      this.parseIntakeReceiptConfirmation(body ?? {}),
     );
   }
 
@@ -983,6 +983,33 @@ export class AdminController {
           })()
         : body;
     const parsed = intakeDestinationAssignment.safeParse(candidate);
+    if (!parsed.success)
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: 'Request validation failed.',
+        fieldErrors: parsed.error.flatten().fieldErrors,
+      });
+    return parsed.data;
+  }
+
+  private parseIntakeReceiptConfirmation(
+    body: unknown,
+  ): z.output<typeof intakeReceiptConfirmation> {
+    // Older admin bundles passed the receipt object through JSON.stringify
+    // before handing it to the shared HTTP client. Accept that representation
+    // during the rollout, then apply the same strict schema so no additional
+    // fields are admitted.
+    const candidate =
+      typeof body === 'string'
+        ? (() => {
+            try {
+              return JSON.parse(body) as unknown;
+            } catch {
+              return body;
+            }
+          })()
+        : body;
+    const parsed = intakeReceiptConfirmation.safeParse(candidate);
     if (!parsed.success)
       throw new BadRequestException({
         code: 'VALIDATION_FAILED',
