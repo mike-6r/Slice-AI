@@ -271,6 +271,12 @@ const metadataKeys: Record<string, readonly string[]> = {
     'retainedUnits',
     'idempotencyRecordId',
   ],
+  INITIAL_OFFERING_PREPARED_FOR_REVIEW: [
+    'assetId',
+    'offeringId',
+    'totalUnits',
+    'offeredUnits',
+  ],
   INITIAL_OFFERING_UPDATED: ['offeringId', 'offeredUnits', 'retainedUnits'],
   INITIAL_OFFERING_CHANGES_REQUESTED: ['offeringId', 'reason'],
   INITIAL_OFFERING_APPROVED: ['offeringId', 'reason'],
