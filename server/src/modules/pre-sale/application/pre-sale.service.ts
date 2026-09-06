@@ -210,19 +210,30 @@ export class PreSaleService {
       if (!inventory) fail('PRESALE_INVENTORY_MISSING', 'Offering inventory is unavailable.');
       const market = await db.tradingMarket.findUnique({ where: { assetId: sale.assetId } });
       if (!market || market.status !== 'OPEN' || !market.tradingEnabled) fail('MARKET_NOT_OPEN', 'The market must be open to finalize.');
+      // Opening the Initial Offering already creates the authoritative seller
+      // order, ownership reservation, and inventory reservation. Finalization
+      // only converts the conditional Pre-Sale buyers against that order.
+      // Creating another seller order here double-counts inventory and can
+      // violate OwnershipPosition_units_bounds when reservations exist.
+      const seller = await db.tradingOrder.findFirst({
+        where: {
+          initialOfferingId: sale.initialOffering.id,
+          side: 'SELL',
+          status: { in: ['OPEN', 'PARTIALLY_FILLED'] },
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      });
+      if (!seller || !seller.ownershipReservationId || seller.remainingUnits < total)
+        fail('PRESALE_INVENTORY_UNAVAILABLE', 'Offering inventory is unavailable.');
       await db.preSale.update({ where: { id: sale.id }, data: { status: 'FINALIZING', physicalStatus: 'CUSTODY_ESTABLISHED', version: { increment: 1 } } });
-      await db.ownershipPosition.update({ where: { assetId_accountId: { assetId: sale.assetId, accountId: inventory.accountId } }, data: { reservedUnits: { increment: total }, version: { increment: 1 } } });
-      await db.initialOfferingInventory.update({ where: { offeringId: sale.initialOffering.id }, data: { availableUnits: { decrement: total }, reservedUnits: { increment: total } } });
-      const sellId = randomUUID();
-      const ownReservation = await db.ownershipReservation.create({ data: { id: randomUUID(), assetId: sale.assetId, accountId: inventory.accountId, purposeType: 'TRADING_ORDER', purposeId: sellId, units: total, idempotencyRef: key } });
-      const seller = await db.tradingOrder.create({ data: { id: sellId, principalType: 'INITIAL_OFFERING', channel: 'INITIAL_OFFERING', principalId: sale.initialOffering.id, initialOfferingId: sale.initialOffering.id, actorUserId: actor.userId, assetId: sale.assetId, side: 'SELL', type: 'LIMIT', timeInForce: 'GTC', status: 'OPEN', limitPriceMinor: sale.initialOffering.pricePerUnitMinor, originalUnits: total, remainingUnits: total, filledUnits: 0n, prioritySequence: market.nextPrioritySequence, ownershipReservationId: ownReservation.id } });
-      await db.orderStatusHistory.create({ data: { id: randomUUID(), orderId: seller.id, fromStatus: null, toStatus: 'OPEN', reasonCode: 'PRESALE_FINALIZATION_STARTED' } });
+      let currentSeller = seller;
       for (const row of active) {
         await db.preSaleReservation.update({ where: { id: row.id }, data: { status: 'CONVERTING', version: { increment: 1 } } });
         const buyId = randomUUID();
         const buyer = await db.tradingOrder.create({ data: { id: buyId, userId: row.buyerUserId, principalType: 'USER', channel: 'INITIAL_OFFERING', principalId: row.buyerUserId, initialOfferingId: sale.initialOffering.id, actorUserId: row.buyerUserId, assetId: sale.assetId, side: 'BUY', type: 'LIMIT', timeInForce: 'GTC', status: 'OPEN', limitPriceMinor: row.pricePerUnitMinor, originalUnits: row.units, remainingUnits: row.units, filledUnits: 0n, prioritySequence: market.nextPrioritySequence + BigInt(active.indexOf(row) + 1), cashReservationId: row.cashReservationId } });
         await db.orderStatusHistory.create({ data: { id: randomUUID(), orderId: buyer.id, fromStatus: null, toStatus: 'OPEN', reasonCode: 'PRESALE_RESERVATION_CONVERTING' } });
-        await this.trading.settlePreSaleExecution(db, buyer.id, seller.id, actor, requestId);
+        await this.trading.settlePreSaleExecution(db, buyer.id, currentSeller.id, actor, requestId);
+        currentSeller = await db.tradingOrder.findUniqueOrThrow({ where: { id: currentSeller.id } });
         await db.preSaleReservation.update({ where: { id: row.id }, data: { status: 'CONVERTED', convertedAt: new Date(), version: { increment: 1 } } });
       }
       await db.preSale.update({ where: { id: sale.id }, data: { status: 'CONVERTED', completedAt: new Date(), version: { increment: 1 } } });
