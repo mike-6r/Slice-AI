@@ -1535,11 +1535,17 @@ function Ownership({
           <div className="admin-custody-fields">
             <label>
               Policy
-              <select value={policyCode} onChange={(event) => setPolicyCode(event.target.value)}>
-                <option value="">Select policy</option>
-                {policyOptions.map((code) => (
-                  <option key={code} value={code}>
-                    {sentence(code)}
+              <select
+                value={policyUnits}
+                onChange={(event) => {
+                  setPolicyUnits(event.target.value);
+                  setPolicyCode(item.issuance?.policy.code ?? "");
+                }}
+              >
+                <option value="">Select supply</option>
+                {policyOptions.map((units) => (
+                  <option key={units} value={units}>
+                    {item.issuance?.policy.label ?? "Standard collectible"} · {units} units
                   </option>
                 ))}
               </select>
