@@ -212,6 +212,7 @@ export function AdminAssetOperationsDetail({
       setValuePounds("");
       refresh();
     },
+    onError: (error) => handleRecentAuthError(error, () => valuation.mutate()),
   });
   const linkMarketReference = useMutation({
     mutationFn: () =>
@@ -224,6 +225,7 @@ export function AdminAssetOperationsDetail({
       setMarketReferenceReason("");
       refresh();
     },
+    onError: (error) => handleRecentAuthError(error, () => linkMarketReference.mutate()),
   });
   const forceLinkMarketReference = useMutation({
     mutationFn: () =>
@@ -238,10 +240,12 @@ export function AdminAssetOperationsDetail({
       setMarketReferenceReason("");
       refresh();
     },
+    onError: (error) => handleRecentAuthError(error, () => forceLinkMarketReference.mutate()),
   });
   const rerunMarketReference = useMutation({
     mutationFn: () => services.repositories.admin.rerunMarketReference(assetId),
     onSuccess: refresh,
+    onError: (error) => handleRecentAuthError(error, () => rerunMarketReference.mutate()),
   });
   const proposeSupply = useMutation({
     mutationFn: () =>
@@ -251,36 +255,47 @@ export function AdminAssetOperationsDetail({
         reason: policyReason,
       }),
     onSuccess: refresh,
+    onError: (error) => handleRecentAuthError(error, () => proposeSupply.mutate()),
   });
   const approveSupply = useMutation({
     mutationFn: () => services.repositories.admin.approveOwnershipSupply(assetId, approvalReason),
     onSuccess: refresh,
+    onError: (error) => handleRecentAuthError(error, () => approveSupply.mutate()),
   });
   const issueSupply = useMutation({
     mutationFn: (units: string) => services.repositories.admin.issueOwnership(assetId, units),
     onSuccess: refresh,
+    onError: (error, units) => handleRecentAuthError(error, () => issueSupply.mutate(units)),
   });
   const approveOffering = useMutation({
     mutationFn: (offeringId: string) =>
       services.repositories.admin.approveInitialOffering(offeringId, approvalReason),
     onSuccess: refresh,
+    onError: (error, offeringId) =>
+      handleRecentAuthError(error, () => approveOffering.mutate(offeringId)),
   });
   const requestOfferingChanges = useMutation({
     mutationFn: (offeringId: string) =>
       services.repositories.admin.requestInitialOfferingChanges(offeringId, approvalReason),
     onSuccess: refresh,
+    onError: (error, offeringId) =>
+      handleRecentAuthError(error, () => requestOfferingChanges.mutate(offeringId)),
   });
   const activateMarket = useMutation({
     mutationFn: () => services.repositories.admin.activateTradingMarket(assetId),
     onSuccess: refresh,
+    onError: (error) => handleRecentAuthError(error, () => activateMarket.mutate()),
   });
   const openOffering = useMutation({
     mutationFn: (offeringId: string) => services.repositories.admin.openInitialOffering(offeringId),
     onSuccess: refresh,
+    onError: (error, offeringId) =>
+      handleRecentAuthError(error, () => openOffering.mutate(offeringId)),
   });
   const publish = useMutation({
     mutationFn: () => services.repositories.lifecycle.publish(assetId),
     onSuccess: refresh,
+    onError: (error) => handleRecentAuthError(error, () => publish.mutate()),
   });
   const assetControl = useMutation({
     mutationFn: async () => {
@@ -333,6 +348,7 @@ export function AdminAssetOperationsDetail({
       setControlConfirmation("");
       refresh();
     },
+    onError: (error) => handleRecentAuthError(error, () => assetControl.mutate()),
   });
 
   if (detail.isLoading)
