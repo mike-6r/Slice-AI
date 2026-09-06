@@ -74835,3 +74835,86 @@ body:has(.portfolio-page)
     height: min(68vw, 18rem);
   }
 }
+
+/* Give marketplace identity and public listing provenance a clear, compact hierarchy. */
+.markets-page .market-card-live-heading h2 a,
+.markets-page .market-card-heading h2 a,
+.markets-page .market-card-home-heading h2 a {
+  text-transform: uppercase;
+}
+
+.market-card-listing-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  min-width: 0;
+  margin-top: 0.18rem;
+  padding: 0.42rem 0.52rem;
+  border: 1px solid rgba(64, 223, 186, 0.18);
+  border-radius: 0.68rem;
+  background: linear-gradient(105deg, rgba(20, 73, 72, 0.25), rgba(4, 15, 19, 0.62));
+  color: #91abad;
+  font-size: 0.58rem;
+  line-height: 1.2;
+}
+
+.market-card-listing-meta__byline,
+.market-card-listing-meta time {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.market-card-listing-meta__byline {
+  gap: 0.34rem;
+  overflow: hidden;
+}
+
+.market-card-listing-meta__byline svg {
+  flex: 0 0 auto;
+  width: 0.78rem;
+  height: 0.78rem;
+  color: rgb(var(--market-live-accent));
+}
+
+.market-card-listing-meta__byline > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.market-card-listing-meta strong {
+  color: #e5fff8;
+  font-weight: 800;
+}
+
+.market-card-listing-meta time {
+  flex: 0 0 auto;
+  color: #b4c9c9;
+  font-size: 0.53rem;
+  white-space: nowrap;
+}
+
+.market-card-home-body .market-card-listing-meta {
+  margin-top: 0.34rem;
+}
+
+.markets-page .market-investment-card.is-live:not(.is-compact) .market-card-listing-meta,
+.markets-page .market-investment-card.is-pre-sale:not(.is-compact) .market-card-listing-meta {
+  margin-top: 0.12rem;
+  padding: 0.36rem 0.46rem;
+  border-radius: 0.58rem;
+  font-size: 0.52rem;
+}
+
+.markets-page .market-investment-card.is-live:not(.is-compact) .market-card-listing-meta time,
+.markets-page .market-investment-card.is-pre-sale:not(.is-compact) .market-card-listing-meta time {
+  font-size: 0.48rem;
+}
+
+@media (max-width: 559px) {
+  .market-card-listing-meta {
+    gap: 0.4rem;
+  }
+}

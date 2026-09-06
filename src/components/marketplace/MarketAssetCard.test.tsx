@@ -168,7 +168,17 @@ describe("MarketAssetCard layout contracts", () => {
       <MarketAssetCard asset={{ ...asset, setName: undefined, cardNumber: undefined }} />,
     );
 
-    expect(html).toContain("Collectible details unavailable");
+    expect(html).toContain("Pokémon TCG");
+  });
+
+  it("cleans duplicate card numbers from the display title", () => {
+    const html = renderToStaticMarkup(
+      <MarketAssetCard
+        asset={{ ...asset, title: "Umbreon ex #161", cardNumber: "161", year: 2026 }}
+      />,
+    );
+
+    expect(html).toContain(">Umbreon ex<");
   });
 
   it("renders the live market reference card for non-pre-sale assets", () => {
@@ -195,7 +205,7 @@ describe("MarketAssetCard layout contracts", () => {
             movement30dBps: 1240,
           },
           listing: {
-            listedAt: null,
+            listedAt: "2026-09-05T18:00:00.000Z" as ISODateTime,
             listedBy: { displayName: "Slice Demo Collector", username: "demo", slug: "demo" },
           },
         }}
@@ -205,13 +215,46 @@ describe("MarketAssetCard layout contracts", () => {
     expect(html).toContain("market-card-live-body");
     expect(html).toContain("Price per Slice");
     expect(html).toContain("1 Slice = 0.10% ownership");
-    expect(html).toContain("30D REFERENCE MOVEMENT");
+    expect(html).toContain("30D MARKET REFERENCE");
     expect(html).toContain("+12.4%");
     expect(html).toContain("8,420");
-    expect(html).toContain("Listed by Slice Demo Collector");
+    expect(html).toContain("Listed by");
+    expect(html).toContain("@demo");
+    expect(html).toContain("Listed 5 Sept 2026");
     expect(html).toContain("Live Market");
     expect(html).toContain("Buy Slices");
     expect(html).not.toContain("market-card-presale-summary");
+  });
+
+  it("renders the full pre-sale card with supply and settlement details", () => {
+    const html = renderToStaticMarkup(
+      <MarketAssetCard
+        asset={{
+          ...asset,
+          title: "Umbreon ex #161",
+          preSale: {
+            status: "ACTIVE",
+            deadlineAt: "2030-01-01T00:00:00.000Z" as ISODateTime,
+            physicalStatus: "AWAITING_INTAKE",
+            pricePerUnitMinor: "42",
+            currency: "GBP",
+            offeredUnits: "10000",
+            reservedUnits: "120",
+            availableUnits: "9880",
+            reservedPercentageBps: 120,
+            sliceOwnershipPercentageBps: 10,
+          },
+        }}
+      />,
+    );
+
+    expect(html).toContain("Pre-Sale availability");
+    expect(html).toContain("9880");
+    expect(html).toContain("120");
+    expect(html).toContain("10000");
+    expect(html).toContain("total Slices");
+    expect(html).toContain("GBP settlement");
+    expect(html).toContain("Awaiting Intake · conditional reservation");
   });
 
   it("renders a compact homepage projection for pre-sale assets", () => {

@@ -6,15 +6,12 @@ import {
   CheckCircle2,
   Coins,
   Info,
-  Link2,
-  LockKeyhole,
-  ShieldCheck,
   TrendingUp,
   UserRound,
 } from "lucide-react";
 import { useState } from "react";
 import { useSession } from "@/auth/use-session";
-import { formatPercent } from "@/lib/format";
+import { formatDate, formatPercent } from "@/lib/format";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
 import type { MarketplaceAsset } from "./market-api-presentation";
@@ -54,6 +51,68 @@ function marketStatusPresentation(asset: MarketplaceAsset) {
 function officialGradeLabel(asset: MarketplaceAsset) {
   if (!asset.grade) return "Raw / Ungraded";
   return asset.grade.replaceAll(" · ", " ");
+}
+
+function categoryLabel(category: string) {
+  const labels: Record<string, string> = {
+    "pokemon-tcg": "Pokémon TCG",
+    "sports-cards": "Sports Cards",
+    "trading-card-games": "Trading Card Games",
+    "one-piece": "One Piece",
+    "magic-the-gathering": "Magic: The Gathering",
+    "yu-gi-oh": "Yu-Gi-Oh!",
+  };
+  return labels[category] ?? category.replaceAll(/[-_]+/g, " ");
+}
+
+function cleanCardTitle(asset: MarketplaceAsset) {
+  const title = asset.title.trim();
+  const cardNumber = asset.cardNumber?.replace(/^#/, "").trim();
+  if (!cardNumber) return title;
+  const escapedCardNumber = cardNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return title.replace(new RegExp(`\\s+#?${escapedCardNumber}$`, "i"), "").trim() || title;
+}
+
+function cardIdentity(asset: MarketplaceAsset) {
+  const identity = [
+    asset.year,
+    asset.setName,
+    asset.cardNumber ? `#${asset.cardNumber.replace(/^#/, "")}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    identity || (asset.category ? categoryLabel(asset.category) : "Collectible details unavailable")
+  );
+}
+
+function listingHandle(listing: MarketplaceAsset["listing"]) {
+  const listedBy = listing?.listedBy;
+  if (!listedBy) return null;
+  const value = listedBy.username ?? listedBy.slug ?? listedBy.displayName;
+  if (!value) return null;
+  return `@${value.replace(/^@/, "").trim()}`;
+}
+
+function ListingAttribution({ asset }: { asset: MarketplaceAsset }) {
+  const listing = asset.listing;
+  const listedBy = listing?.listedBy;
+  const handle = listingHandle(listing);
+  if (!listedBy || !handle) return null;
+
+  return (
+    <div className="market-card-listing-meta">
+      <span className="market-card-listing-meta__byline" title={listedBy.displayName ?? undefined}>
+        <UserRound aria-hidden="true" />
+        <span>
+          Listed by <strong>{handle}</strong>
+        </span>
+      </span>
+      {listing.listedAt ? (
+        <time dateTime={listing.listedAt}>Listed {formatDate(listing.listedAt)}</time>
+      ) : null}
+    </div>
+  );
 }
 
 function formatActiveListingLabel(count: number) {
@@ -103,7 +162,7 @@ function AssetVisual({ asset }: { asset: MarketplaceAsset }) {
           to="/asset/$id"
           params={{ id: asset.slug }}
           className="market-card-media-link"
-          aria-label={`View ${asset.title}`}
+          aria-label={`View ${cleanCardTitle(asset)}`}
         >
           {media ? (
             <img className="market-card-media-image" src={media.src} alt={media.alt} />
@@ -258,7 +317,7 @@ function PreSaleCardSummary({ asset }: { asset: MarketplaceAsset }) {
   return (
     <section className="market-card-presale-summary" aria-label="Pre-Sale availability">
       <div className="market-card-presale-summary__heading">
-        <span>Pre-Sale</span>
+        <span>Pre-Sale availability</span>
         <strong>{formatPreSaleCountdown(preSale.deadlineAt)} left</strong>
       </div>
       <div className="market-card-presale-summary__facts">
@@ -276,24 +335,23 @@ function PreSaleCardSummary({ asset }: { asset: MarketplaceAsset }) {
         <span>
           <b>{preSale.reservedUnits}</b> reserved
         </span>
+        <span>
+          <b>{preSale.offeredUnits}</b> total Slices
+        </span>
       </div>
       <div className="market-card-presale-summary__progress" aria-hidden="true">
         <span style={{ width: `${progress}%` }} />
       </div>
-      <small>Awaiting intake · conditional reservation</small>
+      <div className="market-card-presale-summary__foot">
+        <small>{homepagePhysicalStatus(preSale.physicalStatus)} · conditional reservation</small>
+        <small>{preSale.currency} settlement</small>
+      </div>
     </section>
   );
 }
 
 function homepageIdentity(asset: MarketplaceAsset) {
-  const identity = [
-    asset.year,
-    asset.setName,
-    asset.cardNumber ? `#${asset.cardNumber.replace(/^#/, "")}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  return identity || officialGradeLabel(asset);
+  return cardIdentity(asset);
 }
 
 function homepagePhysicalStatus(status: string) {
@@ -329,10 +387,11 @@ function HomepageAssetBody({ asset }: { asset: MarketplaceAsset }) {
         </span>
         <h2>
           <Link to="/asset/$id" params={{ id: asset.slug }}>
-            {asset.title}
+            {cleanCardTitle(asset)}
           </Link>
         </h2>
         <p>{homepageIdentity(asset)}</p>
+        <ListingAttribution asset={asset} />
         <span className="market-card-home-grade">{officialGradeLabel(asset)}</span>
       </div>
 
@@ -382,14 +441,14 @@ function LiveMarketTrend({ asset }: { asset: MarketplaceAsset }) {
   const movement = formatMovementBps(asset.marketReference?.movement30dBps);
   const hasMovement = movement !== null;
   return (
-    <section className="market-card-live-trend" aria-label="30 day market reference movement">
+    <section className="market-card-live-trend" aria-label="30 day market reference">
       <div className="market-card-live-trend__heading">
-        <span>30D REFERENCE MOVEMENT</span>
+        <span>30D MARKET REFERENCE</span>
         <strong className={hasMovement && movement.startsWith("+") ? "is-positive" : ""}>
           {movement ?? "Awaiting history"}
         </strong>
       </div>
-      <svg viewBox="0 0 600 96" role="img" aria-label="Market reference movement">
+      <svg viewBox="0 0 600 96" role="img" aria-label="Market reference graph">
         <defs>
           <linearGradient id={`market-trend-fill-${asset.id}`} x1="0" x2="0" y1="0" y2="1">
             <stop offset="0" stopColor="currentColor" stopOpacity="0.24" />
@@ -410,45 +469,12 @@ function LiveMarketTrend({ asset }: { asset: MarketplaceAsset }) {
         <circle className="market-card-live-trend__dot" cx="600" cy="62" r="4" />
       </svg>
       <div className="market-card-live-trend__scale" aria-hidden="true">
-        <span>{hasMovement ? "Movement only · no history" : "History unavailable"}</span>
+        <span>
+          {hasMovement ? "Movement reported · history unavailable" : "History unavailable"}
+        </span>
         <span>{asset.marketReference?.currency ?? "—"}</span>
       </div>
     </section>
-  );
-}
-
-function LiveMarketTrustRow({ asset }: { asset: MarketplaceAsset }) {
-  const verified = asset.publicVerificationStatus === "VERIFIED";
-  const insured = asset.insuranceActive === true;
-  const linked = Boolean(asset.marketReferenceLink || asset.marketReference);
-  return (
-    <div className="market-card-live-trust" aria-label="Asset trust signals">
-      <div>
-        <ShieldCheck aria-hidden="true" />
-        <span>
-          <strong>{verified ? "Verified" : "Verification"}</strong>
-          <small>{verified ? "Authentic asset" : "Status unavailable"}</small>
-        </span>
-      </div>
-      <div>
-        <LockKeyhole aria-hidden="true" />
-        <span>
-          <strong>{insured ? "Insured" : "Custodied"}</strong>
-          <small>
-            {insured ? "Protected while held" : (asset.custodyStatus ?? "Custody status")}
-          </small>
-        </span>
-      </div>
-      <div>
-        <Link2 aria-hidden="true" />
-        <span>
-          <strong>{linked ? "Ref linked" : "Ref pending"}</strong>
-          <small>
-            {asset.marketReference?.source ?? asset.marketReferenceLink?.provider ?? "Market data"}
-          </small>
-        </span>
-      </div>
-    </div>
   );
 }
 
@@ -459,7 +485,6 @@ function LiveMarketBody({ asset }: { asset: MarketplaceAsset }) {
   const reference = asset.marketReference;
   const ownershipPerSlice = formatIssuedOwnership(asset.issuedUnits);
   const hasListings = (asset.activeListingsCount ?? 0) > 0;
-  const listingOwner = asset.listing?.listedBy?.displayName;
   const movement = formatMovementBps(asset.change24hBps);
   const available =
     asset.availableListingUnits && asset.availableListingUnits !== "0"
@@ -472,18 +497,10 @@ function LiveMarketBody({ asset }: { asset: MarketplaceAsset }) {
         <div>
           <h2>
             <Link to="/asset/$id" params={{ id: asset.slug }}>
-              {asset.title}
+              {cleanCardTitle(asset)}
             </Link>
           </h2>
-          <p>
-            {[
-              asset.year,
-              asset.setName,
-              asset.cardNumber ? `#${asset.cardNumber.replace(/^#/, "")}` : null,
-            ]
-              .filter(Boolean)
-              .join(" · ") || "Collectible details unavailable"}
-          </p>
+          <p>{cardIdentity(asset)}</p>
         </div>
         <span className="market-card-live-heading__verified">
           <CheckCircle2 aria-hidden="true" />
@@ -497,13 +514,9 @@ function LiveMarketBody({ asset }: { asset: MarketplaceAsset }) {
           {officialGradeLabel(asset)}
         </span>
         {asset.conditionLabel ? <span>Condition: {asset.conditionLabel}</span> : null}
-        {listingOwner ? (
-          <span>
-            <UserRound aria-hidden="true" />
-            Listed by {listingOwner}
-          </span>
-        ) : null}
       </div>
+
+      <ListingAttribution asset={asset} />
 
       <section className="market-card-live-valuation" aria-label="Live valuation">
         <div>
@@ -568,8 +581,6 @@ function LiveMarketBody({ asset }: { asset: MarketplaceAsset }) {
         </span>
         <ArrowRight aria-hidden="true" />
       </div>
-
-      <LiveMarketTrustRow asset={asset} />
 
       <div className="market-card-live-marketline">
         <TrendingUp aria-hidden="true" />
@@ -737,13 +748,11 @@ export function MarketAssetCard({
                 </span>
                 <h2>
                   <Link to="/asset/$id" params={{ id: asset.slug }}>
-                    {asset.title}
+                    {cleanCardTitle(asset)}
                   </Link>
                 </h2>
-                <p className="market-card-identity-line">
-                  {[asset.setName, asset.cardNumber].filter(Boolean).join(" · ") ||
-                    "Set and card number unavailable"}
-                </p>
+                <p className="market-card-identity-line">{cardIdentity(asset)}</p>
+                <ListingAttribution asset={asset} />
               </div>
             </div>
             <div className="market-card-condition" aria-label="Condition and grading">
