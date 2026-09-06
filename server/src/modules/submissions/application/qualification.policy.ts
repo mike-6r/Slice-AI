@@ -74,6 +74,11 @@ export function qualificationCustomerStatus(outcome: QualificationOutcome) {
   }
 }
 
+export function normalizeGrade(value: unknown) {
+  const numeric = Number(String(value ?? '').trim());
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric.toFixed(2) : null;
+}
+
 export function evaluateQualification(input: {
   category: string;
   grader: string;
@@ -115,7 +120,9 @@ export function evaluateQualification(input: {
     else if (cert?.status === 'MISMATCH') add('CERTIFICATION_MATCH', 'UNCERTAIN', 'The certification result does not match the submitted collectible.');
     else if (!cert || !['CLEAR', 'VERIFIED'].includes(cert.status)) add('CERTIFICATION_CHECK', 'UNCERTAIN', 'Certification evidence needs staff confirmation before this listing can progress.');
     else add('CERTIFICATION_CHECK', 'PASS', 'The certification number passed the Slice duplicate and verification checks.');
-    if (cert?.verifiedGrade && String(input.identity.grade ?? '').trim() && cert.verifiedGrade !== String(input.identity.grade).trim()) add('CERTIFICATION_GRADE', 'UNCERTAIN', 'The submitted grade does not match the verified grade.', true, { submitted: input.identity.grade, verified: cert.verifiedGrade });
+    const submittedGrade = normalizeGrade(input.identity.grade);
+    const verifiedGrade = normalizeGrade(cert?.verifiedGrade);
+    if (verifiedGrade && submittedGrade && verifiedGrade !== submittedGrade) add('CERTIFICATION_GRADE', 'UNCERTAIN', 'The submitted grade does not match the verified grade.', true, { submitted: input.identity.grade, verified: cert?.verifiedGrade });
   }
   const terms = input.terms;
   add('PROVISIONAL_TERMS', terms ? 'PASS' : 'ACTION_REQUIRED', terms ? 'A valid provisional Pre-Sale allocation can be calculated.' : 'Add a valid expected value and offer percentage before submitting.', true);

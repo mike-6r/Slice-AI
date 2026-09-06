@@ -21,6 +21,13 @@ export interface AssetSubmission {
     customerStatus: string;
     completedAt: ISODateTime | null;
     reasons: string[];
+    nextAction?: {
+      stage: string;
+      owner: "COLLECTOR" | "SLICE" | "PROVIDER" | "SYSTEM";
+      action: string;
+      blockers: string[];
+      deadlineAt: ISODateTime | null;
+    };
   } | null;
 }
 

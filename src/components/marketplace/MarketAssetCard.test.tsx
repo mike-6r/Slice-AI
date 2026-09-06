@@ -50,6 +50,7 @@ const asset: MarketplaceAsset = {
   tradingHasExecutionHistory: false,
   activeListingsCount: 0,
   availableListingUnits: "0",
+  issuedUnits: "1000",
 };
 
 const rawPreMarketAsset: MarketplaceAsset = {
@@ -139,8 +140,9 @@ describe("MarketAssetCard layout contracts", () => {
       />,
     );
 
-    expect(html).toContain("3 active listings");
-    expect(html).toContain("12 Slices currently offered");
+    expect(html).toContain("ACTIVE LISTINGS");
+    expect(html).toContain("3");
+    expect(html).toContain("12");
     expect(html).not.toContain("Buy & sell anytime");
   });
 
@@ -155,10 +157,10 @@ describe("MarketAssetCard layout contracts", () => {
       />,
     );
 
-    expect(html).toContain("Example Set · 1/10");
+    expect(html).toContain("Example Set · #1/10");
     expect(html).not.toContain("Example Set • #1/10");
-    expect(html).toContain("1 active listing");
-    expect(html).toContain("1 Slice currently offered");
+    expect(html).toContain("ACTIVE LISTINGS");
+    expect(html).toContain("Ready to trade");
   });
 
   it("keeps missing identity data explicit", () => {
@@ -166,7 +168,50 @@ describe("MarketAssetCard layout contracts", () => {
       <MarketAssetCard asset={{ ...asset, setName: undefined, cardNumber: undefined }} />,
     );
 
-    expect(html).toContain("Set and card number unavailable");
+    expect(html).toContain("Collectible details unavailable");
+  });
+
+  it("renders the live market reference card for non-pre-sale assets", () => {
+    const html = renderToStaticMarkup(
+      <MarketAssetCard
+        asset={{
+          ...asset,
+          title: "Shohei Ohtani Aa",
+          year: 2026,
+          setName: "Topps All Aces",
+          cardNumber: "AA-1",
+          grade: "PSA 10 · GEM-MT",
+          publicVerificationStatus: "VERIFIED",
+          custodyStatus: "STORED",
+          insuranceActive: true,
+          activeListingsCount: 8420,
+          availableListingUnits: "412",
+          change24hBps: 280,
+          tradingHasExecutionHistory: true,
+          marketReference: {
+            amountMinor: 1848839,
+            currency: "GBP",
+            source: "PriceCharting",
+            movement30dBps: 1240,
+          },
+          listing: {
+            listedAt: null,
+            listedBy: { displayName: "Slice Demo Collector", username: "demo", slug: "demo" },
+          },
+        }}
+      />,
+    );
+
+    expect(html).toContain("market-card-live-body");
+    expect(html).toContain("Price per Slice");
+    expect(html).toContain("1 Slice = 0.10% ownership");
+    expect(html).toContain("30D REFERENCE MOVEMENT");
+    expect(html).toContain("+12.4%");
+    expect(html).toContain("8,420");
+    expect(html).toContain("Listed by Slice Demo Collector");
+    expect(html).toContain("Live Market");
+    expect(html).toContain("Buy Slices");
+    expect(html).not.toContain("market-card-presale-summary");
   });
 
   it("renders a compact homepage projection for pre-sale assets", () => {

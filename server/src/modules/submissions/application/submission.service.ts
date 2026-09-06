@@ -189,7 +189,10 @@ export class SubmissionService {
     @Optional() private readonly capabilities?: AccountCapabilityService,
     private readonly outbox: OutboxWriter = new OutboxWriter(),
     @Optional() private readonly authorization?: AuthorizationService,
-    @Optional() private readonly qualification?: QualificationService,
+    // Qualification is the submission handoff authority. Keep the fallback
+    // for isolated legacy unit harnesses, but explicitly bind the Nest token so
+    // production cannot silently resolve a different/undefined dependency.
+    @Optional() @Inject(QualificationService) private readonly qualification?: QualificationService,
   ) {}
 
   async create(
@@ -418,6 +421,7 @@ export class SubmissionService {
             customerStatus: qualification.customerStatus,
             completedAt: qualification.completedAt,
             reasons: qualification.reasons,
+            nextAction: qualification.nextAction,
           }
         : null,
       media: await Promise.all(
@@ -1408,6 +1412,10 @@ export class SubmissionService {
       pageSize?: number;
     },
   ) {
+    // Repair any legacy manual-review state before reading the queue. A
+    // completed automated qualification is authoritative and must not remain
+    // claimable just because an older review row or reviewer assignment exists.
+    await this.qualification?.reconcileAutoQualifiedSubmissions();
     const isAdmin = actor.roles.includes('ADMIN');
     const submittedFrom = parseDateBoundary(input.submittedFrom, false);
     const submittedTo = parseDateBoundary(input.submittedTo, true);

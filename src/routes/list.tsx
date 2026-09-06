@@ -4647,10 +4647,13 @@ function SubmissionReceived({ submission }: { submission: SubmissionDetail }) {
   const qualification = submission.qualification;
   const isQualified = qualification?.customerStatus === "PRE_SALE_QUALIFIED" || submission.status === "APPROVED";
   const needsAction = qualification?.customerStatus === "NEEDS_YOUR_ACTION";
+  const isRetrying = qualification?.customerStatus === "SYSTEM_RETRYING";
   const statusTitle = isQualified
     ? "Your collectible is Pre-Sale qualified"
     : needsAction
       ? "A quick update is needed"
+      : isRetrying
+        ? "Slice is finishing your listing"
       : qualification?.customerStatus === "BLOCKED_CONTACT_SUPPORT"
         ? "We need to speak with you"
         : "Your listing is being checked";
@@ -4658,6 +4661,8 @@ function SubmissionReceived({ submission }: { submission: SubmissionDetail }) {
     ? "The automated checks passed. Your collectible is available for conditional reservations while Slice completes physical intake and verification."
     : needsAction
       ? qualification.reasons[0] ?? "Please update the requested listing information, then submit it again."
+      : isRetrying
+        ? "No action is needed from you. Slice is retrying the automated hand-off and will continue the listing when it succeeds."
       : qualification?.customerStatus === "BLOCKED_CONTACT_SUPPORT"
         ? "This listing cannot move forward automatically. Contact Slice Support and we’ll explain the next step."
         : "Slice is checking your listing and will route it to staff only when a decision needs human judgment.";
@@ -4669,9 +4674,17 @@ function SubmissionReceived({ submission }: { submission: SubmissionDetail }) {
           <p className="page-kicker">{isQualified ? "Pre-Sale qualified" : "Submission received"}</p>
           <h1>{submissionName(submission.declaredMetadata)}</h1>
           <p>{statusTitle}. {statusBody}</p>
+          {qualification?.nextAction ? (
+            <p className="list-received-next-action">
+              <strong>Next step:</strong> {qualification.nextAction.action}
+              {qualification.nextAction.deadlineAt
+                ? ` By ${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(qualification.nextAction.deadlineAt))}.`
+                : ""}
+            </p>
+          ) : null}
           <ol>
             <li>Submitted</li>
-            <li>{isQualified ? "Automated checks passed" : needsAction ? "Your update" : "Slice review, if needed"}</li>
+            <li>{isQualified ? "Automated checks passed" : needsAction ? "Your update" : isRetrying ? "Automated hand-off retrying" : "Slice review, if needed"}</li>
             <li>Physical intake and verification</li>
             <li>Final marketplace eligibility</li>
           </ol>

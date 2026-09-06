@@ -1,6 +1,7 @@
 import {
   calculateProvisionalTerms,
   evaluateQualification,
+  normalizeGrade,
   qualificationCustomerStatus,
 } from './qualification.policy';
 
@@ -38,5 +39,9 @@ describe('automated qualification policy', () => {
     const terms = calculateProvisionalTerms({ collectorExpectedValueMinor: '100000', offerIntentPercent: '62.5' }, 1000n);
     expect(terms?.offeredUnits).toBe(625n);
     expect(terms?.pricePerUnitMinor).toBe(100n);
+  });
+  it('compares equivalent grade representations consistently', () => {
+    expect(normalizeGrade('10')).toBe('10.00');
+    expect(normalizeGrade('10.00')).toBe('10.00');
   });
 });
