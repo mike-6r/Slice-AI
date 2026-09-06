@@ -131,7 +131,11 @@ export function AdminAssetOperationsDetail({
     setRecentAuthPassword("");
   };
   const handleRecentAuthError = (error: unknown, retry: () => void) => {
-    if (error instanceof ApiError && error.code === "RECENT_AUTH_REQUIRED") {
+    const isRecentAuthRequired =
+      error instanceof ApiError &&
+      (error.code === "RECENT_AUTH_REQUIRED" ||
+        (error.status === 403 && /recent authentication/i.test(error.message)));
+    if (isRecentAuthRequired) {
       setPreSaleNotice(null);
       requestRecentAuth(retry);
     }
