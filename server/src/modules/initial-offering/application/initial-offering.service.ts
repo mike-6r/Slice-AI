@@ -780,7 +780,6 @@ export class InitialOfferingService {
           offeringId,
           orderId: order.id,
           offeredUnits: offering.offeredUnits.toString(),
-          reason: control?.reason.trim() ?? 'Approved Initial Offering launch',
         });
         return this.projectionFromRecord(updated);
       },
