@@ -74918,3 +74918,36 @@ body:has(.portfolio-page)
     gap: 0.4rem;
   }
 }
+
+/* The trend panel belongs in the expanded marketplace grid card. Keep the
+   compact card lean while restoring the graph to the full presentation. */
+.markets-page .market-investment-card.is-live:not(.is-compact) .market-card-live-trend {
+  display: block;
+  padding: 0.62rem 0.62rem 0.48rem;
+}
+
+.markets-page .market-investment-card.is-live:not(.is-compact) .market-card-live-trend svg {
+  height: 3.65rem;
+  margin-top: 0.18rem;
+}
+
+.markets-page .market-investment-card.is-live:not(.is-compact) .market-card-live-trend__heading span,
+.markets-page .market-investment-card.is-live:not(.is-compact) .market-card-live-trend__scale span {
+  font-size: 0.48rem;
+}
+
+.markets-page .market-investment-card.is-live:not(.is-compact) .market-card-live-trend__heading strong {
+  font-size: 0.62rem;
+}
+
+.markets-page .market-investment-card.is-pre-sale:not(.is-compact) .market-card-presale-summary__foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+}
+
+.markets-page .market-investment-card.is-pre-sale:not(.is-compact) .market-card-presale-summary__foot small:last-child {
+  padding-left: 0.5rem;
+  border-left: 1px solid rgba(242, 190, 66, 0.24);
+  text-align: right;
+}

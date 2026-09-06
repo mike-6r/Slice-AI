@@ -74,9 +74,10 @@ function cleanCardTitle(asset: MarketplaceAsset) {
 }
 
 function cardIdentity(asset: MarketplaceAsset) {
+  const collection = asset.setName ?? (asset.category ? categoryLabel(asset.category) : null);
   const identity = [
     asset.year,
-    asset.setName,
+    collection,
     asset.cardNumber ? `#${asset.cardNumber.replace(/^#/, "")}` : null,
   ]
     .filter(Boolean)
