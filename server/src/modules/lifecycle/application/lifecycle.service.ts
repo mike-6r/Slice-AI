@@ -562,27 +562,10 @@ export class LifecycleService {
         blockers,
       },
       economicWorkflow: operationEconomicWorkflow(item),
-      publicationReadiness: {
-        state: item.launchReadiness.blockers.some(
-          (code) =>
-            code !== 'OWNERSHIP_ISSUANCE_REQUIRED' &&
-            code !== 'INITIAL_OFFERING_REQUIRED',
-        )
-          ? 'BLOCKED'
-          : 'READY',
-        blockers: item.launchReadiness.blockers.filter(
-          (code) =>
-            code !== 'OWNERSHIP_ISSUANCE_REQUIRED' &&
-            code !== 'INITIAL_OFFERING_REQUIRED',
-        ),
-        gates: operationLaunchGates(
-          item.launchReadiness.blockers.filter(
-            (code) =>
-              code !== 'OWNERSHIP_ISSUANCE_REQUIRED' &&
-              code !== 'INITIAL_OFFERING_REQUIRED',
-          ),
-        ),
-      },
+      // Keep publication readiness as the publication policy computed by
+      // operationsItem. The combined final-launch blockers also contain
+      // ownership and offering gates, which must not disable publication.
+      publicationReadiness: item.publicationReadiness,
       launchReadiness: item.launchReadiness,
       finalMarketReadiness: item.launchReadiness,
       preSaleReadiness: item.preSaleReadiness,
@@ -613,13 +596,7 @@ export class LifecycleService {
         // held hostage by the later ownership/offering gates, otherwise a
         // provisional Pre-Sale can leave an asset permanently unable to enter
         // the launch sequence.
-        publish:
-          !frozen &&
-          item.launchReadiness.blockers.every(
-            (code) =>
-              code !== 'OWNERSHIP_ISSUANCE_REQUIRED' &&
-              code !== 'INITIAL_OFFERING_REQUIRED',
-          ),
+        publish: !frozen && item.publicationReadiness.state === 'READY',
         activateMarket: !frozen && issued && !offeringLive,
         openOffering: !frozen && issued && item.offering.state === 'APPROVED',
         configurePreSale: canConfigurePreSale(item.currentStage, frozen),
@@ -2017,6 +1994,11 @@ async function operationsItem(asset: BoardAsset, storage: ObjectStoragePort) {
     offering,
     market,
     launchReadiness,
+    publicationReadiness: {
+      state: publicationReadiness.status,
+      blockers: publicationReadiness.blockingCodes,
+      gates: operationLaunchGates(publicationReadiness.blockingCodes),
+    },
     attention: {
       // Attention is reserved for a real operable issue. Age without an
       // authority-backed SLA is not a priority signal.
