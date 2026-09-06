@@ -1822,8 +1822,8 @@ function Launch({
             detail={
               item.market.publication === "PUBLISHED"
                 ? "Published"
-                : operations?.launchReadiness.blockers.length
-                  ? operations.launchReadiness.blockers.map(sentence).join(" · ")
+                : operations?.publicationReadiness?.blockers.length
+                  ? operations.publicationReadiness.blockers.map(sentence).join(" · ")
                   : "Server readiness unavailable"
             }
             action={publish}
@@ -3000,14 +3000,22 @@ function AdminPreSalePanel({
         detail.physicalStatus === "CUSTODY_ESTABLISHED" &&
         status !== "CONVERTED" &&
         status !== "CANCELLED" ? (
-          <button
-            type="button"
-            className="admin-ops-button primary"
-            disabled={pending}
-            onClick={() => execute("finalize")}
-          >
-            Finalize conversion <CheckCircle2 aria-hidden="true" />
-          </button>
+          <>
+            <button
+              type="button"
+              className="admin-ops-button primary"
+              disabled={pending || detail.commands?.canFinalizePreSale === false}
+              title={detail.commands?.canFinalizePreSale === false ? detail.nextStep : undefined}
+              onClick={() => execute("finalize")}
+            >
+              Finalize conversion <CheckCircle2 aria-hidden="true" />
+            </button>
+            {detail.commands?.canFinalizePreSale === false ? (
+              <p className="admin-presale-panel__field-hint is-error">
+                {detail.nextStep}
+              </p>
+            ) : null}
+          </>
         ) : null}
       </div>
     </section>

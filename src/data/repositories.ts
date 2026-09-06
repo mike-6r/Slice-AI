@@ -402,6 +402,15 @@ export type AssetOperationDetailProjection = {
       state: "SATISFIED" | "BLOCKED";
     }>;
   };
+  publicationReadiness: {
+    state: "READY" | "BLOCKED";
+    blockers: string[];
+    gates: Array<{
+      blockerCode: string;
+      label: string;
+      state: "SATISFIED" | "BLOCKED";
+    }>;
+  };
   preSaleReadiness: {
     state: "READY" | "BLOCKED";
     blockers: string[];

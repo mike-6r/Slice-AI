@@ -562,6 +562,27 @@ export class LifecycleService {
         blockers,
       },
       economicWorkflow: operationEconomicWorkflow(item),
+      publicationReadiness: {
+        state: item.launchReadiness.blockers.some(
+          (code) =>
+            code !== 'OWNERSHIP_ISSUANCE_REQUIRED' &&
+            code !== 'INITIAL_OFFERING_REQUIRED',
+        )
+          ? 'BLOCKED'
+          : 'READY',
+        blockers: item.launchReadiness.blockers.filter(
+          (code) =>
+            code !== 'OWNERSHIP_ISSUANCE_REQUIRED' &&
+            code !== 'INITIAL_OFFERING_REQUIRED',
+        ),
+        gates: operationLaunchGates(
+          item.launchReadiness.blockers.filter(
+            (code) =>
+              code !== 'OWNERSHIP_ISSUANCE_REQUIRED' &&
+              code !== 'INITIAL_OFFERING_REQUIRED',
+          ),
+        ),
+      },
       launchReadiness: item.launchReadiness,
       finalMarketReadiness: item.launchReadiness,
       preSaleReadiness: item.preSaleReadiness,
