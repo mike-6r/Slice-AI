@@ -1680,7 +1680,11 @@ function InitialOffering({
       </section>
     );
   const approved =
-    offering.status === "APPROVED" || offering.status === "OPEN" || offering.status === "PAUSED";
+    offering.status === "APPROVED" ||
+    offering.status === "OPEN" ||
+    offering.status === "PARTIALLY_FILLED" ||
+    offering.status === "SOLD_OUT" ||
+    offering.status === "PAUSED";
   return (
     <div className="admin-asset-workspace__grid">
       <section className="admin-operation-card admin-operation-card--wide">
@@ -1823,6 +1827,9 @@ function Launch({
   pending: boolean;
 }) {
   const offering = item.initialOffering;
+  const offeringLive = Boolean(
+    offering && ["OPEN", "PARTIALLY_FILLED", "SOLD_OUT"].includes(offering.status),
+  );
   const issued = Boolean(
     item.issuance?.supply && item.issuance.supply.issuedUnits === item.issuance.supply.totalUnits,
   );
@@ -1863,7 +1870,7 @@ function Launch({
           <LaunchStep
             label="Approve Initial Offering"
             state={
-              offering?.status === "APPROVED" || offering?.status === "OPEN"
+              offeringLive || offering?.status === "APPROVED"
                 ? "complete"
                 : "blocked"
             }
@@ -1891,9 +1898,9 @@ function Launch({
           />
           <LaunchStep
             label="Open Initial Offering"
-            state={offering?.status === "OPEN" ? "complete" : "blocked"}
+            state={offeringLive ? "complete" : "blocked"}
             detail={
-              offering?.status === "OPEN"
+              offeringLive
                 ? "Live for investors"
                 : "Ownership and market must be ready"
             }
@@ -1920,6 +1927,7 @@ function Market({ item }: { item: Detail }) {
   const offered = inventory ? BigInt(inventory.offeredUnits) : null;
   const soldPercent =
     sold !== null && offered && offered > 0n ? Number((sold * 10_000n) / offered) : null;
+  const remaining = sold !== null && offered !== null ? offered - sold : null;
   return (
     <div className="admin-asset-workspace__grid">
       <Info title="Market authority" eyebrow="Publication & trading">
@@ -1971,7 +1979,7 @@ function Market({ item }: { item: Detail }) {
           <>
             <Field label="Units offered" value={offering.offeredUnits} />
             <Field label="Units sold" value={sold?.toString() ?? "Not available"} />
-            <Field label="Units remaining" value={inventory?.availableUnits ?? "Not available"} />
+            <Field label="Units remaining" value={remaining?.toString() ?? "Not available"} />
             <Field
               label="Percentage sold"
               value={soldPercent === null ? "Not available" : percent(soldPercent)}
