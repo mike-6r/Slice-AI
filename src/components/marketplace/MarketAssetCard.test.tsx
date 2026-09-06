@@ -94,6 +94,9 @@ describe("MarketAssetCard layout contracts", () => {
     const html = renderToStaticMarkup(<MarketAssetCard asset={asset} compact />);
 
     expect(html).toContain("is-compact");
+    expect(html).toContain("is-live");
+    expect(html).toContain("LIVE MARKET");
+    expect(html).toContain("market-card-media-beam");
     expect(html).toContain("https://cdn.example/front.webp");
     expect(html).toContain("market-card-cta");
     expect(html).toContain("View collectible");
@@ -194,6 +197,8 @@ describe("MarketAssetCard layout contracts", () => {
     );
 
     expect(html).toContain("market-card-home-body");
+    expect(html).toContain("is-pre-sale");
+    expect(html).toContain("CONDITIONAL MARKET");
     expect(html).toContain("2026 · Topps All Aces · #1");
     expect(html).toContain("Price per Slice");
     expect(html).toContain("0.10% ownership");

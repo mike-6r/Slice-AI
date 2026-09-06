@@ -30,7 +30,6 @@ import type {
 } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
-import { customerTerms } from "@/lib/customer-terminology";
 import { formatAvailability, formatPricePerUnit } from "@/lib/market-presentation";
 import {
   averageCostMinor,
@@ -313,6 +312,9 @@ export function TradingOrderForm({
     }
   };
 
+  const buildStepState = stage === "configure" ? "is-active" : "is-complete";
+  const reviewStepState = stage === "review" ? "is-active" : "";
+
   if (stage === "result" && result) {
     return (
       <div className="trading-order-page page-shell">
@@ -364,19 +366,18 @@ export function TradingOrderForm({
     review && side === "SELL" ? BigInt(review.grossMinor) - BigInt(review.feeMinor) : null;
 
   return (
-    <main className="trading-order-page page-shell">
+    <main className={`trading-order-page page-shell trading-order-page--${side.toLowerCase()}`}>
       <Link to="/asset/$id" params={{ id: assetSlug }} className="trading-back-link">
         <ArrowLeft aria-hidden="true" /> Back to {asset.data.details.title}
       </Link>
       <header className="trading-order-header">
         <div>
-          <p className="trading-eyebrow">
-            {side === "BUY" ? customerTerms.own : customerTerms.sell}
-          </p>
+          <p className="trading-eyebrow">{side === "BUY" ? "BUY ORDER" : "SELL ORDER"}</p>
           <h1>Place a {action.toLowerCase()} order</h1>
           <p>
-            Choose how many Slices you want and your limit price. Slice confirms fees, reservations
-            and fills.
+            {side === "BUY"
+              ? "Choose how much of this collectible you want to own. We will show your exact cost before anything is placed."
+              : "Choose how much of this collectible you want to sell. We will show your exact proceeds before anything is placed."}
           </p>
         </div>
         <div className="trading-asset-chip">
@@ -393,6 +394,24 @@ export function TradingOrderForm({
         </div>
       </header>
 
+      <nav className="trading-flow-steps" aria-label="Order progress">
+        <span className={buildStepState}>
+          <b>1</b>
+          <span>
+            <strong>Build your order</strong>
+            <small>Choose an amount</small>
+          </span>
+        </span>
+        <i aria-hidden="true" />
+        <span className={reviewStepState}>
+          <b>2</b>
+          <span>
+            <strong>Review & place</strong>
+            <small>Check every detail</small>
+          </span>
+        </span>
+      </nav>
+
       <div className="trading-order-layout">
         <section className="trading-form-card">
           {stage === "configure" ? (
@@ -407,11 +426,18 @@ export function TradingOrderForm({
                   <Scale aria-hidden="true" />
                 </span>
                 <div>
-                  <p className="trading-eyebrow">Trade ownership</p>
-                  <h2>{side === "BUY" ? "Own this collectible" : "Sell ownership"}</h2>
+                  <p className="trading-eyebrow">
+                    {side === "BUY" ? "YOUR POSITION" : "YOUR EXIT"}
+                  </p>
+                  <h2>
+                    {side === "BUY"
+                      ? "How much would you like to own?"
+                      : "How much would you like to sell?"}
+                  </h2>
                   <p>
-                    Choose how many Slices you want. Slice confirms the live price, fees and
-                    resulting ownership before you review.
+                    {side === "BUY"
+                      ? "Start with Slices, a percentage, or a total amount. Your live calculation updates as you type."
+                      : "Choose Slices or a percentage of your available ownership. Your live proceeds update as you type."}
                   </p>
                 </div>
               </div>
@@ -432,7 +458,14 @@ export function TradingOrderForm({
                 </Link>
               </div>
               <fieldset className="trading-input-mode">
-                <legend>Choose quantity</legend>
+                <legend>
+                  <span>1</span> Choose your amount
+                </legend>
+                <p className="trading-input-mode__help">
+                  {side === "BUY"
+                    ? "Most people start with the number of Slices they want."
+                    : "Choose the amount you are comfortable releasing from your position."}
+                </p>
                 <div
                   className="trading-input-mode__tabs"
                   role="tablist"
@@ -951,6 +984,13 @@ function PurchaseSummary({
       aria-label={`${side === "BUY" ? "Buy" : "Sell"} Slice summary`}
       aria-busy={loading}
     >
+      <div className="trading-purchase-summary__heading">
+        <span>
+          <i aria-hidden="true" /> Live calculation
+        </span>
+        <strong>{side === "BUY" ? "Your buy preview" : "Your sell preview"}</strong>
+        <small>Updates as you change the amount</small>
+      </div>
       <div className="trading-purchase-summary__topline">
         <div>
           <span>Price per Slice</span>

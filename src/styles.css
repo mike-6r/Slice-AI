@@ -73192,3 +73192,843 @@ body:has(.portfolio-page)
     margin-top: 0;
   }
 }
+
+/* =================================================
+   Buy / sell order experience
+   A guided two-step surface for first-time traders: choose an amount, see the
+   live outcome, then review before the order can be placed.
+   ================================================= */
+
+.trading-order-page {
+  --trading-accent: 34 211 165;
+  position: relative;
+  isolation: isolate;
+}
+
+.trading-order-page--sell {
+  --trading-accent: 247 154 115;
+}
+
+.trading-order-page::before {
+  position: absolute;
+  top: -6rem;
+  left: 12%;
+  z-index: -1;
+  width: 48rem;
+  height: 28rem;
+  border-radius: 50%;
+  background: rgb(var(--trading-accent) / 0.07);
+  filter: blur(86px);
+  content: "";
+  pointer-events: none;
+}
+
+.trading-order-header {
+  position: relative;
+  align-items: end;
+  margin-top: 1.65rem;
+  padding: 2.25rem 0 1.55rem;
+}
+
+.trading-order-header::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgb(var(--trading-accent) / 0.42), rgba(142, 175, 180, 0.1), transparent);
+  content: "";
+}
+
+.trading-order-header h1 {
+  max-width: 38rem;
+  margin-top: 0.2rem;
+  text-wrap: balance;
+}
+
+.trading-order-header > div:first-child > p:last-child {
+  max-width: 40rem;
+  margin-top: 0.95rem;
+  color: rgba(190, 209, 210, 0.8);
+}
+
+.trading-order-page--sell .trading-eyebrow,
+.trading-order-page--sell .trading-flow-steps .is-active b,
+.trading-order-page--sell .trading-flow-steps .is-complete b {
+  color: rgb(var(--trading-accent));
+}
+
+.trading-asset-chip {
+  border-color: rgb(var(--trading-accent) / 0.22);
+  background:
+    linear-gradient(135deg, rgb(var(--trading-accent) / 0.08), transparent 58%),
+    rgba(10, 19, 23, 0.88);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1rem 2.4rem rgba(0, 0, 0, 0.16);
+}
+
+.trading-asset-chip > img {
+  border: 1px solid rgb(var(--trading-accent) / 0.25);
+  box-shadow: 0 0 1.3rem rgb(var(--trading-accent) / 0.1);
+}
+
+.trading-flow-steps {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin: 1.15rem 0;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(142, 175, 180, 0.15);
+  border-radius: 0.9rem;
+  background: linear-gradient(100deg, rgba(13, 29, 31, 0.86), rgba(7, 14, 18, 0.72));
+}
+
+.trading-flow-steps > span {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.6rem;
+  color: rgba(155, 177, 181, 0.7);
+}
+
+.trading-flow-steps > span > b {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(142, 175, 180, 0.2);
+  border-radius: 50%;
+  color: #9db3b6;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 0.68rem;
+}
+
+.trading-flow-steps > span > span {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.trading-flow-steps strong {
+  color: #cfdfdf;
+  font-size: 0.7rem;
+}
+
+.trading-flow-steps small {
+  color: #82999d;
+  font-size: 0.61rem;
+}
+
+.trading-flow-steps > span.is-active > b,
+.trading-flow-steps > span.is-complete > b {
+  border-color: rgb(var(--trading-accent) / 0.72);
+  color: #061312;
+  background: rgb(var(--trading-accent));
+  box-shadow: 0 0 1rem rgb(var(--trading-accent) / 0.25);
+}
+
+.trading-flow-steps > span.is-active strong,
+.trading-flow-steps > span.is-complete strong {
+  color: #f1fbf8;
+}
+
+.trading-flow-steps > i {
+  width: clamp(1.5rem, 8vw, 6rem);
+  height: 1px;
+  flex: 0 1 auto;
+  background: linear-gradient(90deg, rgb(var(--trading-accent) / 0.4), rgba(142, 175, 180, 0.14));
+}
+
+.trading-form-card,
+.trading-context-card {
+  position: relative;
+  overflow: hidden;
+  border-color: rgb(var(--trading-accent) / 0.2);
+  background:
+    radial-gradient(circle at 0% 0%, rgb(var(--trading-accent) / 0.07), transparent 36%),
+    linear-gradient(145deg, rgba(15, 26, 31, 0.97), rgba(6, 12, 16, 0.98));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    0 1.8rem 4rem rgba(0, 0, 0, 0.24);
+}
+
+.trading-form-card::before,
+.trading-context-card::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2px;
+  height: 4.5rem;
+  background: linear-gradient(180deg, rgb(var(--trading-accent)), transparent);
+  content: "";
+  pointer-events: none;
+}
+
+.trading-form-card {
+  padding: clamp(1.3rem, 3vw, 2.35rem);
+}
+
+.trading-section-heading {
+  align-items: flex-start;
+  margin-bottom: 1.25rem;
+}
+
+.trading-section-icon,
+.trading-context-card > header > span {
+  border-color: rgb(var(--trading-accent) / 0.32);
+  background: rgb(var(--trading-accent) / 0.085);
+  color: rgb(var(--trading-accent));
+  box-shadow: 0 0 1.4rem rgb(var(--trading-accent) / 0.08);
+}
+
+.trading-section-heading h2 {
+  max-width: 34rem;
+  font-size: clamp(1.15rem, 2vw, 1.55rem);
+  text-wrap: balance;
+}
+
+.trading-section-heading p:not(.trading-eyebrow) {
+  max-width: 38rem;
+  margin-top: 0.35rem;
+  color: rgba(171, 194, 196, 0.78);
+  line-height: 1.5;
+}
+
+.trading-side-tabs {
+  gap: 0.45rem;
+  margin: 1.25rem 0 1.4rem;
+  padding: 0.3rem;
+  border: 1px solid rgba(142, 175, 180, 0.16);
+  border-radius: 0.78rem;
+  background: rgba(2, 9, 12, 0.64);
+}
+
+.trading-side-tabs a {
+  min-height: 2.65rem;
+  border: 0;
+  border-radius: 0.58rem;
+  color: #a8bdc0;
+  transition: color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+
+.trading-side-tabs a:hover {
+  color: #edf9f5;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.trading-side-tabs a.is-active {
+  color: #061412;
+  background: rgb(var(--trading-accent));
+  box-shadow: 0 0.45rem 1.1rem rgb(var(--trading-accent) / 0.16);
+}
+
+.trading-input-mode {
+  margin-top: 0.3rem;
+  padding: 1rem;
+  border: 1px solid rgba(142, 175, 180, 0.14);
+  border-radius: 0.82rem;
+  background: rgba(2, 10, 13, 0.38);
+}
+
+.trading-input-mode legend {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.25rem;
+  color: #f0f8f5;
+}
+
+.trading-input-mode legend > span {
+  display: grid;
+  width: 1.2rem;
+  height: 1.2rem;
+  place-items: center;
+  border-radius: 50%;
+  color: #061412;
+  background: rgb(var(--trading-accent));
+  font-size: 0.6rem;
+}
+
+.trading-input-mode__help {
+  margin: 0 0 0.7rem;
+  color: #8ea6aa;
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.trading-input-mode__tabs button {
+  min-height: 2.55rem;
+  border-color: rgba(142, 175, 180, 0.18);
+  border-radius: 0.62rem;
+  color: #a9bec1;
+  background: rgba(7, 17, 20, 0.72);
+  transition: border-color 180ms ease, color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+
+.trading-input-mode__tabs button:hover {
+  border-color: rgb(var(--trading-accent) / 0.45);
+  color: #eefaf6;
+  transform: translateY(-1px);
+}
+
+.trading-input-mode__tabs button:hover,
+.trading-input-mode__tabs button.is-active {
+  border-color: rgb(var(--trading-accent) / 0.66);
+  color: #061412;
+  background: rgb(var(--trading-accent));
+  box-shadow: 0 0.45rem 1rem rgb(var(--trading-accent) / 0.12);
+}
+
+.trading-field-label {
+  margin-top: 1.2rem;
+  color: #edf8f5;
+}
+
+.trading-input,
+.trading-money-input {
+  border-color: rgba(142, 175, 180, 0.2);
+  background: rgba(2, 9, 12, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.trading-input:focus,
+.trading-money-input:focus-within {
+  border-color: rgb(var(--trading-accent) / 0.76);
+  box-shadow: 0 0 0 3px rgb(var(--trading-accent) / 0.11), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.trading-slice-input,
+.trading-percent-control input,
+.trading-money-input input {
+  font-variant-numeric: tabular-nums;
+}
+
+.trading-quick-row button {
+  border-color: rgba(142, 175, 180, 0.2);
+  background: rgba(255, 255, 255, 0.03);
+  transition: border-color 180ms ease, color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+
+.trading-quick-row button:hover,
+.trading-quick-row button.is-selected {
+  border-color: rgb(var(--trading-accent) / 0.62);
+  color: #061412;
+  background: rgb(var(--trading-accent) / 0.82);
+  transform: translateY(-1px);
+}
+
+.trading-purchase-summary {
+  position: relative;
+  overflow: hidden;
+  border-color: rgb(var(--trading-accent) / 0.42);
+  background:
+    radial-gradient(circle at 100% 0%, rgb(var(--trading-accent) / 0.18), transparent 42%),
+    linear-gradient(145deg, rgb(var(--trading-accent) / 0.095), rgba(5, 18, 22, 0.95) 62%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 1.2rem 2.6rem rgba(0, 0, 0, 0.2),
+    0 0 2.6rem rgb(var(--trading-accent) / 0.055);
+}
+
+.trading-purchase-summary::before {
+  position: absolute;
+  top: 0;
+  right: 1rem;
+  left: 1rem;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(var(--trading-accent) / 0.8), transparent);
+  content: "";
+}
+
+.trading-purchase-summary__heading {
+  display: grid;
+  gap: 0.18rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgb(var(--trading-accent) / 0.14);
+}
+
+.trading-purchase-summary__heading > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: rgb(var(--trading-accent));
+  font-size: 0.56rem;
+  font-weight: 850;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.trading-purchase-summary__heading i {
+  width: 0.36rem;
+  height: 0.36rem;
+  border-radius: 50%;
+  background: rgb(var(--trading-accent));
+  box-shadow: 0 0 0.65rem rgb(var(--trading-accent) / 0.8);
+}
+
+.trading-purchase-summary__heading > strong {
+  color: #f5fffb;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  letter-spacing: -0.025em;
+}
+
+.trading-purchase-summary__heading > small {
+  color: #8ea9aa;
+  font-size: 0.65rem;
+}
+
+.trading-purchase-summary__topline strong,
+.trading-purchase-summary__selection > div:last-child strong {
+  color: rgb(var(--trading-accent));
+}
+
+.trading-purchase-summary__selection,
+.trading-purchase-summary__ownership {
+  border-color: rgb(var(--trading-accent) / 0.16);
+}
+
+.trading-purchase-summary .trading-submit {
+  min-height: 3.25rem;
+  border: 1px solid rgb(var(--trading-accent) / 0.48);
+  color: #061412;
+  background: linear-gradient(105deg, rgb(var(--trading-accent)), rgb(var(--trading-accent) / 0.72));
+  box-shadow: 0 0.8rem 1.7rem rgb(var(--trading-accent) / 0.15);
+  font-size: 0.83rem;
+  font-weight: 850;
+  transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+}
+
+.trading-purchase-summary .trading-submit:hover:not(:disabled) {
+  filter: brightness(1.06) saturate(1.05);
+  box-shadow: 0 1rem 2rem rgb(var(--trading-accent) / 0.22);
+  transform: translateY(-2px);
+}
+
+.trading-context-card {
+  padding: 1.25rem;
+}
+
+.trading-context-card > header > span {
+  border-radius: 0.72rem;
+}
+
+.trading-context-card h2 {
+  font-size: 1rem;
+}
+
+.trading-context-list > div,
+.trading-book-side > div,
+.trading-spread {
+  border-top-color: rgba(142, 175, 180, 0.12);
+}
+
+.trading-context-list dd,
+.trading-spread strong {
+  color: #eff8f5;
+  font-variant-numeric: tabular-nums;
+}
+
+.trading-context-details,
+.trading-detailed-preview,
+.trading-advanced-settings {
+  border-top-color: rgba(142, 175, 180, 0.16);
+}
+
+.trading-context-details summary,
+.trading-detailed-preview summary,
+.trading-advanced-settings summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 2rem;
+  color: rgb(var(--trading-accent));
+}
+
+.trading-how-it-works {
+  border-left-color: rgb(var(--trading-accent));
+  background: rgb(var(--trading-accent) / 0.06);
+}
+
+.trading-tif-grid button {
+  border-color: rgba(142, 175, 180, 0.18);
+  background: rgba(2, 8, 10, 0.52);
+}
+
+.trading-tif-grid button.is-active {
+  border-color: rgb(var(--trading-accent) / 0.62);
+  color: rgb(var(--trading-accent));
+  background: rgb(var(--trading-accent) / 0.075);
+  box-shadow: inset 0 0 0 1px rgb(var(--trading-accent) / 0.06);
+}
+
+.trading-authority-note {
+  border-color: rgb(var(--trading-accent) / 0.2);
+  background: rgb(var(--trading-accent) / 0.06);
+}
+
+.trading-authority-note svg {
+  color: rgb(var(--trading-accent));
+}
+
+@media (max-width: 680px) {
+  .trading-flow-steps {
+    gap: 0.55rem;
+    padding-inline: 0.65rem;
+  }
+
+  .trading-flow-steps > span {
+    gap: 0.42rem;
+  }
+
+  .trading-flow-steps strong {
+    font-size: 0.63rem;
+  }
+
+  .trading-flow-steps small {
+    font-size: 0.55rem;
+  }
+
+  .trading-flow-steps > i {
+    width: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trading-side-tabs a,
+  .trading-input-mode__tabs button,
+  .trading-quick-row button,
+  .trading-purchase-summary .trading-submit {
+    transition: none;
+  }
+}
+
+/* =================================================
+   Market card signature finish
+   Live cards feel like an open trading surface; pre-sale cards carry a
+   warmer conditional-access signal. The shared card stays data-first while
+   the stage, signal line and motion create a more collectible presentation.
+   ================================================= */
+
+.market-investment-card {
+  isolation: isolate;
+  border-color: rgb(var(--market-card-accent) / 0.2);
+  background:
+    radial-gradient(circle at 12% 0%, rgb(var(--market-card-accent) / 0.08), transparent 34%),
+    linear-gradient(155deg, rgba(15, 25, 29, 0.99), rgba(3, 9, 12, 0.998) 72%);
+}
+
+.market-investment-card.is-pre-sale {
+  --market-card-accent: 242 190 66;
+}
+
+.market-investment-card.is-live {
+  --market-card-accent: 34 211 165;
+}
+
+.market-investment-card::after {
+  background:
+    linear-gradient(118deg, rgba(255, 255, 255, 0.052), transparent 17% 74%, rgba(255, 255, 255, 0.014)),
+    radial-gradient(ellipse 72% 30% at 6% 100%, rgb(var(--market-card-accent) / 0.075), transparent 78%);
+}
+
+.market-card-media {
+  border: 1px solid rgb(var(--market-card-accent) / 0.15);
+  background:
+    radial-gradient(ellipse 58% 65% at 50% 44%, rgb(var(--market-card-accent) / 0.15), transparent 70%),
+    linear-gradient(155deg, rgba(8, 19, 21, 0.94), rgba(2, 8, 11, 0.99));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -60px 80px rgba(0, 0, 0, 0.32),
+    0 15px 30px rgba(0, 0, 0, 0.2),
+    0 0 34px rgb(var(--market-card-accent) / 0.045);
+}
+
+.market-card-media-topline {
+  position: absolute;
+  top: 0.78rem;
+  right: 0.95rem;
+  left: 0.95rem;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: rgba(178, 203, 204, 0.62);
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  pointer-events: none;
+  text-transform: uppercase;
+}
+
+.market-card-media-topline > span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.35rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.market-card-media-topline > span:last-child {
+  color: rgba(183, 204, 205, 0.42);
+  font-size: 0.46rem;
+  letter-spacing: 0.12em;
+}
+
+.market-card-media-topline i {
+  display: inline-block;
+  width: 0.32rem;
+  height: 0.32rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: rgb(var(--market-card-accent));
+  box-shadow: 0 0 0.6rem rgb(var(--market-card-accent) / 0.9);
+}
+
+.market-card-media-beam {
+  position: absolute;
+  inset: -40% -55%;
+  z-index: 3;
+  background: linear-gradient(108deg, transparent 43%, rgb(255 255 255 / 0.12) 49%, transparent 55%);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-42%) rotate(9deg);
+}
+
+.market-investment-card:hover .market-card-media-beam,
+.market-investment-card:focus-within .market-card-media-beam {
+  opacity: 1;
+  animation: market-card-sweep 1.15s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.market-card-status {
+  border-color: rgb(var(--market-card-accent) / 0.42);
+  background: linear-gradient(135deg, rgb(var(--market-card-accent) / 0.19), rgba(4, 13, 16, 0.84));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 0 0 3px rgb(var(--market-card-accent) / 0.035),
+    0 9px 24px rgba(0, 0, 0, 0.24);
+  color: rgb(var(--market-card-accent));
+}
+
+.market-card-status.is-open > span {
+  animation: market-status-pulse 2.8s ease-in-out infinite;
+}
+
+.market-investment-card.is-pre-sale .market-card-status {
+  color: #f7ca58;
+}
+
+.market-card-body {
+  border-top-color: rgb(var(--market-card-accent) / 0.12);
+  background:
+    linear-gradient(180deg, rgba(10, 19, 22, 0.99), rgba(3, 9, 12, 0.998)),
+    radial-gradient(ellipse at 0% 0%, rgb(var(--market-card-accent) / 0.045), transparent 58%);
+}
+
+.market-card-heading {
+  display: block;
+}
+
+.market-card-heading-copy {
+  min-width: 0;
+}
+
+.market-card-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: rgb(var(--market-card-accent));
+  font-size: 0.53rem;
+  font-weight: 850;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.market-card-kicker::after {
+  width: 2rem;
+  height: 1px;
+  background: linear-gradient(90deg, rgb(var(--market-card-accent) / 0.6), transparent);
+  content: "";
+}
+
+.market-card-heading h2 {
+  margin-top: 0.55rem;
+}
+
+.market-card-identity-line {
+  color: rgba(159, 183, 184, 0.76);
+}
+
+.market-card-condition span {
+  border-color: rgb(var(--market-card-accent) / 0.18);
+  background: rgb(var(--market-card-accent) / 0.045);
+}
+
+.market-card-condition span + span {
+  border-color: rgb(var(--market-card-accent) / 0.5);
+  color: rgb(var(--market-card-accent));
+}
+
+.market-card-valuation {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgb(var(--market-card-accent) / 0.14);
+  border-radius: 0.82rem;
+  background:
+    linear-gradient(135deg, rgb(var(--market-card-accent) / 0.065), transparent 48%),
+    rgba(3, 11, 14, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+.market-card-valuation::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3px;
+  height: 100%;
+  background: linear-gradient(180deg, rgb(var(--market-card-accent)), transparent);
+  content: "";
+}
+
+.market-card-valuation strong {
+  color: #f4fbf8;
+  text-shadow: 0 0 1.2rem rgb(var(--market-card-accent) / 0.1);
+}
+
+.market-investment-card.is-pre-sale .market-card-valuation strong {
+  color: #fff4d1;
+  text-shadow: 0 0 1.2rem rgb(242 190 66 / 0.16);
+}
+
+.market-card-presale-summary {
+  border-color: rgb(var(--market-card-accent) / 0.2);
+  border-radius: 0.72rem;
+  background: linear-gradient(135deg, rgb(var(--market-card-accent) / 0.05), transparent 62%);
+}
+
+.market-card-presale-summary__heading strong {
+  display: inline-flex;
+  padding: 0.24rem 0.45rem;
+  border: 1px solid rgb(var(--market-card-accent) / 0.3);
+  border-radius: 999px;
+  background: rgb(var(--market-card-accent) / 0.08);
+  color: #f7ca58;
+  font-size: 0.62rem;
+}
+
+.market-card-presale-summary__progress span {
+  background: linear-gradient(90deg, #24d3a3, #f0bd45);
+  box-shadow: 0 0 0.7rem rgb(240 189 69 / 0.25);
+}
+
+.market-card-market-grid {
+  position: relative;
+  border-top-color: rgb(var(--market-card-accent) / 0.14);
+  border-bottom-color: rgb(var(--market-card-accent) / 0.14);
+}
+
+.market-card-market-grid::before {
+  position: absolute;
+  top: 0.15rem;
+  left: 0;
+  color: rgb(var(--market-card-accent) / 0.78);
+  content: "MARKET PULSE";
+  font-size: 0.48rem;
+  font-weight: 850;
+  letter-spacing: 0.16em;
+}
+
+.market-card-market-grid > div {
+  padding-top: 0.72rem;
+}
+
+.market-card-market-grid strong {
+  color: #ecf6f3;
+}
+
+.market-card-ownership {
+  border-color: rgb(var(--market-card-accent) / 0.16);
+  background: linear-gradient(100deg, rgb(var(--market-card-accent) / 0.055), rgba(5, 13, 16, 0.84));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.market-card-ownership-icon {
+  border: 1px solid rgb(var(--market-card-accent) / 0.25);
+  background: rgb(var(--market-card-accent) / 0.09);
+  color: rgb(var(--market-card-accent));
+  box-shadow: 0 0 1rem rgb(var(--market-card-accent) / 0.1);
+}
+
+.market-card-cta {
+  border-color: rgb(var(--market-card-accent) / 0.38);
+  background: linear-gradient(105deg, rgb(32 207 162 / 0.96), rgb(19 167 132 / 0.98));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.19),
+    0 0.75rem 1.5rem rgb(8 123 99 / 0.14);
+  color: #03110f;
+  font-weight: 850;
+}
+
+.market-investment-card.is-pre-sale .market-card-cta {
+  background: linear-gradient(105deg, #27d3a3 0%, #1ab88f 70%, #e6b53f 180%);
+}
+
+.market-card-cta svg {
+  color: currentColor;
+}
+
+.market-card-cta:hover {
+  border-color: rgb(var(--market-card-accent) / 0.7);
+  background: linear-gradient(105deg, #44e4b8, #1fc79b);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 0.9rem 1.8rem rgb(var(--market-card-accent) / 0.18);
+  color: #02100d;
+}
+
+@keyframes market-card-sweep {
+  from {
+    transform: translateX(-42%) rotate(9deg);
+  }
+  to {
+    transform: translateX(42%) rotate(9deg);
+  }
+}
+
+@keyframes market-status-pulse {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.16);
+  }
+}
+
+@media (max-width: 559px) {
+  .market-card-media-topline {
+    right: 0.7rem;
+    left: 0.7rem;
+    font-size: 0.44rem;
+  }
+
+  .market-card-media-topline > span:last-child {
+    font-size: 0.4rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .market-card-status.is-open > span,
+  .market-investment-card:hover .market-card-media-beam,
+  .market-investment-card:focus-within .market-card-media-beam {
+    animation: none;
+  }
+}

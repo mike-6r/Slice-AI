@@ -59,11 +59,20 @@ function AssetVisual({ asset }: { asset: MarketplaceAsset }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const media = gallery[activeIndex] ?? gallery[0] ?? resolveMarketplaceMedia(asset);
   const status = marketStatusPresentation(asset);
+  const stageLabel = asset.preSale ? "CONDITIONAL MARKET" : "LIVE MARKET";
 
   return (
     <div className="market-card-hero">
       <div className="market-card-media">
         <span className="market-card-glow" aria-hidden="true" />
+        <span className="market-card-media-beam" aria-hidden="true" />
+        <div className="market-card-media-topline" aria-hidden="true">
+          <span>
+            <i />
+            {stageLabel}
+          </span>
+          <span>{asset.cardNumber ? `NO. ${asset.cardNumber.replace(/^#/, "")}` : "ASSET 01"}</span>
+        </div>
         <Link
           to="/asset/$id"
           params={{ id: asset.slug }}
@@ -421,7 +430,7 @@ export function MarketAssetCard({
   });
   return (
     <article
-      className={`market-investment-card${compact ? " is-compact" : ""}${homepageCompact ? " is-home-compact" : ""}`}
+      className={`market-investment-card${asset.preSale ? " is-pre-sale" : " is-live"}${compact ? " is-compact" : ""}${homepageCompact ? " is-home-compact" : ""}`}
     >
       <div className="market-card-visual-wrap">
         <AssetVisual asset={asset} />
@@ -452,15 +461,20 @@ export function MarketAssetCard({
         ) : (
           <>
             <div className="market-card-heading">
-              <h2>
-                <Link to="/asset/$id" params={{ id: asset.slug }}>
-                  {asset.title}
-                </Link>
-              </h2>
-              <p className="market-card-identity-line">
-                {[asset.setName, asset.cardNumber].filter(Boolean).join(" · ") ||
-                  "Set and card number unavailable"}
-              </p>
+              <div className="market-card-heading-copy">
+                <span className="market-card-kicker">
+                  {asset.preSale ? "CONDITIONAL ACCESS" : "MARKET LIVE"}
+                </span>
+                <h2>
+                  <Link to="/asset/$id" params={{ id: asset.slug }}>
+                    {asset.title}
+                  </Link>
+                </h2>
+                <p className="market-card-identity-line">
+                  {[asset.setName, asset.cardNumber].filter(Boolean).join(" · ") ||
+                    "Set and card number unavailable"}
+                </p>
+              </div>
             </div>
             <div className="market-card-condition" aria-label="Condition and grading">
               <span>{officialGradeLabel(asset)}</span>
