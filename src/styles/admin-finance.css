@@ -390,6 +390,16 @@
   font-size: 11px;
 }
 
+.admin-finance-scope-note {
+  margin: 0;
+  padding: 9px 17px;
+  border-top: 1px solid rgba(225, 172, 84, 0.18);
+  background: rgba(225, 172, 84, 0.06);
+  color: #e8c47f;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .admin-finance-table-wrap {
   max-width: 100%;
   overflow-x: auto;

@@ -15,12 +15,20 @@ import { createIdentityTransaction } from '../../identity/persistence/prisma-ide
 import { financeTestFailurePoint } from './finance-test-failure-injection';
 import type { IdempotencyIdentity } from '../../identity/ports/repositories';
 import { OutboxWriter } from '../../outbox/application/outbox-writer.service';
-import { financialNotificationEvent, financialNotificationKind, formatGbpMinor } from '../../outbox/domain/domain-event';
+import {
+  financialNotificationEvent,
+  financialNotificationKind,
+  formatGbpMinor,
+} from '../../outbox/domain/domain-event';
 import {
   accountAuthority,
   validateBalancedJournal,
   type JournalLine,
 } from '../domain/journal';
+import {
+  classificationForJournalType,
+  type FinancialDataClass,
+} from '../domain/financial-data-classification';
 
 type Db = Prisma.TransactionClient;
 
@@ -28,8 +36,14 @@ export function bacsReleaseAt(providerAvailableOn: Date, holdDays: number) {
   return new Date(providerAvailableOn.getTime() + holdDays * 86_400_000);
 }
 
-export function isBacsReleaseEligible(providerAvailableOn: Date, holdDays: number, now: Date) {
-  return now.getTime() >= bacsReleaseAt(providerAvailableOn, holdDays).getTime();
+export function isBacsReleaseEligible(
+  providerAvailableOn: Date,
+  holdDays: number,
+  now: Date,
+) {
+  return (
+    now.getTime() >= bacsReleaseAt(providerAvailableOn, holdDays).getTime()
+  );
 }
 
 type PostJournalInput = Readonly<{
@@ -45,6 +59,7 @@ type PostJournalInput = Readonly<{
   correlationId: string;
   descriptionCode: string;
   lines: readonly JournalLine[];
+  financialDataClass?: FinancialDataClass;
 }>;
 
 @Injectable()
@@ -62,9 +77,11 @@ export class FinancialLedgerService {
    * separate from CASH_AVAILABLE while the explicit risk policy is unset.
    */
   bacsRiskHoldEnabled() {
-    return this.config?.providerMode !== undefined &&
+    return (
+      this.config?.providerMode !== undefined &&
       this.config.providerMode !== 'local' &&
-      this.config.stripeBankFundingRail === 'bacs_debit';
+      this.config.stripeBankFundingRail === 'bacs_debit'
+    );
   }
 
   async depositCashAccount(
@@ -73,6 +90,10 @@ export class FinancialLedgerService {
     bacsRiskHold = this.bacsRiskHoldEnabled(),
   ) {
     await db.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
+    const owner = await db.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { financialDataClass: true },
+    });
     const code = bacsRiskHold ? 'BACS_RISK_HOLD' : 'CASH_AVAILABLE';
     const existing = await db.financialAccount.findFirst({
       where: {
@@ -93,6 +114,7 @@ export class FinancialLedgerService {
         code,
         currency: 'GBP',
         normalSide: 'CREDIT',
+        financialDataClass: owner.financialDataClass,
       },
       include: { balance: true },
     });
@@ -165,17 +187,29 @@ export class FinancialLedgerService {
       )
         return false;
       const cash = await this.depositCashAccount(db, movement.userId, false);
-      const actor = this.systemActor(movement.userId, `bacs-release:${movement.id}`);
+      const actor = this.systemActor(
+        movement.userId,
+        `bacs-release:${movement.id}`,
+      );
       await this.postInTransaction(
         db,
         actor,
         {
           type: 'CASH_RELEASE',
+          financialDataClass: movement.financialDataClass,
           correlationId: `bacs-risk-release:${movement.id}`,
           descriptionCode: 'BACS_RISK_HOLD_RELEASED',
           lines: [
-            { accountId: movement.cashAccountId, side: 'DEBIT', amountMinor: movement.amountMinor.toString() },
-            { accountId: cash.id, side: 'CREDIT', amountMinor: movement.amountMinor.toString() },
+            {
+              accountId: movement.cashAccountId,
+              side: 'DEBIT',
+              amountMinor: movement.amountMinor.toString(),
+            },
+            {
+              accountId: cash.id,
+              side: 'CREDIT',
+              amountMinor: movement.amountMinor.toString(),
+            },
           ],
         },
         requestId,
@@ -183,7 +217,11 @@ export class FinancialLedgerService {
       );
       const updated = await db.moneyMovement.update({
         where: { id: movement.id },
-        data: { status: 'SETTLED', failureCode: null, version: { increment: 1 } },
+        data: {
+          status: 'SETTLED',
+          failureCode: null,
+          version: { increment: 1 },
+        },
       });
       await db.moneyMovementHistory.create({
         data: {
@@ -210,21 +248,29 @@ export class FinancialLedgerService {
         },
         createdAt: now,
       });
-      await this.outbox.append(db, financialNotificationEvent({
-        kind: financialNotificationKind.depositReleased,
-        title: 'Bank deposit ready to use',
-        body: `Your ${formatGbpMinor(movement.amountMinor)} bank deposit has cleared and is now available to use for Slice trading.`,
-        resourceType: 'money-movement',
-        resourceId: movement.id,
-        aggregateType: 'money-movement',
-        aggregateId: movement.id,
-        amountMinor: movement.amountMinor.toString(),
-        actorUserId: movement.userId,
-        correlationId: requestId,
-        occurredAt: now,
-        eventSuffix: 'released',
-      }));
-      await this.recoverDeficitInTransaction(db, movement.userId, requestId, actor);
+      await this.outbox.append(
+        db,
+        financialNotificationEvent({
+          kind: financialNotificationKind.depositReleased,
+          title: 'Bank deposit ready to use',
+          body: `Your ${formatGbpMinor(movement.amountMinor)} bank deposit has cleared and is now available to use for Slice trading.`,
+          resourceType: 'money-movement',
+          resourceId: movement.id,
+          aggregateType: 'money-movement',
+          aggregateId: movement.id,
+          amountMinor: movement.amountMinor.toString(),
+          actorUserId: movement.userId,
+          correlationId: requestId,
+          occurredAt: now,
+          eventSuffix: 'released',
+        }),
+      );
+      await this.recoverDeficitInTransaction(
+        db,
+        movement.userId,
+        requestId,
+        actor,
+      );
       void updated;
       return true;
     });
@@ -253,7 +299,10 @@ export class FinancialLedgerService {
       include: { balance: true },
     });
     if (!accounts.length) return 0n;
-    await this.lockAccounts(db, accounts.map((account) => account.id));
+    await this.lockAccounts(
+      db,
+      accounts.map((account) => account.id),
+    );
     const cash = accounts.find((account) => account.code === 'CASH_AVAILABLE');
     if (!cash) return 0n;
     const cashMinor = accountAuthority(
@@ -264,17 +313,29 @@ export class FinancialLedgerService {
     if (cashMinor >= 0n) return 0n;
     const deficitMinor = -cashMinor;
     const receivable = await this.deficitReceivableAccount(db);
-    const actor = this.systemActor(userId, `bacs-deficit-reclass:${movementId}`);
+    const actor = this.systemActor(
+      userId,
+      `bacs-deficit-reclass:${movementId}`,
+    );
     await this.postInTransaction(
       db,
       actor,
       {
         type: 'ADMIN_CORRECTION',
+        financialDataClass: cash.financialDataClass,
         correlationId: `bacs-deficit-reclass:${movementId}`,
         descriptionCode: 'RETURNED_FUNDS_DEFICIT_RECLASSIFIED',
         lines: [
-          { accountId: receivable.id, side: 'DEBIT', amountMinor: deficitMinor.toString() },
-          { accountId: cash.id, side: 'CREDIT', amountMinor: deficitMinor.toString() },
+          {
+            accountId: receivable.id,
+            side: 'DEBIT',
+            amountMinor: deficitMinor.toString(),
+          },
+          {
+            accountId: cash.id,
+            side: 'CREDIT',
+            amountMinor: deficitMinor.toString(),
+          },
         ],
       },
       requestId,
@@ -288,6 +349,7 @@ export class FinancialLedgerService {
       data: {
         id: randomUUID(),
         userId,
+        financialDataClass: cash.financialDataClass,
         sourceMovementId: movementId,
         currency: 'GBP',
         amountMinor: deficitMinor,
@@ -329,35 +391,41 @@ export class FinancialLedgerService {
       metadata: { amountMinor: deficitMinor.toString(), reasonCode },
       createdAt: new Date(),
     });
-    await this.outbox.append(db, financialNotificationEvent({
-      kind: financialNotificationKind.deficitCreated,
-      title: 'Outstanding balance created',
-      body: `A returned bank deposit left an outstanding Slice balance of ${formatGbpMinor(deficitMinor)}. Buying and withdrawals are temporarily restricted until this balance is resolved. You can recover it with a verified bank deposit after that deposit clears.`,
-      resourceType: 'financial-deficit',
-      resourceId: deficit.id,
-      aggregateType: 'financial-deficit',
-      aggregateId: deficit.id,
-      amountMinor: deficitMinor.toString(),
-      outstandingMinor: deficitMinor.toString(),
-      actorUserId: userId,
-      correlationId: requestId,
-      eventSuffix: 'created',
-    }));
-    if (holdCreated) {
-      await this.outbox.append(db, financialNotificationEvent({
-        kind: financialNotificationKind.restrictionsApplied,
-        title: 'Some account actions are temporarily restricted',
-        body: 'Buying, listings, offers, and withdrawals are temporarily restricted while your outstanding Slice balance is resolved. You can still sign in, view your portfolio and history, contact support, and use an approved recovery path.',
-        resourceType: 'account',
-        resourceId: userId,
-        aggregateType: 'account',
-        aggregateId: userId,
+    await this.outbox.append(
+      db,
+      financialNotificationEvent({
+        kind: financialNotificationKind.deficitCreated,
+        title: 'Outstanding balance created',
+        body: `A returned bank deposit left an outstanding Slice balance of ${formatGbpMinor(deficitMinor)}. Buying and withdrawals are temporarily restricted until this balance is resolved. You can recover it with a verified bank deposit after that deposit clears.`,
+        resourceType: 'financial-deficit',
+        resourceId: deficit.id,
+        aggregateType: 'financial-deficit',
+        aggregateId: deficit.id,
         amountMinor: deficitMinor.toString(),
         outstandingMinor: deficitMinor.toString(),
         actorUserId: userId,
         correlationId: requestId,
-        eventSuffix: `deficit:${deficit.id}`,
-      }));
+        eventSuffix: 'created',
+      }),
+    );
+    if (holdCreated) {
+      await this.outbox.append(
+        db,
+        financialNotificationEvent({
+          kind: financialNotificationKind.restrictionsApplied,
+          title: 'Some account actions are temporarily restricted',
+          body: 'Buying, listings, offers, and withdrawals are temporarily restricted while your outstanding Slice balance is resolved. You can still sign in, view your portfolio and history, contact support, and use an approved recovery path.',
+          resourceType: 'account',
+          resourceId: userId,
+          aggregateType: 'account',
+          aggregateId: userId,
+          amountMinor: deficitMinor.toString(),
+          outstandingMinor: deficitMinor.toString(),
+          actorUserId: userId,
+          correlationId: requestId,
+          eventSuffix: `deficit:${deficit.id}`,
+        }),
+      );
     }
     return deficitMinor;
   }
@@ -379,7 +447,10 @@ export class FinancialLedgerService {
       select: { id: true },
     });
     if (!accounts.length) return 0;
-    await this.lockAccounts(db, accounts.map((account) => account.id));
+    await this.lockAccounts(
+      db,
+      accounts.map((account) => account.id),
+    );
     const reservations = await db.cashReservation.count({
       where: {
         accountId: { in: accounts.map((account) => account.id) },
@@ -435,7 +506,13 @@ export class FinancialLedgerService {
     });
     if (!deficit) return 0n;
     const cash = await db.financialAccount.findFirst({
-      where: { ownerType: 'USER', ownerUserId: userId, code: 'CASH_AVAILABLE', currency: 'GBP', status: 'ACTIVE' },
+      where: {
+        ownerType: 'USER',
+        ownerUserId: userId,
+        code: 'CASH_AVAILABLE',
+        currency: 'GBP',
+        status: 'ACTIVE',
+      },
       include: { balance: true },
     });
     if (!cash) return 0n;
@@ -455,11 +532,20 @@ export class FinancialLedgerService {
       actor,
       {
         type: 'ADMIN_CORRECTION',
+        financialDataClass: deficit.financialDataClass,
         correlationId: `bacs-deficit-recovery:${deficit.id}:${deficit.recoveredMinor}`,
         descriptionCode: 'RETURNED_FUNDS_DEFICIT_RECOVERED',
         lines: [
-          { accountId: cash.id, side: 'DEBIT', amountMinor: recovery.toString() },
-          { accountId: receivable.id, side: 'CREDIT', amountMinor: recovery.toString() },
+          {
+            accountId: cash.id,
+            side: 'DEBIT',
+            amountMinor: recovery.toString(),
+          },
+          {
+            accountId: receivable.id,
+            side: 'CREDIT',
+            amountMinor: recovery.toString(),
+          },
         ],
       },
       requestId,
@@ -477,48 +563,68 @@ export class FinancialLedgerService {
     });
     if (recovered) {
       await db.complianceHold.updateMany({
-        where: { movementId: deficit.sourceMovementId, reasonCode: 'RETURNED_FUNDS_DEFICIT', status: 'ACTIVE' },
+        where: {
+          movementId: deficit.sourceMovementId,
+          reasonCode: 'RETURNED_FUNDS_DEFICIT',
+          status: 'ACTIVE',
+        },
         data: { status: 'RELEASED', releasedAt: new Date() },
       });
     }
-    await this.outbox.append(db, financialNotificationEvent({
-      kind: recovered ? financialNotificationKind.deficitResolved : financialNotificationKind.deficitPartiallyRecovered,
-      title: recovered ? 'Outstanding balance resolved' : 'Outstanding balance partially recovered',
-      body: recovered
-        ? `Your outstanding Slice balance has been fully recovered. The temporary financial restrictions on your account have been removed.`
-        : `${formatGbpMinor(recovery)} has been applied to your outstanding Slice balance. ${formatGbpMinor(updatedDeficit.amountMinor - updatedDeficit.recoveredMinor)} remains outstanding, so buying and withdrawals remain temporarily restricted.`,
-      resourceType: 'financial-deficit',
-      resourceId: updatedDeficit.id,
-      aggregateType: 'financial-deficit',
-      aggregateId: updatedDeficit.id,
-      amountMinor: recovery.toString(),
-      outstandingMinor: (updatedDeficit.amountMinor - updatedDeficit.recoveredMinor).toString(),
-      actorUserId: userId,
-      correlationId: requestId,
-      eventSuffix: updatedDeficit.recoveredMinor.toString(),
-    }));
-    if (recovered) {
-      await this.outbox.append(db, financialNotificationEvent({
-        kind: financialNotificationKind.restrictionsRemoved,
-        title: 'Account financial restrictions removed',
-        body: 'Your outstanding Slice balance has been resolved. Buying and withdrawals are available again subject to the usual account, identity, and provider checks.',
-        resourceType: 'account',
-        resourceId: userId,
-        aggregateType: 'account',
-        aggregateId: userId,
+    await this.outbox.append(
+      db,
+      financialNotificationEvent({
+        kind: recovered
+          ? financialNotificationKind.deficitResolved
+          : financialNotificationKind.deficitPartiallyRecovered,
+        title: recovered
+          ? 'Outstanding balance resolved'
+          : 'Outstanding balance partially recovered',
+        body: recovered
+          ? `Your outstanding Slice balance has been fully recovered. The temporary financial restrictions on your account have been removed.`
+          : `${formatGbpMinor(recovery)} has been applied to your outstanding Slice balance. ${formatGbpMinor(updatedDeficit.amountMinor - updatedDeficit.recoveredMinor)} remains outstanding, so buying and withdrawals remain temporarily restricted.`,
+        resourceType: 'financial-deficit',
+        resourceId: updatedDeficit.id,
+        aggregateType: 'financial-deficit',
+        aggregateId: updatedDeficit.id,
         amountMinor: recovery.toString(),
-        outstandingMinor: '0',
+        outstandingMinor: (
+          updatedDeficit.amountMinor - updatedDeficit.recoveredMinor
+        ).toString(),
         actorUserId: userId,
         correlationId: requestId,
-        eventSuffix: `deficit:${updatedDeficit.id}`,
-      }));
+        eventSuffix: updatedDeficit.recoveredMinor.toString(),
+      }),
+    );
+    if (recovered) {
+      await this.outbox.append(
+        db,
+        financialNotificationEvent({
+          kind: financialNotificationKind.restrictionsRemoved,
+          title: 'Account financial restrictions removed',
+          body: 'Your outstanding Slice balance has been resolved. Buying and withdrawals are available again subject to the usual account, identity, and provider checks.',
+          resourceType: 'account',
+          resourceId: userId,
+          aggregateType: 'account',
+          aggregateId: userId,
+          amountMinor: recovery.toString(),
+          outstandingMinor: '0',
+          actorUserId: userId,
+          correlationId: requestId,
+          eventSuffix: `deficit:${updatedDeficit.id}`,
+        }),
+      );
     }
     return recovery;
   }
 
   async deficitReceivableAccount(db: Db) {
     const existing = await db.financialAccount.findFirst({
-      where: { ownerType: 'PLATFORM', code: 'CUSTOMER_DEFICIT_RECEIVABLE', currency: 'GBP' },
+      where: {
+        ownerType: 'PLATFORM',
+        code: 'CUSTOMER_DEFICIT_RECEIVABLE',
+        currency: 'GBP',
+      },
     });
     if (existing) return existing;
     return db.financialAccount.create({
@@ -622,6 +728,8 @@ export class FinancialLedgerService {
       data: {
         id: randomUUID(),
         type: input.type,
+        financialDataClass:
+          input.financialDataClass ?? classificationForJournalType(input.type),
         currency: 'GBP',
         correlationId: input.correlationId,
         descriptionCode: input.descriptionCode,
@@ -679,7 +787,9 @@ export class FinancialLedgerService {
       this.db.moneyMovement.findMany({
         where: {
           userId,
-          status: { in: ['CREATED', 'PENDING_PROVIDER', 'PROCESSING', 'MANUAL_REVIEW'] },
+          status: {
+            in: ['CREATED', 'PENDING_PROVIDER', 'PROCESSING', 'MANUAL_REVIEW'],
+          },
         },
         select: { type: true, amountMinor: true },
       }),
@@ -690,41 +800,71 @@ export class FinancialLedgerService {
           })
         : Promise.resolve([]),
       this.db.moneyMovement.findMany({
-        where: { userId, type: 'DEPOSIT', status: 'HELD', cashAccount: { code: 'BACS_RISK_HOLD' } },
+        where: {
+          userId,
+          type: 'DEPOSIT',
+          status: 'HELD',
+          cashAccount: { code: 'BACS_RISK_HOLD' },
+        },
         orderBy: [{ providerAvailableOn: 'asc' }, { id: 'asc' }],
-        select: { id: true, amountMinor: true, providerAvailableOn: true, createdAt: true },
+        select: {
+          id: true,
+          amountMinor: true,
+          providerAvailableOn: true,
+          createdAt: true,
+        },
       }),
     ]);
-    const pendingDeposits = pendingMovements.filter((movement) => movement.type === 'DEPOSIT');
-    const pendingWithdrawals = pendingMovements.filter((movement) => movement.type === 'WITHDRAWAL');
+    const pendingDeposits = pendingMovements.filter(
+      (movement) => movement.type === 'DEPOSIT',
+    );
+    const pendingWithdrawals = pendingMovements.filter(
+      (movement) => movement.type === 'WITHDRAWAL',
+    );
     const pendingMinor = pendingDeposits
       .filter((movement) => movement.type === 'DEPOSIT')
       .reduce((total, movement) => total + movement.amountMinor, 0n);
-    const pendingWithdrawalMinor = pendingWithdrawals.reduce((total, movement) => total + movement.amountMinor, 0n);
+    const pendingWithdrawalMinor = pendingWithdrawals.reduce(
+      (total, movement) => total + movement.amountMinor,
+      0n,
+    );
     const orderReservedMinor = reservations
       .filter((reservation) => reservation.purposeType === 'TRADING_ORDER')
       .reduce((total, reservation) => total + reservation.amountMinor, 0n);
     const withdrawalReservedMinor = reservations
-      .filter((reservation) => reservation.purposeType === 'EXTERNAL_WITHDRAWAL')
+      .filter(
+        (reservation) => reservation.purposeType === 'EXTERNAL_WITHDRAWAL',
+      )
       .reduce((total, reservation) => total + reservation.amountMinor, 0n);
-    const riskHold = accounts.find((account) => account.code === 'BACS_RISK_HOLD');
+    const riskHold = accounts.find(
+      (account) => account.code === 'BACS_RISK_HOLD',
+    );
     const riskHoldBalance = riskHold?.balance;
     const riskHeldMinor = riskHoldBalance
-      ? maxZero(accountAuthority(
-          riskHold.normalSide,
-          riskHoldBalance.postedDebitMinor,
-          riskHoldBalance.postedCreditMinor,
-        ) - riskHoldBalance.reservedMinor)
+      ? maxZero(
+          accountAuthority(
+            riskHold.normalSide,
+            riskHoldBalance.postedDebitMinor,
+            riskHoldBalance.postedCreditMinor,
+          ) - riskHoldBalance.reservedMinor,
+        )
       : 0n;
-    const proceeds = accounts.find((account) => account.code === 'COLLECTOR_PROCEEDS_AVAILABLE');
+    const proceeds = accounts.find(
+      (account) => account.code === 'COLLECTOR_PROCEEDS_AVAILABLE',
+    );
     const proceedsBalance = proceeds?.balance;
     const collectorProceedsMinor = proceedsBalance
-      ? accountAuthority(proceeds.normalSide, proceedsBalance.postedDebitMinor, proceedsBalance.postedCreditMinor)
+      ? accountAuthority(
+          proceeds.normalSide,
+          proceedsBalance.postedDebitMinor,
+          proceedsBalance.postedCreditMinor,
+        )
       : 0n;
     const withdrawableSources = accounts
-      .filter((account) =>
-        account.code === 'CASH_AVAILABLE' ||
-        account.code === 'COLLECTOR_PROCEEDS_AVAILABLE',
+      .filter(
+        (account) =>
+          account.code === 'CASH_AVAILABLE' ||
+          account.code === 'COLLECTOR_PROCEEDS_AVAILABLE',
       )
       .map((account) => {
         const balance = account.balance;
@@ -744,9 +884,10 @@ export class FinancialLedgerService {
       0n,
     );
     const tradeAvailableMinor = accounts
-      .filter((account) =>
-        account.code === 'CASH_AVAILABLE' ||
-        account.code === 'COLLECTOR_PROCEEDS_AVAILABLE',
+      .filter(
+        (account) =>
+          account.code === 'CASH_AVAILABLE' ||
+          account.code === 'COLLECTOR_PROCEEDS_AVAILABLE',
       )
       .reduce((total, account) => {
         const balance = account.balance;
@@ -759,10 +900,13 @@ export class FinancialLedgerService {
       }, 0n);
     const totalMinor = accounts.reduce((total, account) => {
       const balance = account.balance;
-      return total + accountAuthority(
-        account.normalSide,
-        balance?.postedDebitMinor ?? 0n,
-        balance?.postedCreditMinor ?? 0n,
+      return (
+        total +
+        accountAuthority(
+          account.normalSide,
+          balance?.postedDebitMinor ?? 0n,
+          balance?.postedCreditMinor ?? 0n,
+        )
       );
     }, 0n);
     const reservedMinor = accounts.reduce(
@@ -787,20 +931,37 @@ export class FinancialLedgerService {
       withdrawableMinor: withdrawableMinor.toString(),
       tradeAvailableMinor: tradeAvailableMinor.toString(),
       riskHeldMinor: riskHeldMinor.toString(),
-      riskHeldDepositCount: accounts.some((account) => account.code === 'BACS_RISK_HOLD')
-        ? await this.db.moneyMovement.count({ where: { userId, type: 'DEPOSIT', status: { in: ['HELD', 'MANUAL_REVIEW'] }, cashAccount: { code: 'BACS_RISK_HOLD' } } })
+      riskHeldDepositCount: accounts.some(
+        (account) => account.code === 'BACS_RISK_HOLD',
+      )
+        ? await this.db.moneyMovement.count({
+            where: {
+              userId,
+              type: 'DEPOSIT',
+              status: { in: ['HELD', 'MANUAL_REVIEW'] },
+              cashAccount: { code: 'BACS_RISK_HOLD' },
+            },
+          })
         : 0,
       riskHeldDeposits: heldDeposits.map((movement) => ({
         id: movement.id,
         amountMinor: movement.amountMinor.toString(),
-        providerAvailableOn: movement.providerAvailableOn?.toISOString() ?? null,
-        expectedReleaseAt: movement.providerAvailableOn && this.config?.bacsInternalTradeHoldDays !== undefined
-          ? bacsReleaseAt(movement.providerAvailableOn, this.config.bacsInternalTradeHoldDays).toISOString()
-          : null,
+        providerAvailableOn:
+          movement.providerAvailableOn?.toISOString() ?? null,
+        expectedReleaseAt:
+          movement.providerAvailableOn &&
+          this.config?.bacsInternalTradeHoldDays !== undefined
+            ? bacsReleaseAt(
+                movement.providerAvailableOn,
+                this.config.bacsInternalTradeHoldDays,
+              ).toISOString()
+            : null,
       })),
       withdrawableSources,
       collectorProceedsMinor: collectorProceedsMinor.toString(),
-      collectorProceedsReservedMinor: (proceedsBalance?.reservedMinor ?? 0n).toString(),
+      collectorProceedsReservedMinor: (
+        proceedsBalance?.reservedMinor ?? 0n
+      ).toString(),
       accounts: accounts.map((account) => {
         const balance = account.balance;
         const total = accountAuthority(
@@ -819,16 +980,23 @@ export class FinancialLedgerService {
     };
   }
 
-  async walletInsightsForUser(userId: string, period: '30d' | 'month' = '30d', now = new Date()) {
-    const currentStart = period === '30d'
-      ? new Date(now.getTime() - 30 * 86_400_000)
-      : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const previousStart = period === '30d'
-      ? new Date(now.getTime() - 60 * 86_400_000)
-      : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
-    const currentEnd = period === '30d'
-      ? now
-      : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  async walletInsightsForUser(
+    userId: string,
+    period: '30d' | 'month' = '30d',
+    now = new Date(),
+  ) {
+    const currentStart =
+      period === '30d'
+        ? new Date(now.getTime() - 30 * 86_400_000)
+        : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const previousStart =
+      period === '30d'
+        ? new Date(now.getTime() - 60 * 86_400_000)
+        : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+    const currentEnd =
+      period === '30d'
+        ? now
+        : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
     const rows = await this.db.moneyMovement.findMany({
       where: {
         userId,
@@ -839,21 +1007,42 @@ export class FinancialLedgerService {
       select: { type: true, amountMinor: true, settledAt: true },
     });
     const summarize = (from: Date, to: Date) => {
-      const deposits = rows.filter((row) => row.type === 'DEPOSIT' && row.settledAt && row.settledAt >= from && row.settledAt < to)
+      const deposits = rows
+        .filter(
+          (row) =>
+            row.type === 'DEPOSIT' &&
+            row.settledAt &&
+            row.settledAt >= from &&
+            row.settledAt < to,
+        )
         .reduce((total, row) => total + row.amountMinor, 0n);
-      const withdrawals = rows.filter((row) => row.type === 'WITHDRAWAL' && row.settledAt && row.settledAt >= from && row.settledAt < to)
+      const withdrawals = rows
+        .filter(
+          (row) =>
+            row.type === 'WITHDRAWAL' &&
+            row.settledAt &&
+            row.settledAt >= from &&
+            row.settledAt < to,
+        )
         .reduce((total, row) => total + row.amountMinor, 0n);
       return {
         totalDepositsMinor: deposits.toString(),
         totalWithdrawalsMinor: withdrawals.toString(),
         netMovementMinor: (deposits - withdrawals).toString(),
-        settledMovementCount: rows.filter((row) => row.settledAt && row.settledAt >= from && row.settledAt < to).length,
+        settledMovementCount: rows.filter(
+          (row) => row.settledAt && row.settledAt >= from && row.settledAt < to,
+        ).length,
       };
     };
     const current = summarize(currentStart, currentEnd);
     const previous = summarize(previousStart, currentStart);
     const previousHasData = previous.settledMovementCount > 0;
-    return { period, currency: 'GBP' as const, ...current, previousPeriod: previousHasData ? previous : null };
+    return {
+      period,
+      currency: 'GBP' as const,
+      ...current,
+      previousPeriod: previousHasData ? previous : null,
+    };
   }
 
   async transactionsForUser(userId: string, cursor?: string, limit = 20) {
@@ -934,104 +1123,105 @@ export class FinancialLedgerService {
       .update(`${transactionId}\n${reasonCode}`)
       .digest('hex');
     const tx = createIdentityTransaction(db);
-      const acquired = await tx.idempotency.acquire(
-        identity,
-        requestHash,
-        new Date(Date.now() + 86_400_000),
+    const acquired = await tx.idempotency.acquire(
+      identity,
+      requestHash,
+      new Date(Date.now() + 86_400_000),
+    );
+    if (acquired.state === 'FINGERPRINT_CONFLICT')
+      throw conflict(
+        'IDEMPOTENCY_KEY_CONFLICT',
+        'The request key cannot be reused.',
       );
-      if (acquired.state === 'FINGERPRINT_CONFLICT')
-        throw conflict(
-          'IDEMPOTENCY_KEY_CONFLICT',
-          'The request key cannot be reused.',
-        );
-      if (acquired.state === 'EXISTING_IN_PROGRESS')
-        throw conflict(
-          'PERSISTENCE_CONFLICT',
-          'The request is already in progress.',
-        );
-      if (acquired.state === 'EXISTING_COMPLETED')
-        return acquired.record.response!.body as {
-          transactionId: string;
-          reversalId: string;
-        };
-      await db.$queryRaw`SELECT id FROM "JournalTransaction" WHERE id = ${transactionId} FOR UPDATE`;
-      const original = await db.journalTransaction.findUnique({
-        where: { id: transactionId },
-        include: {
-          entries: { orderBy: { sequence: 'asc' } },
-          reversal: { select: { id: true } },
-        },
-      });
-      if (!original)
-        throw new NotFoundException({
-          code: 'JOURNAL_TRANSACTION_NOT_FOUND',
-          message: 'Journal transaction not found.',
-        });
-      if (original.reversal || original.status === 'REVERSED')
-        throw conflict(
-          'TRANSACTION_ALREADY_REVERSED',
-          'Journal transaction has already been reversed.',
-        );
-      const accountIds = [
-        ...new Set(original.entries.map((entry) => entry.accountId)),
-      ].sort();
-      await this.lockAccounts(db, accountIds);
-      const reversal = await db.journalTransaction.create({
-        data: {
-          id: randomUUID(),
-          type: 'REVERSAL',
-          currency: original.currency,
-          correlationId: `reversal:${original.id}`,
-          descriptionCode: reasonCode,
-          reversalOfId: original.id,
-          createdByUserId: actor.userId,
-        },
-      });
-      await financeTestFailurePoint('reversal.after-transaction');
-      const reversedLines = original.entries.map((entry, index) => ({
-        id: randomUUID(),
-        transactionId: reversal.id,
-        sequence: index + 1,
-        accountId: entry.accountId,
-        side: entry.side === 'DEBIT' ? ('CREDIT' as const) : ('DEBIT' as const),
-        amountMinor: entry.amountMinor,
-        currency: entry.currency,
-      }));
-      await db.journalEntry.createMany({ data: reversedLines });
-      for (const line of reversedLines)
-        await this.applyProjection(db, {
-          accountId: line.accountId,
-          side: line.side,
-          money: { minor: line.amountMinor },
-        });
-      await db.journalTransaction.update({
-        where: { id: original.id },
-        data: { status: 'REVERSED' },
-      });
-      const result = { transactionId: original.id, reversalId: reversal.id };
-      await tx.audit.append({
-        id: randomUUID(),
-        actorUserId: actor.userId,
-        actorType: 'USER',
-        action: 'FINANCE_JOURNAL_REVERSED',
-        resourceType: 'journal-transaction',
-        resourceId: original.id,
-        requestId,
-        sessionId: actor.sessionId as never,
-        result: 'SUCCESS',
-        metadata: {
-          transactionId: original.id,
-          reversalId: reversal.id,
-          reasonCode,
-        },
-        createdAt: new Date(),
-      });
-      await tx.idempotency.complete(
-        identity,
-        { status: 200, body: result },
-        new Date(),
+    if (acquired.state === 'EXISTING_IN_PROGRESS')
+      throw conflict(
+        'PERSISTENCE_CONFLICT',
+        'The request is already in progress.',
       );
-      return result;
+    if (acquired.state === 'EXISTING_COMPLETED')
+      return acquired.record.response!.body as {
+        transactionId: string;
+        reversalId: string;
+      };
+    await db.$queryRaw`SELECT id FROM "JournalTransaction" WHERE id = ${transactionId} FOR UPDATE`;
+    const original = await db.journalTransaction.findUnique({
+      where: { id: transactionId },
+      include: {
+        entries: { orderBy: { sequence: 'asc' } },
+        reversal: { select: { id: true } },
+      },
+    });
+    if (!original)
+      throw new NotFoundException({
+        code: 'JOURNAL_TRANSACTION_NOT_FOUND',
+        message: 'Journal transaction not found.',
+      });
+    if (original.reversal || original.status === 'REVERSED')
+      throw conflict(
+        'TRANSACTION_ALREADY_REVERSED',
+        'Journal transaction has already been reversed.',
+      );
+    const accountIds = [
+      ...new Set(original.entries.map((entry) => entry.accountId)),
+    ].sort();
+    await this.lockAccounts(db, accountIds);
+    const reversal = await db.journalTransaction.create({
+      data: {
+        id: randomUUID(),
+        type: 'REVERSAL',
+        financialDataClass: original.financialDataClass,
+        currency: original.currency,
+        correlationId: `reversal:${original.id}`,
+        descriptionCode: reasonCode,
+        reversalOfId: original.id,
+        createdByUserId: actor.userId,
+      },
+    });
+    await financeTestFailurePoint('reversal.after-transaction');
+    const reversedLines = original.entries.map((entry, index) => ({
+      id: randomUUID(),
+      transactionId: reversal.id,
+      sequence: index + 1,
+      accountId: entry.accountId,
+      side: entry.side === 'DEBIT' ? ('CREDIT' as const) : ('DEBIT' as const),
+      amountMinor: entry.amountMinor,
+      currency: entry.currency,
+    }));
+    await db.journalEntry.createMany({ data: reversedLines });
+    for (const line of reversedLines)
+      await this.applyProjection(db, {
+        accountId: line.accountId,
+        side: line.side,
+        money: { minor: line.amountMinor },
+      });
+    await db.journalTransaction.update({
+      where: { id: original.id },
+      data: { status: 'REVERSED' },
+    });
+    const result = { transactionId: original.id, reversalId: reversal.id };
+    await tx.audit.append({
+      id: randomUUID(),
+      actorUserId: actor.userId,
+      actorType: 'USER',
+      action: 'FINANCE_JOURNAL_REVERSED',
+      resourceType: 'journal-transaction',
+      resourceId: original.id,
+      requestId,
+      sessionId: actor.sessionId as never,
+      result: 'SUCCESS',
+      metadata: {
+        transactionId: original.id,
+        reversalId: reversal.id,
+        reasonCode,
+      },
+      createdAt: new Date(),
+    });
+    await tx.idempotency.complete(
+      identity,
+      { status: 200, body: result },
+      new Date(),
+    );
+    return result;
   }
 
   /** Internal cash-control port; no public order or payment flow calls this in Document 013. */
@@ -1105,6 +1295,7 @@ export class FinancialLedgerService {
             purposeType: input.purposeType,
             purposeId: input.purposeId,
             amountMinor,
+            financialDataClass: account.financialDataClass,
           },
         });
         await financeTestFailurePoint('cash.reserve.after-create');
@@ -1136,29 +1327,70 @@ export class FinancialLedgerService {
   async reserveCashInTransaction(
     db: Db,
     actor: Actor,
-    input: { accountId: string; purposeType: string; purposeId: string; amountMinor: bigint },
+    input: {
+      accountId: string;
+      purposeType: string;
+      purposeId: string;
+      amountMinor: bigint;
+    },
     requestId: string,
   ) {
     this.recentAuth.require(actor);
     if (input.amountMinor <= 0n)
-      throw new NotFoundException({ code: 'CASH_AMOUNT_INVALID', message: 'Cash amount must be positive.' });
+      throw new NotFoundException({
+        code: 'CASH_AMOUNT_INVALID',
+        message: 'Cash amount must be positive.',
+      });
     await this.lockAccounts(db, [input.accountId]);
-    const account = await this.userCashAccount(db, input.accountId, actor.userId);
+    const account = await this.userCashAccount(
+      db,
+      input.accountId,
+      actor.userId,
+    );
     const balance = await this.lockBalance(db, account.id);
-    const total = accountAuthority(account.normalSide, balance?.postedDebitMinor ?? 0n, balance?.postedCreditMinor ?? 0n);
+    const total = accountAuthority(
+      account.normalSide,
+      balance?.postedDebitMinor ?? 0n,
+      balance?.postedCreditMinor ?? 0n,
+    );
     if (total - (balance?.reservedMinor ?? 0n) < input.amountMinor)
-      throw new NotFoundException({ code: 'INSUFFICIENT_AVAILABLE_FUNDS', message: 'Insufficient available funds.' });
+      throw new NotFoundException({
+        code: 'INSUFFICIENT_AVAILABLE_FUNDS',
+        message: 'Insufficient available funds.',
+      });
     const reservation = await db.cashReservation.create({
-      data: { id: randomUUID(), accountId: account.id, purposeType: input.purposeType, purposeId: input.purposeId, amountMinor: input.amountMinor },
+      data: {
+        id: randomUUID(),
+        accountId: account.id,
+        purposeType: input.purposeType,
+        purposeId: input.purposeId,
+        amountMinor: input.amountMinor,
+        financialDataClass: account.financialDataClass,
+      },
     });
     await db.accountBalance.upsert({
       where: { accountId: account.id },
       create: { accountId: account.id, reservedMinor: input.amountMinor },
-      update: { reservedMinor: { increment: input.amountMinor }, version: { increment: 1 } },
+      update: {
+        reservedMinor: { increment: input.amountMinor },
+        version: { increment: 1 },
+      },
     });
     await createIdentityTransaction(db).audit.append({
-      id: randomUUID(), actorUserId: actor.userId, actorType: 'USER', action: 'FINANCE_CASH_RESERVED', resourceType: 'cash-reservation', resourceId: reservation.id,
-      requestId, sessionId: actor.sessionId as never, result: 'SUCCESS', metadata: { reservationId: reservation.id, amountMinor: input.amountMinor.toString() }, createdAt: new Date(),
+      id: randomUUID(),
+      actorUserId: actor.userId,
+      actorType: 'USER',
+      action: 'FINANCE_CASH_RESERVED',
+      resourceType: 'cash-reservation',
+      resourceId: reservation.id,
+      requestId,
+      sessionId: actor.sessionId as never,
+      result: 'SUCCESS',
+      metadata: {
+        reservationId: reservation.id,
+        amountMinor: input.amountMinor.toString(),
+      },
+      createdAt: new Date(),
     });
     return reservation;
   }
@@ -1333,7 +1565,10 @@ export class FinancialLedgerService {
       requestId,
       sessionId: actor.sessionId as never,
       result: 'SUCCESS',
-      metadata: { reservationId: reservation.id, amountMinor: reservation.amountMinor.toString() },
+      metadata: {
+        reservationId: reservation.id,
+        amountMinor: reservation.amountMinor.toString(),
+      },
       createdAt: new Date(),
     });
     return { reservationId, status: 'RELEASED' as const };
@@ -1349,15 +1584,35 @@ export class FinancialLedgerService {
     reason = 'PRE_SALE_CANCELLED',
   ) {
     await db.$queryRaw`SELECT id FROM "CashReservation" WHERE id = ${reservationId} FOR UPDATE`;
-    const reservation = await db.cashReservation.findUnique({ where: { id: reservationId } });
+    const reservation = await db.cashReservation.findUnique({
+      where: { id: reservationId },
+    });
     if (!reservation || reservation.status !== 'ACTIVE') return false;
     await this.lockAccounts(db, [reservation.accountId]);
     await this.lockBalance(db, reservation.accountId);
-    await db.cashReservation.update({ where: { id: reservation.id }, data: { status: 'RELEASED' } });
-    await db.accountBalance.update({ where: { accountId: reservation.accountId }, data: { reservedMinor: { decrement: reservation.amountMinor }, version: { increment: 1 } } });
+    await db.cashReservation.update({
+      where: { id: reservation.id },
+      data: { status: 'RELEASED' },
+    });
+    await db.accountBalance.update({
+      where: { accountId: reservation.accountId },
+      data: {
+        reservedMinor: { decrement: reservation.amountMinor },
+        version: { increment: 1 },
+      },
+    });
     await createIdentityTransaction(db).audit.append({
-      id: randomUUID(), actorUserId: null, actorType: 'SYSTEM', action: 'FINANCE_CASH_RELEASED', resourceType: 'cash-reservation', resourceId: reservation.id,
-      requestId, sessionId: null, result: 'SUCCESS', metadata: { amountMinor: reservation.amountMinor.toString(), reason }, createdAt: new Date(),
+      id: randomUUID(),
+      actorUserId: null,
+      actorType: 'SYSTEM',
+      action: 'FINANCE_CASH_RELEASED',
+      resourceType: 'cash-reservation',
+      resourceId: reservation.id,
+      requestId,
+      sessionId: null,
+      result: 'SUCCESS',
+      metadata: { amountMinor: reservation.amountMinor.toString(), reason },
+      createdAt: new Date(),
     });
     return true;
   }
@@ -1410,7 +1665,10 @@ export class FinancialLedgerService {
       requestId,
       sessionId: actor.sessionId as never,
       result: 'SUCCESS',
-      metadata: { reservationId: reservation.id, amountMinor: reservation.amountMinor.toString() },
+      metadata: {
+        reservationId: reservation.id,
+        amountMinor: reservation.amountMinor.toString(),
+      },
       createdAt: new Date(),
     });
     return { reservationId, status: 'CONSUMED' as const };
@@ -1452,10 +1710,10 @@ export class FinancialLedgerService {
     work: (
       db: Db,
       audit: (
-      action:
-        | 'FINANCE_CASH_RESERVED'
-        | 'FINANCE_CASH_RELEASED'
-        | 'FINANCE_CASH_CONSUMED',
+        action:
+          | 'FINANCE_CASH_RESERVED'
+          | 'FINANCE_CASH_RELEASED'
+          | 'FINANCE_CASH_CONSUMED',
         metadata: Record<string, unknown>,
       ) => Promise<void>,
     ) => Promise<T>,

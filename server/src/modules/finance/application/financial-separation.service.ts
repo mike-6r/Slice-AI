@@ -6,6 +6,7 @@ import {
   type ProviderLiquidityProjection,
 } from '../../providers/application/withdrawal-preflight.service';
 import { accountAuthority } from '../domain/journal';
+import { authoritativeFinancialDataClasses } from '../domain/financial-data-classification';
 import {
   calculateFinancialSeparation,
   type FinancialSeparationProjection,
@@ -85,6 +86,7 @@ export class FinancialSeparationService {
         where: {
           ownerType: 'USER',
           currency: 'GBP',
+          financialDataClass: { in: [...authoritativeFinancialDataClasses] },
           code: {
             in: [
               'CASH_AVAILABLE',
@@ -98,6 +100,7 @@ export class FinancialSeparationService {
       this.db.moneyMovement.findMany({
         where: {
           currency: 'GBP',
+          financialDataClass: { in: [...authoritativeFinancialDataClasses] },
           status: {
             in: [
               'CREATED',
@@ -111,12 +114,17 @@ export class FinancialSeparationService {
         select: { type: true, amountMinor: true },
       }),
       this.db.cashReservation.aggregate({
-        where: { status: 'ACTIVE', purposeType: 'EXTERNAL_WITHDRAWAL' },
+        where: {
+          status: 'ACTIVE',
+          purposeType: 'EXTERNAL_WITHDRAWAL',
+          financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+        },
         _sum: { amountMinor: true },
       }),
       this.db.financialDeficit.findMany({
         where: {
           currency: 'GBP',
+          financialDataClass: { in: [...authoritativeFinancialDataClasses] },
           status: { in: ['OPEN', 'PARTIALLY_RECOVERED'] },
         },
         select: { amountMinor: true, recoveredMinor: true },
@@ -124,6 +132,9 @@ export class FinancialSeparationService {
       this.db.connectPayout.findMany({
         where: {
           currency: 'GBP',
+          movement: {
+            financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+          },
           status: {
             in: ['CREATED', 'TRANSFERRED', 'PROCESSING', 'MANUAL_REVIEW'],
           },
@@ -131,7 +142,16 @@ export class FinancialSeparationService {
         select: { amountMinor: true },
       }),
       this.db.connectPayoutBalanceSnapshot.findMany({
-        where: { connectPayout: { currency: 'GBP' } },
+        where: {
+          connectPayout: {
+            currency: 'GBP',
+            movement: {
+              financialDataClass: {
+                in: [...authoritativeFinancialDataClasses],
+              },
+            },
+          },
+        },
         orderBy: [{ capturedAt: 'desc' }, { id: 'desc' }],
         take: 500,
         select: {
@@ -141,21 +161,41 @@ export class FinancialSeparationService {
           capturedAt: true,
         },
       }),
-      this.db.financialAccount.findMany({
+      this.db.journalEntry.findMany({
         where: {
-          ownerType: 'PLATFORM',
-          code: { in: [...REVENUE_CODES] },
           currency: 'GBP',
+          transaction: {
+            financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+          },
+          account: {
+            ownerType: 'PLATFORM',
+            code: { in: [...REVENUE_CODES] },
+            currency: 'GBP',
+          },
         },
-        include: { balance: true },
+        select: {
+          side: true,
+          amountMinor: true,
+          account: { select: { code: true, normalSide: true } },
+        },
       }),
-      this.db.financialAccount.findFirst({
+      this.db.journalEntry.findMany({
         where: {
-          ownerType: 'PLATFORM',
-          code: 'STRIPE_PROVIDER_EXPENSE',
           currency: 'GBP',
+          transaction: {
+            financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+          },
+          account: {
+            ownerType: 'PLATFORM',
+            code: 'STRIPE_PROVIDER_EXPENSE',
+            currency: 'GBP',
+          },
         },
-        include: { balance: true },
+        select: {
+          side: true,
+          amountMinor: true,
+          account: { select: { normalSide: true } },
+        },
       }),
       this.db.providerFinancialCost.findMany({
         where: {
@@ -188,7 +228,10 @@ export class FinancialSeparationService {
         },
       }),
       this.db.moneyMovement.findMany({
-        where: { currency: 'GBP' },
+        where: {
+          currency: 'GBP',
+          financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+        },
         orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
         take: 16,
         select: {
@@ -267,27 +310,31 @@ export class FinancialSeparationService {
     const connectedBalanceEvidenceAt =
       balanceSnapshots[0]?.capturedAt.toISOString() ?? null;
 
-    const feeRevenueByCategory = revenueAccounts.map((account) => ({
-      category: account.code,
-      amountMinor: account.balance
-        ? maxZero(
-            accountAuthority(
-              account.normalSide,
-              account.balance.postedDebitMinor,
-              account.balance.postedCreditMinor,
-            ),
-          )
-        : 0n,
-    }));
-    const providerExpensesMinor = expenseAccount?.balance
-      ? maxZero(
-          accountAuthority(
-            expenseAccount.normalSide,
-            expenseAccount.balance.postedDebitMinor,
-            expenseAccount.balance.postedCreditMinor,
-          ),
-        )
-      : 0n;
+    const feeRevenue = new Map<string, bigint>();
+    for (const entry of revenueAccounts) {
+      const signed =
+        entry.side === entry.account.normalSide
+          ? entry.amountMinor
+          : -entry.amountMinor;
+      feeRevenue.set(
+        entry.account.code,
+        (feeRevenue.get(entry.account.code) ?? 0n) + signed,
+      );
+    }
+    const feeRevenueByCategory = [...feeRevenue.entries()].map(
+      ([category, amountMinor]) => ({
+        category,
+        amountMinor: maxZero(amountMinor),
+      }),
+    );
+    const providerExpensesMinor = expenseAccount.reduce(
+      (total, entry) =>
+        total +
+        (entry.side === entry.account.normalSide
+          ? entry.amountMinor
+          : -entry.amountMinor),
+      0n,
+    );
     const knownProviderCostsMinor = providerCosts
       .filter((cost) => cost.status !== 'PENDING_EVIDENCE')
       .reduce((total, cost) => total + (cost.amountMinor ?? 0n), 0n);
@@ -332,7 +379,7 @@ export class FinancialSeparationService {
         }),
         company: {
           feeRevenueByCategory,
-          providerExpensesMinor,
+          providerExpensesMinor: maxZero(providerExpensesMinor),
           knownProviderCostsMinor,
           pendingProviderCostCount,
           alreadySweptMinor,

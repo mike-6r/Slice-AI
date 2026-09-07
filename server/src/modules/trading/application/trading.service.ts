@@ -18,6 +18,7 @@ import { AccountCapabilityService } from '../../identity/access/account-capabili
 import { createIdentityTransaction } from '../../identity/persistence/prisma-identity.repositories';
 import type { IdempotencyIdentity } from '../../identity/ports/repositories';
 import { accountAuthority } from '../../finance/domain/journal';
+import { classificationForTrade } from '../../finance/domain/financial-data-classification';
 import { allocateFifoLots } from '../../finance/domain/fifo';
 import {
   normalizeLimitOrder,
@@ -581,10 +582,15 @@ export class TradingService {
         );
       }
       await tradingTestFailurePoint('order.after-reservation');
+      const orderOwner = await db.user.findUniqueOrThrow({
+        where: { id: actor.userId },
+        select: { financialDataClass: true },
+      });
       const order = await db.tradingOrder.create({
         data: {
           id: orderId,
           userId: actor.userId,
+          financialDataClass: orderOwner.financialDataClass,
           principalType: 'USER',
           principalId: actor.userId,
           actorUserId: actor.userId,
@@ -1723,13 +1729,24 @@ export class TradingService {
     actor: Actor,
     requestId: string,
   ) {
-    const market = await db.tradingMarket.findUnique({ where: { assetId: (await db.tradingOrder.findUniqueOrThrow({ where: { id: sellOrderId }, select: { assetId: true } })).assetId } });
-    if (!market) throw conflict('MARKET_NOT_OPEN', 'Trading market is unavailable.');
+    const market = await db.tradingMarket.findUnique({
+      where: {
+        assetId: (
+          await db.tradingOrder.findUniqueOrThrow({
+            where: { id: sellOrderId },
+            select: { assetId: true },
+          })
+        ).assetId,
+      },
+    });
+    if (!market)
+      throw conflict('MARKET_NOT_OPEN', 'Trading market is unavailable.');
     const [buy, sell] = await Promise.all([
       db.tradingOrder.findUnique({ where: { id: buyOrderId } }),
       db.tradingOrder.findUnique({ where: { id: sellOrderId } }),
     ]);
-    if (!buy || !sell) throw conflict('ORDER_NOT_FOUND', 'Settlement order is unavailable.');
+    if (!buy || !sell)
+      throw conflict('ORDER_NOT_FOUND', 'Settlement order is unavailable.');
     return this.settleExecution(db, market, buy, sell, actor, requestId);
   }
 
@@ -1868,6 +1885,10 @@ export class TradingService {
         grossMinor: gross,
         buyerFeeMinor: buyerFee,
         sellerFeeMinor: sellerFee,
+        financialDataClass: classificationForTrade(
+          buy.financialDataClass,
+          sell.financialDataClass,
+        ),
         marketSequence: sequence,
         correlationId,
       },
@@ -2048,6 +2069,7 @@ export class TradingService {
         purposeType: 'TRADING_ORDER',
         purposeId: orderId,
         amountMinor: amount,
+        financialDataClass: account.financialDataClass,
       },
     });
     await db.accountBalance.upsert({
@@ -2196,6 +2218,10 @@ export class TradingService {
         type: initialOffering
           ? 'INITIAL_OFFERING_SETTLEMENT'
           : 'TRADE_SETTLEMENT',
+        financialDataClass: classificationForTrade(
+          buyOrder.financialDataClass,
+          sellOrder.financialDataClass,
+        ),
         currency: 'GBP',
         correlationId,
         descriptionCode: initialOffering
@@ -2399,10 +2425,15 @@ export class TradingService {
     gross: bigint,
     sourceReference: string,
   ) {
+    const owner = await db.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { financialDataClass: true },
+    });
     await db.portfolioLot.create({
       data: {
         id: randomUUID(),
         userId,
+        financialDataClass: owner.financialDataClass,
         assetId,
         acquiredUnits: units,
         remainingUnits: units,
@@ -2753,6 +2784,10 @@ export class TradingService {
   }
   private async cashAccount(db: Db, userId: string) {
     await this.lockUsers(db, [userId]);
+    const owner = await db.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { financialDataClass: true },
+    });
     return (
       (await db.financialAccount.findFirst({
         where: {
@@ -2771,6 +2806,7 @@ export class TradingService {
           code: 'CASH_AVAILABLE',
           currency: 'GBP',
           normalSide: 'CREDIT',
+          financialDataClass: owner.financialDataClass,
         },
       })
     );
@@ -2860,6 +2896,10 @@ export class TradingService {
           'Initial offering beneficiary is unavailable.',
         );
       await this.lockUsers(db, [initialOffering.beneficiaryUserId]);
+      const beneficiary = await db.user.findUniqueOrThrow({
+        where: { id: initialOffering.beneficiaryUserId },
+        select: { financialDataClass: true },
+      });
       return (
         (await db.financialAccount.findFirst({
           where: {
@@ -2878,6 +2918,7 @@ export class TradingService {
             code: 'COLLECTOR_PROCEEDS_AVAILABLE',
             currency: 'GBP',
             normalSide: 'CREDIT',
+            financialDataClass: beneficiary.financialDataClass,
           },
         })
       );
@@ -2906,6 +2947,7 @@ export class TradingService {
           code: 'STAGING_DEMO_TREASURY_PROCEEDS',
           currency: 'GBP',
           normalSide: 'CREDIT',
+          financialDataClass: 'DEMO',
         },
       })
     );

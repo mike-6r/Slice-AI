@@ -4491,6 +4491,9 @@ const mapAdminFinanceRecords = (raw: unknown): AdminFinanceRecordsResponse => {
   const pagination = objectField(value.pagination, "admin finance records.pagination");
   return {
     tab: stringField(value.tab, "admin finance records.tab"),
+    dataClassScope: ["OPERATIONAL", "QA_DEMO", "ALL"].includes(String(value.dataClassScope))
+      ? (value.dataClassScope as AdminFinanceRecordsResponse["dataClassScope"])
+      : "OPERATIONAL",
     items: Array.isArray(value.items)
       ? value.items.map((entry) => objectField(entry, "admin finance record") as AdminFinanceRecord)
       : [],

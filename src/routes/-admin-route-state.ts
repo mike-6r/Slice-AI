@@ -86,6 +86,7 @@ export type AdminSearch = {
   accountLastActive?: string;
   accountSort?: string;
   accountPage?: string;
+  financeDataClass?: string;
 };
 
 const navigableSections: AdminSection[] = [
@@ -233,6 +234,7 @@ export function normalizeAdminSearch(search: Record<string, unknown>): AdminSear
     accountLastActive: stringValue("accountLastActive"),
     accountSort: stringValue("accountSort"),
     accountPage: stringValue("accountPage"),
+    financeDataClass: stringValue("financeDataClass"),
   };
 }
 

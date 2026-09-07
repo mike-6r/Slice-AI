@@ -28,6 +28,11 @@ import {
 import { OwnershipPolicyService } from '../ownership/application/ownership-policy.service';
 import { deriveMarketLifecycle } from '../market-lifecycle/domain/market-lifecycle';
 import { PlatformRevenueSettlementService } from '../finance/application/platform-revenue-settlement.service';
+import {
+  authoritativeFinancialDataClasses,
+  financeDataScope,
+  financialDataClassesForScope,
+} from '../finance/domain/financial-data-classification';
 import { WithdrawalPreflightService } from '../providers/application/withdrawal-preflight.service';
 import {
   loadOptionalAdminEnrichment,
@@ -62,7 +67,10 @@ import { MarketRefreshService } from '../market/market-refresh.service';
 import { TrustedReferenceImportService } from '../market-research/trusted-reference-import.service';
 import { publicDiscoverableAssetWhere } from '../public-discovery/public-asset-visibility';
 import { OutboxWriter } from '../outbox/application/outbox-writer.service';
-import { customerResourceEvent, eventType } from '../outbox/domain/domain-event';
+import {
+  customerResourceEvent,
+  eventType,
+} from '../outbox/domain/domain-event';
 
 type IntakeLocationManagementInput = {
   displayName: string;
@@ -125,24 +133,57 @@ type IntakeLocationCommand =
   | 'REPAIR_AVAILABILITY'
   | 'REPAIR_CAPACITY_PROJECTION';
 
-function intakeLocationAvailability(location: {
-  active: boolean;
-  status: string;
-  intakeAvailable: boolean;
-  operationallyApproved: boolean;
-  acceptingShipments: boolean;
-  acceptingInPerson: boolean;
-  maximumActiveIntakes?: number | null;
-}, activeIntakes: number) {
+function intakeLocationAvailability(
+  location: {
+    active: boolean;
+    status: string;
+    intakeAvailable: boolean;
+    operationallyApproved: boolean;
+    acceptingShipments: boolean;
+    acceptingInPerson: boolean;
+    maximumActiveIntakes?: number | null;
+  },
+  activeIntakes: number,
+) {
   if (!location.active || location.status === 'INACTIVE')
-    return { code: 'UNAVAILABLE' as const, label: 'Unavailable', reason: 'Location is inactive.' };
-  if (location.maximumActiveIntakes !== null && location.maximumActiveIntakes !== undefined && activeIntakes >= location.maximumActiveIntakes)
-    return { code: 'AT_CAPACITY' as const, label: 'At capacity', reason: 'Configured active-intake capacity has been reached.' };
-  if (location.status === 'TEMPORARILY_UNAVAILABLE' || !location.intakeAvailable)
-    return { code: 'PAUSED' as const, label: 'Temporarily paused', reason: 'Location is not accepting new intakes.' };
-  if (!location.operationallyApproved || (!location.acceptingShipments && !location.acceptingInPerson))
-    return { code: 'UNAVAILABLE' as const, label: 'Unavailable', reason: 'Location configuration is incomplete or not approved.' };
-  return { code: 'ACCEPTING' as const, label: 'Accepting intakes', reason: null };
+    return {
+      code: 'UNAVAILABLE' as const,
+      label: 'Unavailable',
+      reason: 'Location is inactive.',
+    };
+  if (
+    location.maximumActiveIntakes !== null &&
+    location.maximumActiveIntakes !== undefined &&
+    activeIntakes >= location.maximumActiveIntakes
+  )
+    return {
+      code: 'AT_CAPACITY' as const,
+      label: 'At capacity',
+      reason: 'Configured active-intake capacity has been reached.',
+    };
+  if (
+    location.status === 'TEMPORARILY_UNAVAILABLE' ||
+    !location.intakeAvailable
+  )
+    return {
+      code: 'PAUSED' as const,
+      label: 'Temporarily paused',
+      reason: 'Location is not accepting new intakes.',
+    };
+  if (
+    !location.operationallyApproved ||
+    (!location.acceptingShipments && !location.acceptingInPerson)
+  )
+    return {
+      code: 'UNAVAILABLE' as const,
+      label: 'Unavailable',
+      reason: 'Location configuration is incomplete or not approved.',
+    };
+  return {
+    code: 'ACCEPTING' as const,
+    label: 'Accepting intakes',
+    reason: null,
+  };
 }
 
 const activeIntakeStatuses: IntakeStatus[] = [
@@ -244,7 +285,8 @@ export class AdminService {
     private readonly withdrawalPreflight: WithdrawalPreflightService,
     @Optional() private readonly outbox?: OutboxWriter,
     @Optional() private readonly marketRefresh?: MarketRefreshService,
-    @Optional() private readonly referenceImports?: TrustedReferenceImportService,
+    @Optional()
+    private readonly referenceImports?: TrustedReferenceImportService,
   ) {}
 
   async linkMarketReference(
@@ -257,14 +299,24 @@ export class AdminService {
     await this.authorization.authorize(actor, 'integrations.manage');
     if (input.assetId && input.assetId !== assetId)
       throw new BadRequestException({ code: 'ASSET_ID_MISMATCH' });
-    if (force && (!input.reason || input.reason.length < 12 || input.confirmation !== 'FORCE_LINK_MARKET_REFERENCE'))
+    if (
+      force &&
+      (!input.reason ||
+        input.reason.length < 12 ||
+        input.confirmation !== 'FORCE_LINK_MARKET_REFERENCE')
+    )
       throw new BadRequestException({
         code: 'FORCE_LINK_CONFIRMATION_REQUIRED',
-        message: 'Force linking requires a reason and the exact confirmation text.',
+        message:
+          'Force linking requires a reason and the exact confirmation text.',
       });
     const asset = await this.db.asset.findUnique({
       where: { id: assetId },
-      include: { category: true, collectibleSet: true, gradeScaleEntry: { include: { company: true } } },
+      include: {
+        category: true,
+        collectibleSet: true,
+        gradeScaleEntry: { include: { company: true } },
+      },
     });
     if (!asset) throw new NotFoundException({ code: 'ASSET_NOT_FOUND' });
     if (!this.referenceImports || !this.marketRefresh)
@@ -276,19 +328,25 @@ export class AdminService {
         code: 'MARKET_REFERENCE_UNSUPPORTED',
         message: imported.message,
       });
-    const providerCode = reference.provider.toUpperCase().replace(/[^A-Z0-9]+/g, '_');
-    const providerExternalId = reference.externalReferenceId ?? reference.normalizedUrl;
+    const providerCode = reference.provider
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_');
+    const providerExternalId =
+      reference.externalReferenceId ?? reference.normalizedUrl;
     const identityHash = marketAssetIdentityHash(asset);
     const previous = await this.db.marketProviderMapping.findUnique({
       where: { assetId_providerCode: { assetId, providerCode } },
     });
     const collision = await this.db.marketProviderMapping.findUnique({
-      where: { providerCode_providerExternalId: { providerCode, providerExternalId } },
+      where: {
+        providerCode_providerExternalId: { providerCode, providerExternalId },
+      },
     });
     if (collision && collision.assetId !== assetId)
       throw new ConflictException({
         code: 'MARKET_REFERENCE_ALREADY_LINKED',
-        message: 'That provider reference is already linked to another canonical asset.',
+        message:
+          'That provider reference is already linked to another canonical asset.',
       });
     const status = force
       ? 'STAFF_CONFIRMED'
@@ -306,7 +364,8 @@ export class AdminService {
         providerUrl: reference.normalizedUrl,
         identityHash,
         status,
-        matchQuality: imported.status === 'MATCH_FOUND' || force ? 'EXACT' : 'STRONG',
+        matchQuality:
+          imported.status === 'MATCH_FOUND' || force ? 'EXACT' : 'STRONG',
         lastVerifiedAt: imported.status === 'MATCH_FOUND' || force ? now : null,
         nextRefreshAt: now,
       },
@@ -315,7 +374,8 @@ export class AdminService {
         providerUrl: reference.normalizedUrl,
         identityHash,
         status,
-        matchQuality: imported.status === 'MATCH_FOUND' || force ? 'EXACT' : 'STRONG',
+        matchQuality:
+          imported.status === 'MATCH_FOUND' || force ? 'EXACT' : 'STRONG',
         lastVerifiedAt: imported.status === 'MATCH_FOUND' || force ? now : null,
         nextRefreshAt: now,
         lastFailureAt: null,
@@ -327,7 +387,11 @@ export class AdminService {
         id: randomUUID(),
         actorUserId: actor.userId,
         actorType: 'USER',
-        action: force ? 'ADMIN_MARKET_REFERENCE_FORCE_LINKED' : previous ? 'ADMIN_MARKET_REFERENCE_REPLACED' : 'ADMIN_MARKET_REFERENCE_LINKED',
+        action: force
+          ? 'ADMIN_MARKET_REFERENCE_FORCE_LINKED'
+          : previous
+            ? 'ADMIN_MARKET_REFERENCE_REPLACED'
+            : 'ADMIN_MARKET_REFERENCE_LINKED',
         resourceType: 'asset',
         resourceId: assetId,
         requestId,
@@ -338,10 +402,21 @@ export class AdminService {
           providerReferenceId: providerExternalId,
           originalUrl: reference.originalUrl,
           canonicalUrl: reference.normalizedUrl,
-          reason: input.reason ?? 'Reference linked after provider identity check.',
+          reason:
+            input.reason ?? 'Reference linked after provider identity check.',
           forced: force,
-          before: previous ? { provider: previous.providerCode, providerReferenceId: previous.providerExternalId, status: previous.status } : null,
-          after: { provider: mapping.providerCode, providerReferenceId: mapping.providerExternalId, status: mapping.status },
+          before: previous
+            ? {
+                provider: previous.providerCode,
+                providerReferenceId: previous.providerExternalId,
+                status: previous.status,
+              }
+            : null,
+          after: {
+            provider: mapping.providerCode,
+            providerReferenceId: mapping.providerExternalId,
+            status: mapping.status,
+          },
         } as Prisma.InputJsonValue,
         createdAt: now,
       },
@@ -356,7 +431,11 @@ export class AdminService {
       providerReferenceId: providerExternalId,
       originalUrl: reference.originalUrl,
       canonicalUrl: reference.normalizedUrl,
-      matchStatus: force ? 'VERIFIED MATCH' : status === 'VERIFIED' ? 'VERIFIED MATCH' : 'NEEDS REVIEW',
+      matchStatus: force
+        ? 'VERIFIED MATCH'
+        : status === 'VERIFIED'
+          ? 'VERIFIED MATCH'
+          : 'NEEDS REVIEW',
       fetchStatus: 'QUEUED',
       refresh,
       authoritativeValuationChanged: false,
@@ -365,40 +444,114 @@ export class AdminService {
 
   async rerunMarketReference(actor: Actor, assetId: string, requestId: string) {
     await this.authorization.authorize(actor, 'integrations.manage');
-    if (!this.marketRefresh) throw new ConflictException({ code: 'MARKET_REFRESH_UNAVAILABLE' });
+    if (!this.marketRefresh)
+      throw new ConflictException({ code: 'MARKET_REFRESH_UNAVAILABLE' });
     const refresh = await this.marketRefresh.refreshAssetNow(assetId);
     await this.db.auditEvent.create({
       data: {
-        id: randomUUID(), actorUserId: actor.userId, actorType: 'USER',
-        action: 'MARKET_CHECK_STARTED', resourceType: 'asset', resourceId: assetId,
-        requestId, sessionId: actor.sessionId, result: 'SUCCESS',
-        metadata: refresh as unknown as Prisma.InputJsonValue, createdAt: new Date(),
+        id: randomUUID(),
+        actorUserId: actor.userId,
+        actorType: 'USER',
+        action: 'MARKET_CHECK_STARTED',
+        resourceType: 'asset',
+        resourceId: assetId,
+        requestId,
+        sessionId: actor.sessionId,
+        result: 'SUCCESS',
+        metadata: refresh as unknown as Prisma.InputJsonValue,
+        createdAt: new Date(),
       },
     });
-    return { assetId, status: refresh.queued ? 'QUEUED' : 'ALREADY_QUEUED', refresh };
+    return {
+      assetId,
+      status: refresh.queued ? 'QUEUED' : 'ALREADY_QUEUED',
+      refresh,
+    };
   }
 
-  async removePreferredMarketReference(actor: Actor, assetId: string, reason: string, requestId: string) {
+  async removePreferredMarketReference(
+    actor: Actor,
+    assetId: string,
+    reason: string,
+    requestId: string,
+  ) {
     await this.authorization.authorize(actor, 'integrations.manage');
-    const mapping = await this.db.marketProviderMapping.findFirst({ where: { assetId, status: { not: 'REMOVED' } }, orderBy: { updatedAt: 'desc' } });
-    if (!mapping) throw new NotFoundException({ code: 'MARKET_REFERENCE_NOT_FOUND' });
-    await this.db.marketProviderMapping.update({ where: { id: mapping.id }, data: { status: 'REMOVED', nextRefreshAt: null } });
-    await this.auditMarketCommand(actor, assetId, 'MARKET_REFERENCE_REMOVED_FROM_PREFERRED_USE', requestId, { reason, mappingId: mapping.id });
-    return { assetId, status: 'NOT_LINKED', authoritativeValuationChanged: false };
+    const mapping = await this.db.marketProviderMapping.findFirst({
+      where: { assetId, status: { not: 'REMOVED' } },
+      orderBy: { updatedAt: 'desc' },
+    });
+    if (!mapping)
+      throw new NotFoundException({ code: 'MARKET_REFERENCE_NOT_FOUND' });
+    await this.db.marketProviderMapping.update({
+      where: { id: mapping.id },
+      data: { status: 'REMOVED', nextRefreshAt: null },
+    });
+    await this.auditMarketCommand(
+      actor,
+      assetId,
+      'MARKET_REFERENCE_REMOVED_FROM_PREFERRED_USE',
+      requestId,
+      { reason, mappingId: mapping.id },
+    );
+    return {
+      assetId,
+      status: 'NOT_LINKED',
+      authoritativeValuationChanged: false,
+    };
   }
 
-  async markMarketReferenceReview(actor: Actor, assetId: string, reason: string, requestId: string) {
+  async markMarketReferenceReview(
+    actor: Actor,
+    assetId: string,
+    reason: string,
+    requestId: string,
+  ) {
     await this.authorization.authorize(actor, 'integrations.manage');
-    const mapping = await this.db.marketProviderMapping.findFirst({ where: { assetId, status: { not: 'REMOVED' } }, orderBy: { updatedAt: 'desc' } });
-    if (!mapping) throw new NotFoundException({ code: 'MARKET_REFERENCE_NOT_FOUND' });
-    await this.db.marketProviderMapping.update({ where: { id: mapping.id }, data: { status: 'NEEDS_REVIEW', matchQuality: 'STRONG' } });
-    await this.auditMarketCommand(actor, assetId, 'MARKET_REFERENCE_REQUIRES_REVIEW', requestId, { reason, mappingId: mapping.id });
-    return { assetId, status: 'NEEDS REVIEW', authoritativeValuationChanged: false };
+    const mapping = await this.db.marketProviderMapping.findFirst({
+      where: { assetId, status: { not: 'REMOVED' } },
+      orderBy: { updatedAt: 'desc' },
+    });
+    if (!mapping)
+      throw new NotFoundException({ code: 'MARKET_REFERENCE_NOT_FOUND' });
+    await this.db.marketProviderMapping.update({
+      where: { id: mapping.id },
+      data: { status: 'NEEDS_REVIEW', matchQuality: 'STRONG' },
+    });
+    await this.auditMarketCommand(
+      actor,
+      assetId,
+      'MARKET_REFERENCE_REQUIRES_REVIEW',
+      requestId,
+      { reason, mappingId: mapping.id },
+    );
+    return {
+      assetId,
+      status: 'NEEDS REVIEW',
+      authoritativeValuationChanged: false,
+    };
   }
 
-  private auditMarketCommand(actor: Actor, assetId: string, action: string, requestId: string, metadata: Record<string, unknown>) {
+  private auditMarketCommand(
+    actor: Actor,
+    assetId: string,
+    action: string,
+    requestId: string,
+    metadata: Record<string, unknown>,
+  ) {
     return this.db.auditEvent.create({
-      data: { id: randomUUID(), actorUserId: actor.userId, actorType: 'USER', action, resourceType: 'asset', resourceId: assetId, requestId, sessionId: actor.sessionId, result: 'SUCCESS', metadata: metadata as Prisma.InputJsonValue, createdAt: new Date() },
+      data: {
+        id: randomUUID(),
+        actorUserId: actor.userId,
+        actorType: 'USER',
+        action,
+        resourceType: 'asset',
+        resourceId: assetId,
+        requestId,
+        sessionId: actor.sessionId,
+        result: 'SUCCESS',
+        metadata: metadata as Prisma.InputJsonValue,
+        createdAt: new Date(),
+      },
     });
   }
 
@@ -4116,12 +4269,14 @@ export class AdminService {
       if (submission.status !== 'APPROVED')
         throw new ConflictException({
           code: 'SUBMISSION_NOT_ACCEPTED',
-          message: 'A destination can only be assigned after staff accepts the submission.',
+          message:
+            'A destination can only be assigned after staff accepts the submission.',
         });
       if (submission.intake?.shipment || submission.intake?.receipt)
         throw new ConflictException({
           code: 'SHIPMENT_ALREADY_STARTED',
-          message: 'The destination cannot be changed after shipment or receipt starts.',
+          message:
+            'The destination cannot be changed after shipment or receipt starts.',
         });
 
       const vault = await db.vaultIntakeLocation.findFirst({
@@ -4140,7 +4295,8 @@ export class AdminService {
       if (!vault)
         throw new NotFoundException({
           code: 'VAULT_NOT_AVAILABLE',
-          message: 'That intake destination is no longer available for this delivery method.',
+          message:
+            'That intake destination is no longer available for this delivery method.',
         });
 
       if (vault.maximumActiveIntakes !== null) {
@@ -4154,12 +4310,14 @@ export class AdminService {
         if (activeIntakes >= vault.maximumActiveIntakes)
           throw new ConflictException({
             code: 'VAULT_AT_CAPACITY',
-            message: 'That intake destination has reached its current capacity.',
+            message:
+              'That intake destination has reached its current capacity.',
           });
       }
 
       const accepted =
-        Array.isArray(vault.acceptedCategories) && vault.acceptedCategories.length
+        Array.isArray(vault.acceptedCategories) &&
+        vault.acceptedCategories.length
           ? vault.acceptedCategories
           : null;
       if (accepted && !accepted.includes(submission.categoryId))
@@ -4169,7 +4327,9 @@ export class AdminService {
         });
 
       const intakeStatus =
-        input.deliveryMethod === 'SHIPMENT' ? 'SHIPPING_REQUIRED' : 'VAULT_SELECTED';
+        input.deliveryMethod === 'SHIPMENT'
+          ? 'SHIPPING_REQUIRED'
+          : 'VAULT_SELECTED';
       const intake = await db.submissionIntake.upsert({
         where: { submissionId },
         create: {
@@ -4257,7 +4417,9 @@ export class AdminService {
       pageSize: 100,
       limit: 100,
     });
-    const row = queue.items.find((item) => item.submissionId === canonicalSubmissionId);
+    const row = queue.items.find(
+      (item) => item.submissionId === canonicalSubmissionId,
+    );
     if (!row)
       throw new NotFoundException({
         code: 'INTAKE_NOT_FOUND',
@@ -4470,7 +4632,9 @@ export class AdminService {
       ),
       confirmReceipt: command(
         row.allowedActions?.includes('CONFIRM_RECEIPT') ?? false,
-        row.receipt ? 'Physical receipt is already confirmed.' : 'Receipt requires the current delivery state.',
+        row.receipt
+          ? 'Physical receipt is already confirmed.'
+          : 'Receipt requires the current delivery state.',
       ),
       startVerification: command(
         row.allowedActions?.includes('START_VERIFICATION') ?? false,
@@ -4482,12 +4646,25 @@ export class AdminService {
       ),
       addException: command(true),
       resolveException: command(
-        Boolean(submission.intake?.exceptions.some((exception) => !exception.resolvedAt)),
+        Boolean(
+          submission.intake?.exceptions.some(
+            (exception) => !exception.resolvedAt,
+          ),
+        ),
         'There are no open intake exceptions.',
       ),
-      assignStaff: command(false, 'Staff assignment authority is not configured for this intake projection.'),
-      recover: command(false, 'Break-glass recovery commands are not exposed by the current authority.'),
-      useOverride: command(false, 'Override commands are not exposed by the current authority.'),
+      assignStaff: command(
+        false,
+        'Staff assignment authority is not configured for this intake projection.',
+      ),
+      recover: command(
+        false,
+        'Break-glass recovery commands are not exposed by the current authority.',
+      ),
+      useOverride: command(
+        false,
+        'Override commands are not exposed by the current authority.',
+      ),
     };
 
     return {
@@ -4618,8 +4795,8 @@ export class AdminService {
         | 'SLICE_VAULT'
         | 'SLICE_INTAKE'
         | 'PARTNER_STORE'
-      | 'PARTNER_INTAKE'
-      | 'DEMO_TEST';
+        | 'PARTNER_INTAKE'
+        | 'DEMO_TEST';
       deliveryMethod?: 'SHIPPING' | 'IN_PERSON' | 'BOTH';
       availability?: 'ACCEPTING' | 'PAUSED' | 'AT_CAPACITY' | 'UNAVAILABLE';
       environment?: 'beta' | 'production';
@@ -4660,51 +4837,58 @@ export class AdminService {
         : {}),
     };
     const locations = await this.db.vaultIntakeLocation.findMany({
-        where,
-        orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
-        select: {
-          id: true,
-          displayName: true,
-          locationType: true,
-          environment: true,
-          status: true,
-          active: true,
-          intakeAvailable: true,
-          operationallyApproved: true,
-          acceptingShipments: true,
-          acceptingInPerson: true,
-          region: true,
-          countryCode: true,
-          city: true,
-          addressLine1: true,
-          inPersonInstructions: true,
-          internalName: true,
-          maximumActiveIntakes: true,
-          warningThreshold: true,
-          updatedAt: true,
-          _count: {
-            select: {
-              intakes: { where: { status: { in: activeIntakeStatuses } } },
-            },
-          },
-          intakes: {
-            where: { status: { in: activeIntakeStatuses } },
-            orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-            take: 1,
-            select: { updatedAt: true },
+      where,
+      orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        displayName: true,
+        locationType: true,
+        environment: true,
+        status: true,
+        active: true,
+        intakeAvailable: true,
+        operationallyApproved: true,
+        acceptingShipments: true,
+        acceptingInPerson: true,
+        region: true,
+        countryCode: true,
+        city: true,
+        addressLine1: true,
+        inPersonInstructions: true,
+        internalName: true,
+        maximumActiveIntakes: true,
+        warningThreshold: true,
+        updatedAt: true,
+        _count: {
+          select: {
+            intakes: { where: { status: { in: activeIntakeStatuses } } },
           },
         },
+        intakes: {
+          where: { status: { in: activeIntakeStatuses } },
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+          take: 1,
+          select: { updatedAt: true },
+        },
+      },
     });
     const projected = locations
       .map((location) => {
         const activeIntakes = location._count.intakes;
-        const availability = intakeLocationAvailability(location, activeIntakes);
+        const availability = intakeLocationAvailability(
+          location,
+          activeIntakes,
+        );
         const warnings = [
           availability.code === 'AT_CAPACITY' ? 'At capacity' : null,
           availability.code === 'PAUSED' ? 'New intakes paused' : null,
           !location.operationallyApproved ? 'Configuration incomplete' : null,
-          location.acceptingShipments && !location.addressLine1 ? 'Shipping address incomplete' : null,
-          location.acceptingInPerson && !location.inPersonInstructions ? 'Drop-off instructions missing' : null,
+          location.acceptingShipments && !location.addressLine1
+            ? 'Shipping address incomplete'
+            : null,
+          location.acceptingInPerson && !location.inPersonInstructions
+            ? 'Drop-off instructions missing'
+            : null,
         ].filter((item): item is string => Boolean(item));
         return {
           ...location,
@@ -4714,15 +4898,27 @@ export class AdminService {
           availabilityReason: availability.reason,
           warnings,
           capacity: location.maximumActiveIntakes
-            ? { active: activeIntakes, maximum: location.maximumActiveIntakes, warningThreshold: location.warningThreshold }
+            ? {
+                active: activeIntakes,
+                maximum: location.maximumActiveIntakes,
+                warningThreshold: location.warningThreshold,
+              }
             : null,
-          lastActivityAt: location.intakes[0]?.updatedAt?.toISOString() ?? location.updatedAt.toISOString(),
+          lastActivityAt:
+            location.intakes[0]?.updatedAt?.toISOString() ??
+            location.updatedAt.toISOString(),
         };
       })
-      .filter((location) => !input.availability || location.availability === input.availability);
+      .filter(
+        (location) =>
+          !input.availability || location.availability === input.availability,
+      );
     const direction = input.sortDirection ?? 'asc';
     projected.sort((left, right) => {
-      if (input.sort === 'ACTIVE_INTAKES') return direction === 'desc' ? right.activeIntakes - left.activeIntakes : left.activeIntakes - right.activeIntakes;
+      if (input.sort === 'ACTIVE_INTAKES')
+        return direction === 'desc'
+          ? right.activeIntakes - left.activeIntakes
+          : left.activeIntakes - right.activeIntakes;
       if (input.sort === 'RECENT_ACTIVITY') {
         const result = right.lastActivityAt.localeCompare(left.lastActivityAt);
         return direction === 'desc' ? -result : result;
@@ -4743,53 +4939,99 @@ export class AdminService {
         acceptingInPerson: true,
         maximumActiveIntakes: true,
         warningThreshold: true,
-        _count: { select: { intakes: { where: { status: { in: activeIntakeStatuses } } } } },
+        _count: {
+          select: {
+            intakes: { where: { status: { in: activeIntakeStatuses } } },
+          },
+        },
       },
     });
-    const allProjected = allLocations.map((location) => intakeLocationAvailability(location, location._count.intakes));
+    const allProjected = allLocations.map((location) =>
+      intakeLocationAvailability(location, location._count.intakes),
+    );
     const locationIds = allLocations.map((location) => location.id);
     const [activeExceptionCount, recentInfoUpdateCount] = locationIds.length
       ? await Promise.all([
           this.db.intakeException.count({
             where: {
               resolvedAt: null,
-              intake: { vaultId: { in: locationIds }, status: { in: activeIntakeStatuses } },
+              intake: {
+                vaultId: { in: locationIds },
+                status: { in: activeIntakeStatuses },
+              },
             },
           }),
           this.db.auditEvent.count({
             where: {
               resourceType: 'vault-intake-location',
               action: 'INTAKE_LOCATION_UPDATED',
-              createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+              createdAt: {
+                gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+              },
             },
           }),
         ])
       : [0, 0];
-    const healthy = allProjected.filter((item) => item.code === 'ACCEPTING').length;
-    const degraded = allProjected.filter((item) => item.code === 'PAUSED' || item.code === 'AT_CAPACITY').length;
-    const critical = allProjected.filter((item) => item.code === 'UNAVAILABLE').length;
-    const atCapacity = allProjected.filter((item) => item.code === 'AT_CAPACITY').length;
+    const healthy = allProjected.filter(
+      (item) => item.code === 'ACCEPTING',
+    ).length;
+    const degraded = allProjected.filter(
+      (item) => item.code === 'PAUSED' || item.code === 'AT_CAPACITY',
+    ).length;
+    const critical = allProjected.filter(
+      (item) => item.code === 'UNAVAILABLE',
+    ).length;
+    const atCapacity = allProjected.filter(
+      (item) => item.code === 'AT_CAPACITY',
+    ).length;
     const paused = allProjected.filter((item) => item.code === 'PAUSED').length;
     const lowCapacity = allLocations.filter((location) => {
       if (!location.maximumActiveIntakes) return false;
       const ratio = location._count.intakes / location.maximumActiveIntakes;
-      const threshold = location.warningThreshold === null ? 0.8 : location.warningThreshold / location.maximumActiveIntakes;
+      const threshold =
+        location.warningThreshold === null
+          ? 0.8
+          : location.warningThreshold / location.maximumActiveIntakes;
       return ratio >= threshold;
     }).length;
     return {
       summary: {
-        activeLocations: allLocations.filter((location) => location.status === 'ACTIVE' && location.active).length,
-        acceptingIntakes: allProjected.filter((item) => item.code === 'ACCEPTING').length,
-        shippingEnabled: allLocations.filter((location) => location.active && location.status === 'ACTIVE' && location.intakeAvailable && location.acceptingShipments && intakeLocationAvailability(location, 0).code === 'ACCEPTING').length,
-        inPersonEnabled: allLocations.filter((location) => location.active && location.status === 'ACTIVE' && location.intakeAvailable && location.acceptingInPerson && intakeLocationAvailability(location, 0).code === 'ACCEPTING').length,
-        temporarilyUnavailable: allProjected.filter((item) => item.code === 'PAUSED').length,
-        atCapacity: allProjected.filter((item) => item.code === 'AT_CAPACITY').length,
-        unavailable: allProjected.filter((item) => item.code === 'UNAVAILABLE').length,
+        activeLocations: allLocations.filter(
+          (location) => location.status === 'ACTIVE' && location.active,
+        ).length,
+        acceptingIntakes: allProjected.filter(
+          (item) => item.code === 'ACCEPTING',
+        ).length,
+        shippingEnabled: allLocations.filter(
+          (location) =>
+            location.active &&
+            location.status === 'ACTIVE' &&
+            location.intakeAvailable &&
+            location.acceptingShipments &&
+            intakeLocationAvailability(location, 0).code === 'ACCEPTING',
+        ).length,
+        inPersonEnabled: allLocations.filter(
+          (location) =>
+            location.active &&
+            location.status === 'ACTIVE' &&
+            location.intakeAvailable &&
+            location.acceptingInPerson &&
+            intakeLocationAvailability(location, 0).code === 'ACCEPTING',
+        ).length,
+        temporarilyUnavailable: allProjected.filter(
+          (item) => item.code === 'PAUSED',
+        ).length,
+        atCapacity: allProjected.filter((item) => item.code === 'AT_CAPACITY')
+          .length,
+        unavailable: allProjected.filter((item) => item.code === 'UNAVAILABLE')
+          .length,
         health: {
           healthy,
           degraded,
           critical,
-          percentage: allLocations.length ? Math.round((healthy / allLocations.length) * 100) : 0,
+          percentage: allLocations.length
+            ? Math.round((healthy / allLocations.length) * 100)
+            : 0,
         },
         exceptions: {
           totalActive: activeExceptionCount + atCapacity + paused,
@@ -4879,9 +5121,16 @@ export class AdminService {
         code: 'INTAKE_LOCATION_NOT_FOUND',
         message: 'Intake location not found.',
       });
-    const locationAvailability = intakeLocationAvailability(location, location._count.intakes);
-    const canManageLocation = actor.roles.includes('ADMIN') || actor.roles.includes('VAULT_OPERATOR');
-    const command = (allowed: boolean, reason: string | undefined = undefined) => ({
+    const locationAvailability = intakeLocationAvailability(
+      location,
+      location._count.intakes,
+    );
+    const canManageLocation =
+      actor.roles.includes('ADMIN') || actor.roles.includes('VAULT_OPERATOR');
+    const command = (
+      allowed: boolean,
+      reason: string | undefined = undefined,
+    ) => ({
       allowed,
       ...(reason ? { reason } : {}),
     });
@@ -5018,20 +5267,30 @@ export class AdminService {
         supportedCategories: categories,
         createdAt: location.createdAt.toISOString(),
         updatedAt: location.updatedAt.toISOString(),
-        lastActivityAt: history[0]?.createdAt.toISOString() ?? location.updatedAt.toISOString(),
+        lastActivityAt:
+          history[0]?.createdAt.toISOString() ??
+          location.updatedAt.toISOString(),
         activeIntakes: location._count.intakes,
         availability: locationAvailability.code,
         availabilityLabel: locationAvailability.label,
         availabilityReason: locationAvailability.reason,
         capacity: location.maximumActiveIntakes
-          ? { active: location._count.intakes, maximum: location.maximumActiveIntakes, warningThreshold: location.warningThreshold }
+          ? {
+              active: location._count.intakes,
+              maximum: location.maximumActiveIntakes,
+              warningThreshold: location.warningThreshold,
+            }
           : null,
         warnings: [
           locationAvailability.code === 'AT_CAPACITY' ? 'At capacity' : null,
           locationAvailability.code === 'PAUSED' ? 'New intakes paused' : null,
           !location.operationallyApproved ? 'Configuration incomplete' : null,
-          location.acceptingShipments && !location.addressLine1 ? 'Shipping address incomplete' : null,
-          location.acceptingInPerson && !location.inPersonInstructions ? 'Drop-off instructions missing' : null,
+          location.acceptingShipments && !location.addressLine1
+            ? 'Shipping address incomplete'
+            : null,
+          location.acceptingInPerson && !location.inPersonInstructions
+            ? 'Drop-off instructions missing'
+            : null,
         ].filter((item): item is string => Boolean(item)),
       },
       intakes: intakeRows,
@@ -5041,7 +5300,9 @@ export class AdminService {
       }, {}),
       history: history.map((event) => {
         const metadata =
-          event.metadata && typeof event.metadata === 'object' && !Array.isArray(event.metadata)
+          event.metadata &&
+          typeof event.metadata === 'object' &&
+          !Array.isArray(event.metadata)
             ? (event.metadata as Record<string, unknown>)
             : {};
         return {
@@ -5054,35 +5315,105 @@ export class AdminService {
           occurredAt: event.createdAt.toISOString(),
           reason: typeof metadata.reason === 'string' ? metadata.reason : null,
           before:
-            metadata.previous && typeof metadata.previous === 'object' && !Array.isArray(metadata.previous)
+            metadata.previous &&
+            typeof metadata.previous === 'object' &&
+            !Array.isArray(metadata.previous)
               ? (metadata.previous as Record<string, unknown>)
               : null,
           after:
-            metadata.next && typeof metadata.next === 'object' && !Array.isArray(metadata.next)
+            metadata.next &&
+            typeof metadata.next === 'object' &&
+            !Array.isArray(metadata.next)
               ? (metadata.next as Record<string, unknown>)
               : null,
         };
       }),
       availableCommands: {
-        EDIT: command(canManageLocation, 'Location management requires custody access.'),
-        PAUSE_NEW_INTAKES: command(canManageLocation && location.status === 'ACTIVE' && location.intakeAvailable, location.status !== 'ACTIVE' ? 'Only active locations can be paused.' : 'Location is already paused.'),
-        RESUME_NEW_INTAKES: command(canManageLocation && location.status === 'TEMPORARILY_UNAVAILABLE', location.status !== 'TEMPORARILY_UNAVAILABLE' ? 'Location is not temporarily paused.' : undefined),
-        DEACTIVATE: command(canManageLocation && location.status !== 'INACTIVE', location.status === 'INACTIVE' ? 'Location is already inactive.' : undefined),
-        REACTIVATE: command(canManageLocation && location.status === 'INACTIVE', location.status !== 'INACTIVE' ? 'Location is already active.' : undefined),
-        ENABLE_SHIPPING: command(canManageLocation && !location.acceptingShipments, location.acceptingShipments ? 'Shipping is already enabled.' : undefined),
-        DISABLE_SHIPPING: command(canManageLocation && location.acceptingShipments && location.acceptingInPerson, !location.acceptingShipments ? 'Shipping is already disabled.' : !location.acceptingInPerson ? 'At least one delivery method must remain enabled.' : undefined),
-        ENABLE_IN_PERSON: command(canManageLocation && !location.acceptingInPerson, location.acceptingInPerson ? 'In-person delivery is already enabled.' : undefined),
-        DISABLE_IN_PERSON: command(canManageLocation && location.acceptingInPerson && location.acceptingShipments, !location.acceptingInPerson ? 'In-person delivery is already disabled.' : !location.acceptingShipments ? 'At least one delivery method must remain enabled.' : undefined),
-        REPAIR_AVAILABILITY: command(actor.roles.includes('ADMIN'), 'Availability recovery requires Admin access.'),
-        REPAIR_CAPACITY_PROJECTION: command(actor.roles.includes('ADMIN'), 'Capacity recovery requires Admin access.'),
+        EDIT: command(
+          canManageLocation,
+          'Location management requires custody access.',
+        ),
+        PAUSE_NEW_INTAKES: command(
+          canManageLocation &&
+            location.status === 'ACTIVE' &&
+            location.intakeAvailable,
+          location.status !== 'ACTIVE'
+            ? 'Only active locations can be paused.'
+            : 'Location is already paused.',
+        ),
+        RESUME_NEW_INTAKES: command(
+          canManageLocation && location.status === 'TEMPORARILY_UNAVAILABLE',
+          location.status !== 'TEMPORARILY_UNAVAILABLE'
+            ? 'Location is not temporarily paused.'
+            : undefined,
+        ),
+        DEACTIVATE: command(
+          canManageLocation && location.status !== 'INACTIVE',
+          location.status === 'INACTIVE'
+            ? 'Location is already inactive.'
+            : undefined,
+        ),
+        REACTIVATE: command(
+          canManageLocation && location.status === 'INACTIVE',
+          location.status !== 'INACTIVE'
+            ? 'Location is already active.'
+            : undefined,
+        ),
+        ENABLE_SHIPPING: command(
+          canManageLocation && !location.acceptingShipments,
+          location.acceptingShipments
+            ? 'Shipping is already enabled.'
+            : undefined,
+        ),
+        DISABLE_SHIPPING: command(
+          canManageLocation &&
+            location.acceptingShipments &&
+            location.acceptingInPerson,
+          !location.acceptingShipments
+            ? 'Shipping is already disabled.'
+            : !location.acceptingInPerson
+              ? 'At least one delivery method must remain enabled.'
+              : undefined,
+        ),
+        ENABLE_IN_PERSON: command(
+          canManageLocation && !location.acceptingInPerson,
+          location.acceptingInPerson
+            ? 'In-person delivery is already enabled.'
+            : undefined,
+        ),
+        DISABLE_IN_PERSON: command(
+          canManageLocation &&
+            location.acceptingInPerson &&
+            location.acceptingShipments,
+          !location.acceptingInPerson
+            ? 'In-person delivery is already disabled.'
+            : !location.acceptingShipments
+              ? 'At least one delivery method must remain enabled.'
+              : undefined,
+        ),
+        REPAIR_AVAILABILITY: command(
+          actor.roles.includes('ADMIN'),
+          'Availability recovery requires Admin access.',
+        ),
+        REPAIR_CAPACITY_PROJECTION: command(
+          actor.roles.includes('ADMIN'),
+          'Capacity recovery requires Admin access.',
+        ),
       },
       collectorVisibility: {
-        visibleInProduction: location.environment === 'production' && locationAvailability.code === 'ACCEPTING',
-        visibleInDemoQA: location.environment === 'beta' && locationAvailability.code === 'ACCEPTING',
+        visibleInProduction:
+          location.environment === 'production' &&
+          locationAvailability.code === 'ACCEPTING',
+        visibleInDemoQA:
+          location.environment === 'beta' &&
+          locationAvailability.code === 'ACCEPTING',
         shipping: location.acceptingShipments,
         inPerson: location.acceptingInPerson,
         eligibleForNewAssignment: locationAvailability.code === 'ACCEPTING',
-        eligibilityReason: locationAvailability.code === 'ACCEPTING' ? null : locationAvailability.reason,
+        eligibilityReason:
+          locationAvailability.code === 'ACCEPTING'
+            ? null
+            : locationAvailability.reason,
       },
       revision: location.updatedAt.toISOString(),
     };
@@ -5200,12 +5531,23 @@ export class AdminService {
   async commandIntakeLocation(
     actor: Actor,
     locationId: string,
-    input: { command: IntakeLocationCommand; reason: string; incidentReference?: string },
+    input: {
+      command: IntakeLocationCommand;
+      reason: string;
+      incidentReference?: string;
+    },
     requestId: string,
   ) {
-    await this.authorization.authorize(actor, 'custody.manage', undefined, undefined, requestId);
+    await this.authorization.authorize(
+      actor,
+      'custody.manage',
+      undefined,
+      undefined,
+      requestId,
+    );
     if (
-      (input.command === 'REPAIR_AVAILABILITY' || input.command === 'REPAIR_CAPACITY_PROJECTION') &&
+      (input.command === 'REPAIR_AVAILABILITY' ||
+        input.command === 'REPAIR_CAPACITY_PROJECTION') &&
       !actor.roles.includes('ADMIN')
     )
       throw new ForbiddenException({
@@ -5213,18 +5555,29 @@ export class AdminService {
         message: 'Location recovery commands require Admin access.',
       });
     return this.db.$transaction(async (db) => {
-      const previous = await db.vaultIntakeLocation.findUnique({ where: { id: locationId } });
+      const previous = await db.vaultIntakeLocation.findUnique({
+        where: { id: locationId },
+      });
       if (!previous)
-        throw new NotFoundException({ code: 'INTAKE_LOCATION_NOT_FOUND', message: 'Intake location not found.' });
+        throw new NotFoundException({
+          code: 'INTAKE_LOCATION_NOT_FOUND',
+          message: 'Intake location not found.',
+        });
       const activeIntakes = await db.submissionIntake.count({
         where: { vaultId: locationId, status: { in: activeIntakeStatuses } },
       });
-      const currentlyAvailable = intakeLocationAvailability(previous, activeIntakes);
+      const currentlyAvailable = intakeLocationAvailability(
+        previous,
+        activeIntakes,
+      );
       const data: Prisma.VaultIntakeLocationUpdateInput = {};
       let action = `INTAKE_LOCATION_${input.command}`;
       if (input.command === 'PAUSE_NEW_INTAKES') {
         if (previous.status !== 'ACTIVE' || !previous.intakeAvailable)
-          throw new ConflictException({ code: 'INTAKE_LOCATION_ALREADY_PAUSED', message: 'Location is already unavailable for new intakes.' });
+          throw new ConflictException({
+            code: 'INTAKE_LOCATION_ALREADY_PAUSED',
+            message: 'Location is already unavailable for new intakes.',
+          });
         data.status = 'TEMPORARILY_UNAVAILABLE';
         data.active = true;
         data.intakeAvailable = false;
@@ -5233,9 +5586,19 @@ export class AdminService {
         action = 'INTAKE_LOCATION_PAUSED';
       } else if (input.command === 'RESUME_NEW_INTAKES') {
         if (previous.status !== 'TEMPORARILY_UNAVAILABLE')
-          throw new ConflictException({ code: 'INTAKE_LOCATION_NOT_PAUSED', message: 'Location is not temporarily paused.' });
-        if (!previous.operationallyApproved || (!previous.acceptingShipments && !previous.acceptingInPerson))
-          throw new ConflictException({ code: 'INTAKE_LOCATION_NOT_READY', message: 'Complete approval and delivery configuration before resuming new intakes.' });
+          throw new ConflictException({
+            code: 'INTAKE_LOCATION_NOT_PAUSED',
+            message: 'Location is not temporarily paused.',
+          });
+        if (
+          !previous.operationallyApproved ||
+          (!previous.acceptingShipments && !previous.acceptingInPerson)
+        )
+          throw new ConflictException({
+            code: 'INTAKE_LOCATION_NOT_READY',
+            message:
+              'Complete approval and delivery configuration before resuming new intakes.',
+          });
         data.status = 'ACTIVE';
         data.active = true;
         data.intakeAvailable = currentlyAvailable.code !== 'AT_CAPACITY';
@@ -5245,7 +5608,10 @@ export class AdminService {
         action = 'INTAKE_LOCATION_RESUMED';
       } else if (input.command === 'DEACTIVATE') {
         if (previous.status === 'INACTIVE')
-          throw new ConflictException({ code: 'INTAKE_LOCATION_ALREADY_INACTIVE', message: 'Location is already inactive.' });
+          throw new ConflictException({
+            code: 'INTAKE_LOCATION_ALREADY_INACTIVE',
+            message: 'Location is already inactive.',
+          });
         data.status = 'INACTIVE';
         data.active = false;
         data.intakeAvailable = false;
@@ -5253,45 +5619,96 @@ export class AdminService {
         action = 'INTAKE_LOCATION_DEACTIVATED';
       } else if (input.command === 'REACTIVATE') {
         if (previous.status !== 'INACTIVE')
-          throw new ConflictException({ code: 'INTAKE_LOCATION_NOT_INACTIVE', message: 'Location is not inactive.' });
+          throw new ConflictException({
+            code: 'INTAKE_LOCATION_NOT_INACTIVE',
+            message: 'Location is not inactive.',
+          });
         data.status = 'ACTIVE';
         data.active = true;
-        data.intakeAvailable = previous.operationallyApproved && (previous.acceptingShipments || previous.acceptingInPerson) && currentlyAvailable.code !== 'AT_CAPACITY';
+        data.intakeAvailable =
+          previous.operationallyApproved &&
+          (previous.acceptingShipments || previous.acceptingInPerson) &&
+          currentlyAvailable.code !== 'AT_CAPACITY';
         data.pauseReason = null;
         data.pauseEffectiveAt = null;
         action = 'INTAKE_LOCATION_REACTIVATED';
       } else if (input.command === 'ENABLE_SHIPPING') {
-        if (previous.acceptingShipments) throw new ConflictException({ code: 'SHIPPING_ALREADY_ENABLED', message: 'Shipping is already enabled.' });
+        if (previous.acceptingShipments)
+          throw new ConflictException({
+            code: 'SHIPPING_ALREADY_ENABLED',
+            message: 'Shipping is already enabled.',
+          });
         data.acceptingShipments = true;
         action = 'INTAKE_LOCATION_SHIPPING_ENABLED';
       } else if (input.command === 'DISABLE_SHIPPING') {
-        if (!previous.acceptingShipments) throw new ConflictException({ code: 'SHIPPING_ALREADY_DISABLED', message: 'Shipping is already disabled.' });
-        if (!previous.acceptingInPerson) throw new ConflictException({ code: 'INTAKE_DELIVERY_METHOD_REQUIRED', message: 'At least one delivery method must remain enabled.' });
+        if (!previous.acceptingShipments)
+          throw new ConflictException({
+            code: 'SHIPPING_ALREADY_DISABLED',
+            message: 'Shipping is already disabled.',
+          });
+        if (!previous.acceptingInPerson)
+          throw new ConflictException({
+            code: 'INTAKE_DELIVERY_METHOD_REQUIRED',
+            message: 'At least one delivery method must remain enabled.',
+          });
         data.acceptingShipments = false;
         action = 'INTAKE_LOCATION_SHIPPING_DISABLED';
       } else if (input.command === 'ENABLE_IN_PERSON') {
-        if (previous.acceptingInPerson) throw new ConflictException({ code: 'IN_PERSON_ALREADY_ENABLED', message: 'In-person delivery is already enabled.' });
+        if (previous.acceptingInPerson)
+          throw new ConflictException({
+            code: 'IN_PERSON_ALREADY_ENABLED',
+            message: 'In-person delivery is already enabled.',
+          });
         data.acceptingInPerson = true;
         action = 'INTAKE_LOCATION_IN_PERSON_ENABLED';
       } else if (input.command === 'DISABLE_IN_PERSON') {
-        if (!previous.acceptingInPerson) throw new ConflictException({ code: 'IN_PERSON_ALREADY_DISABLED', message: 'In-person delivery is already disabled.' });
-        if (!previous.acceptingShipments) throw new ConflictException({ code: 'INTAKE_DELIVERY_METHOD_REQUIRED', message: 'At least one delivery method must remain enabled.' });
+        if (!previous.acceptingInPerson)
+          throw new ConflictException({
+            code: 'IN_PERSON_ALREADY_DISABLED',
+            message: 'In-person delivery is already disabled.',
+          });
+        if (!previous.acceptingShipments)
+          throw new ConflictException({
+            code: 'INTAKE_DELIVERY_METHOD_REQUIRED',
+            message: 'At least one delivery method must remain enabled.',
+          });
         data.acceptingInPerson = false;
         action = 'INTAKE_LOCATION_IN_PERSON_DISABLED';
       } else if (input.command === 'REPAIR_AVAILABILITY') {
         data.active = previous.status !== 'INACTIVE';
-        data.intakeAvailable = previous.status === 'ACTIVE' && previous.operationallyApproved && (previous.acceptingShipments || previous.acceptingInPerson) && currentlyAvailable.code !== 'AT_CAPACITY';
+        data.intakeAvailable =
+          previous.status === 'ACTIVE' &&
+          previous.operationallyApproved &&
+          (previous.acceptingShipments || previous.acceptingInPerson) &&
+          currentlyAvailable.code !== 'AT_CAPACITY';
         action = 'INTAKE_LOCATION_AVAILABILITY_CORRECTED';
       } else if (input.command === 'REPAIR_CAPACITY_PROJECTION') {
-        data.intakeAvailable = previous.status === 'ACTIVE' && previous.operationallyApproved && (previous.acceptingShipments || previous.acceptingInPerson) && currentlyAvailable.code !== 'AT_CAPACITY';
+        data.intakeAvailable =
+          previous.status === 'ACTIVE' &&
+          previous.operationallyApproved &&
+          (previous.acceptingShipments || previous.acceptingInPerson) &&
+          currentlyAvailable.code !== 'AT_CAPACITY';
         action = 'INTAKE_LOCATION_CAPACITY_PROJECTION_REPAIRED';
       }
-      const location = await db.vaultIntakeLocation.update({ where: { id: locationId }, data });
-      await this.auditIntakeLocationChange(db, actor, requestId, action, locationId, input.reason, previous, location, {
-        command: input.command,
-        incidentReference: input.incidentReference ?? null,
-        activeIntakes,
+      const location = await db.vaultIntakeLocation.update({
+        where: { id: locationId },
+        data,
       });
+      await this.auditIntakeLocationChange(
+        db,
+        actor,
+        requestId,
+        action,
+        locationId,
+        input.reason,
+        previous,
+        location,
+        {
+          command: input.command,
+          incidentReference: input.incidentReference ?? null,
+          activeIntakes,
+        },
+      );
       return this.intakeLocationMutationProjection(location);
     });
   }
@@ -5398,8 +5815,12 @@ export class AdminService {
       maximumActiveIntakes: input.maximumActiveIntakes ?? null,
       warningThreshold: input.warningThreshold ?? null,
       pauseReason: input.pauseReason ?? null,
-      pauseEffectiveAt: input.pauseEffectiveAt ? new Date(input.pauseEffectiveAt) : null,
-      expectedResumeAt: input.expectedResumeAt ? new Date(input.expectedResumeAt) : null,
+      pauseEffectiveAt: input.pauseEffectiveAt
+        ? new Date(input.pauseEffectiveAt)
+        : null,
+      expectedResumeAt: input.expectedResumeAt
+        ? new Date(input.expectedResumeAt)
+        : null,
       customerSafeAddress: customerSafeLocationAddress(input),
     };
   }
@@ -5604,7 +6025,8 @@ export class AdminService {
       if (!intake.shipment)
         throw new ConflictException({
           code: 'SHIPMENT_REQUIRED',
-          message: 'Shipment tracking must be recorded before confirming delivery.',
+          message:
+            'Shipment tracking must be recorded before confirming delivery.',
         });
       if (intake.receipt)
         throw new ConflictException({
@@ -5629,7 +6051,8 @@ export class AdminService {
       )
         throw new ConflictException({
           code: 'SHIPMENT_NOT_DELIVERABLE',
-          message: 'This shipment status cannot be manually marked as delivered.',
+          message:
+            'This shipment status cannot be manually marked as delivered.',
         });
 
       const now = new Date();
@@ -9396,6 +9819,7 @@ export class AdminService {
       await Promise.all([
         this.db.moneyMovement.count({
           where: {
+            financialDataClass: { in: [...authoritativeFinancialDataClasses] },
             status: {
               in: [
                 'CREATED',
@@ -9408,10 +9832,16 @@ export class AdminService {
           },
         }),
         this.db.moneyMovement.count({
-          where: { status: { in: ['FAILED', 'MANUAL_REVIEW', 'HELD'] } },
+          where: {
+            financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+            status: { in: ['FAILED', 'MANUAL_REVIEW', 'HELD'] },
+          },
         }),
         this.db.financialReconciliationRun.count({
-          where: { status: 'MISMATCH' },
+          where: {
+            financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+            status: 'MISMATCH',
+          },
         }),
         this.platformRevenue.projection(),
       ]);
@@ -9441,7 +9871,11 @@ export class AdminService {
       recentDeposits,
     ] = await Promise.all([
       this.db.moneyMovement.findMany({
-        where: { type: 'DEPOSIT', status: 'HELD' },
+        where: {
+          type: 'DEPOSIT',
+          status: 'HELD',
+          financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+        },
         orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
         take: 50,
         select: {
@@ -9464,7 +9898,11 @@ export class AdminService {
         },
       }),
       this.db.moneyMovement.findMany({
-        where: { type: 'DEPOSIT', status: 'MANUAL_REVIEW' },
+        where: {
+          type: 'DEPOSIT',
+          status: 'MANUAL_REVIEW',
+          financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+        },
         orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
         take: 50,
         select: {
@@ -9487,7 +9925,11 @@ export class AdminService {
         },
       }),
       this.db.moneyMovement.findMany({
-        where: { type: 'DEPOSIT', status: 'RETURNED' },
+        where: {
+          type: 'DEPOSIT',
+          status: 'RETURNED',
+          financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+        },
         orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
         take: 50,
         select: {
@@ -9513,7 +9955,10 @@ export class AdminService {
         },
       }),
       this.db.financialDeficit.findMany({
-        where: { status: { in: ['OPEN', 'PARTIALLY_RECOVERED'] } },
+        where: {
+          status: { in: ['OPEN', 'PARTIALLY_RECOVERED'] },
+          financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+        },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         take: 50,
         select: {
@@ -9540,6 +9985,7 @@ export class AdminService {
       this.db.moneyMovement.findMany({
         where: {
           type: 'DEPOSIT',
+          financialDataClass: { in: [...authoritativeFinancialDataClasses] },
           status: { notIn: ['FAILED', 'CANCELLED', 'RETURNED', 'REVERSED'] },
           createdAt: { gte: new Date(Date.now() - 7 * 86_400_000) },
         },
@@ -9741,18 +10187,31 @@ export class AdminService {
       activity,
     ] = await Promise.all([
       this.db.financialAccount.findMany({
-        where: { ownerType: 'USER', currency: 'GBP' },
+        where: {
+          ownerType: 'USER',
+          currency: 'GBP',
+          financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+        },
         select: { code: true, normalSide: true, balance: true },
       }),
       this.db.moneyMovement.findMany({
-        where: { status: { in: [...pendingStates] } },
+        where: {
+          status: { in: [...pendingStates] },
+          financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+        },
         select: { type: true, amountMinor: true },
       }),
       this.db.moneyMovement.findMany({
+        where: {
+          financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+        },
         select: { type: true, status: true, amountMinor: true },
       }),
       this.db.cashReservation.findMany({
-        where: { status: 'ACTIVE' },
+        where: {
+          status: 'ACTIVE',
+          financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+        },
         select: { purposeType: true, amountMinor: true },
       }),
       this.db.financialAccount.findMany({
@@ -9760,30 +10219,45 @@ export class AdminService {
           ownerType: 'USER',
           code: 'COLLECTOR_PROCEEDS_AVAILABLE',
           currency: 'GBP',
+          financialDataClass: { in: [...authoritativeFinancialDataClasses] },
         },
         select: { normalSide: true, balance: true },
       }),
-      this.db.financialAccount.findMany({
+      this.db.journalEntry.findMany({
         where: {
-          code: {
-            in: [
-              'INITIAL_OFFERING_FEE_REVENUE',
-              'TRADING_FEE_REVENUE',
-              'WITHDRAWAL_FEE_REVENUE',
-              'EXTERNAL_GBP_CLEARING',
-            ],
-          },
           currency: 'GBP',
+          transaction: {
+            financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+          },
+          account: {
+            code: {
+              in: [
+                'INITIAL_OFFERING_FEE_REVENUE',
+                'TRADING_FEE_REVENUE',
+                'WITHDRAWAL_FEE_REVENUE',
+                'EXTERNAL_GBP_CLEARING',
+              ],
+            },
+            currency: 'GBP',
+          },
         },
-        select: { code: true, normalSide: true, balance: true },
+        select: {
+          side: true,
+          amountMinor: true,
+          account: { select: { code: true, normalSide: true } },
+        },
       }),
       this.db.tradingOrder.count({
         where: {
           status: { in: ['PENDING_RESERVATION', 'OPEN', 'PARTIALLY_FILLED'] },
+          financialDataClass: { in: [...authoritativeFinancialDataClasses] },
         },
       }),
       this.db.tradingExecution.findMany({
-        where: { executedAt: { gte: dayStart } },
+        where: {
+          executedAt: { gte: dayStart },
+          financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+        },
         select: {
           grossMinor: true,
           buyerFeeMinor: true,
@@ -9794,10 +10268,16 @@ export class AdminService {
         },
       }),
       this.db.tradingExecution.findMany({
-        where: { executedAt: { gte: historyStart } },
+        where: {
+          executedAt: { gte: historyStart },
+          financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+        },
         select: { grossMinor: true, executedAt: true },
       }),
       this.db.financialReconciliationRun.findMany({
+        where: {
+          financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+        },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: 100,
         select: { status: true, debitMinor: true, creditMinor: true },
@@ -9881,11 +10361,16 @@ export class AdminService {
       0n,
     );
     const revenue = new Map<string, bigint>();
-    for (const account of platformAccounts)
+    for (const entry of platformAccounts) {
+      const signed =
+        entry.side === entry.account.normalSide
+          ? entry.amountMinor
+          : -entry.amountMinor;
       revenue.set(
-        account.code,
-        (revenue.get(account.code) ?? 0n) + accountAuthorityValue(account),
+        entry.account.code,
+        (revenue.get(entry.account.code) ?? 0n) + signed,
       );
+    }
     const externalClearing = revenue.get('EXTERNAL_GBP_CLEARING') ?? 0n;
     const totalVolume = executions.reduce(
       (total, execution) => total + execution.grossMinor,
@@ -10021,9 +10506,23 @@ export class AdminService {
         })),
       },
       orderSummary: {
-        total: await this.db.tradingOrder.count(),
-        buy: await this.db.tradingOrder.count({ where: { side: 'BUY' } }),
-        sell: await this.db.tradingOrder.count({ where: { side: 'SELL' } }),
+        total: await this.db.tradingOrder.count({
+          where: {
+            financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+          },
+        }),
+        buy: await this.db.tradingOrder.count({
+          where: {
+            side: 'BUY',
+            financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+          },
+        }),
+        sell: await this.db.tradingOrder.count({
+          where: {
+            side: 'SELL',
+            financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+          },
+        }),
         open: openOrders,
       },
       executionSummary: {
@@ -10053,15 +10552,22 @@ export class AdminService {
       tab: string;
       q?: string;
       status?: string;
+      dataClass?: string;
       page: number;
       pageSize: number;
     },
   ) {
     await this.authorization.authorize(actor, 'finance.read');
+    const dataClassScope = financeDataScope(input.dataClass);
+    const classes = financialDataClassesForScope(dataClassScope);
+    const financialDataClassWhere = classes
+      ? { financialDataClass: { in: [...classes] } }
+      : {};
     const skip = (input.page - 1) * input.pageSize;
     const take = input.pageSize;
     if (input.tab === 'adjustments') {
       const where: Prisma.FinancialAdjustmentRequestWhereInput = {
+        ...financialDataClassWhere,
         ...(input.status ? { status: input.status as never } : {}),
         ...(input.q
           ? {
@@ -10108,6 +10614,7 @@ export class AdminService {
           id: row.id,
           kind: 'adjustment',
           status: row.status,
+          financialDataClass: row.financialDataClass,
           user: this.financePerson(byId.get(row.userId)),
           initiator: this.financePerson(byId.get(row.initiatorUserId)),
           approver: this.financePerson(
@@ -10132,6 +10639,7 @@ export class AdminService {
       const where: Prisma.FinancialAccountWhereInput = {
         ownerType: 'USER',
         currency: 'GBP',
+        ...financialDataClassWhere,
         ...(input.status ? { status: input.status as never } : {}),
         ...(input.q
           ? {
@@ -10205,12 +10713,14 @@ export class AdminService {
               balance?.updatedAt ?? wallet.updatedAt
             ).toISOString(),
             status: wallet.status,
+            financialDataClass: wallet.financialDataClass,
           };
         }),
       );
     }
     if (input.tab === 'movements') {
       const where: Prisma.MoneyMovementWhereInput = {
+        ...financialDataClassWhere,
         ...(input.status ? { status: input.status as never } : {}),
         ...(input.q
           ? {
@@ -10276,11 +10786,13 @@ export class AdminService {
           sliceState: movement.ledgerTransactionId ? 'SETTLED' : 'NOT_SETTLED',
           createdAt: movement.createdAt.toISOString(),
           updatedAt: movement.updatedAt.toISOString(),
+          financialDataClass: movement.financialDataClass,
         })),
       );
     }
     if (input.tab === 'orders') {
       const where: Prisma.TradingOrderWhereInput = {
+        ...financialDataClassWhere,
         ...(input.status ? { status: input.status as never } : {}),
         ...(input.q
           ? {
@@ -10362,6 +10874,7 @@ export class AdminService {
             filled: order.filledUnits.toString(),
             remaining: order.remainingUnits.toString(),
             status: order.status,
+            financialDataClass: order.financialDataClass,
             createdAt: order.createdAt.toISOString(),
           };
         }),
@@ -10369,6 +10882,7 @@ export class AdminService {
     }
     if (input.tab === 'executions') {
       const where: Prisma.TradingExecutionWhereInput = {
+        ...financialDataClassWhere,
         ...(input.status ? { settlementStatus: input.status as never } : {}),
         ...(input.q
           ? {
@@ -10462,12 +10976,14 @@ export class AdminService {
           ).toString(),
           executedAt: execution.executedAt.toISOString(),
           settlementStatus: execution.settlementStatus,
+          financialDataClass: execution.financialDataClass,
         })),
       );
     }
-    const where: Prisma.FinancialReconciliationRunWhereInput = input.status
-      ? { status: input.status as never }
-      : {};
+    const where: Prisma.FinancialReconciliationRunWhereInput = {
+      ...financialDataClassWhere,
+      ...(input.status ? { status: input.status as never } : {}),
+    };
     const [rows, total] = await Promise.all([
       this.db.financialReconciliationRun.findMany({
         where,
@@ -10490,6 +11006,7 @@ export class AdminService {
         observedMinor: run.creditMinor.toString(),
         differenceMinor: (run.debitMinor - run.creditMinor).toString(),
         currency: run.currency,
+        financialDataClass: run.financialDataClass,
         createdAt: run.createdAt.toISOString(),
         actions: ['Inspect'],
       })),
@@ -10519,12 +11036,13 @@ export class AdminService {
   }
 
   private financePage(
-    input: { tab: string; page: number; pageSize: number },
+    input: { tab: string; dataClass?: string; page: number; pageSize: number },
     total: number,
     items: Array<Record<string, unknown>>,
   ) {
     return {
       tab: input.tab,
+      dataClassScope: financeDataScope(input.dataClass),
       items,
       pagination: {
         page: input.page,
@@ -10716,7 +11234,14 @@ export class AdminService {
         initialOffering: {
           include: {
             inventory: true,
-            preSale: { include: { reservations: { where: { status: 'ACTIVE' }, select: { units: true } } } },
+            preSale: {
+              include: {
+                reservations: {
+                  where: { status: 'ACTIVE' },
+                  select: { units: true },
+                },
+              },
+            },
             originatingCollector: {
               select: {
                 id: true,
@@ -11077,10 +11602,14 @@ export class AdminService {
     const preSale = asset.initialOffering?.preSale
       ? {
           status: asset.initialOffering.preSale.status,
-          openedAt: asset.initialOffering.preSale.openedAt?.toISOString() ?? null,
-          deadlineAt: asset.initialOffering.preSale.deadlineAt?.toISOString() ?? null,
+          openedAt:
+            asset.initialOffering.preSale.openedAt?.toISOString() ?? null,
+          deadlineAt:
+            asset.initialOffering.preSale.deadlineAt?.toISOString() ?? null,
           physicalStatus: asset.initialOffering.preSale.physicalStatus,
-          reservedUnits: asset.initialOffering.preSale.reservations.reduce((sum, item) => sum + item.units, 0n).toString(),
+          reservedUnits: asset.initialOffering.preSale.reservations
+            .reduce((sum, item) => sum + item.units, 0n)
+            .toString(),
         }
       : null;
     const saleValues = sales.map((item) => item.valueMinor);
@@ -11604,7 +12133,9 @@ function buildAdminMarketData(
   observations: AdminMarketObservation[],
 ) {
   const now = Date.now();
-  const activeMappings = mappings.filter((mapping) => mapping.status !== 'REMOVED');
+  const activeMappings = mappings.filter(
+    (mapping) => mapping.status !== 'REMOVED',
+  );
   const preferred =
     activeMappings.find((mapping) => mapping.status === 'STAFF_CONFIRMED') ??
     activeMappings.find((mapping) => mapping.status === 'VERIFIED') ??
@@ -11624,34 +12155,75 @@ function buildAdminMarketData(
       (!mapping.lastSuccessAt || mapping.lastFailureAt > mapping.lastSuccessAt)
     )
       return 'PROVIDER UNAVAILABLE';
-    if (mapping.lastSuccessAt && now - mapping.lastSuccessAt.getTime() > 7 * 86_400_000)
+    if (
+      mapping.lastSuccessAt &&
+      now - mapping.lastSuccessAt.getTime() > 7 * 86_400_000
+    )
       return 'STALE';
     if (mapping.status === 'NEEDS_REVIEW' || mapping.matchQuality === 'STRONG')
       return 'NEEDS REVIEW';
-    if (mapping.status === 'VERIFIED' || mapping.status === 'STAFF_CONFIRMED' || mapping.matchQuality === 'EXACT')
+    if (
+      mapping.status === 'VERIFIED' ||
+      mapping.status === 'STAFF_CONFIRMED' ||
+      mapping.matchQuality === 'EXACT'
+    )
       return 'VERIFIED MATCH';
     return 'LINKED';
   };
   const toReference = (mapping: AdminMarketMapping) => {
     const related = observations
-      .filter((item) =>
-        item.included &&
-        (item.mappingId === mapping.id || (item.providerCode === mapping.providerCode && item.providerExternalId === mapping.providerExternalId)),
+      .filter(
+        (item) =>
+          item.included &&
+          (item.mappingId === mapping.id ||
+            (item.providerCode === mapping.providerCode &&
+              item.providerExternalId === mapping.providerExternalId)),
       )
-      .sort((left, right) => right.observedAt.getTime() - left.observedAt.getTime());
-    const originalUrl = related
-      .map((item) => isRecord(item.provenance) && typeof item.provenance.originalUrl === 'string' ? item.provenance.originalUrl : null)
-      .find((value): value is string => Boolean(value)) ?? mapping.providerUrl;
-    const seriesCurrency = mapping.currentCurrency ?? related[0]?.currency ?? null;
+      .sort(
+        (left, right) => right.observedAt.getTime() - left.observedAt.getTime(),
+      );
+    const originalUrl =
+      related
+        .map((item) =>
+          isRecord(item.provenance) &&
+          typeof item.provenance.originalUrl === 'string'
+            ? item.provenance.originalUrl
+            : null,
+        )
+        .find((value): value is string => Boolean(value)) ??
+      mapping.providerUrl;
+    const seriesCurrency =
+      mapping.currentCurrency ?? related[0]?.currency ?? null;
     const graphSeries = related
-      .filter((item) => item.observationType === 'PRICE_GUIDE' && item.currency === seriesCurrency)
-      .sort((left, right) => left.observedAt.getTime() - right.observedAt.getTime())
-      .map((item) => ({ observedAt: item.observedAt.toISOString(), valueMinor: item.priceMinor.toString(), currency: item.currency }));
-    const currentObservation = mapping.currentPriceMinor !== null && mapping.currentCurrency && mapping.currentObservedAt
-      ? { valueMinor: mapping.currentPriceMinor.toString(), currency: mapping.currentCurrency, observedAt: mapping.currentObservedAt.toISOString() }
-      : related[0]
-        ? { valueMinor: related[0].priceMinor.toString(), currency: related[0].currency, observedAt: related[0].observedAt.toISOString() }
-        : null;
+      .filter(
+        (item) =>
+          item.observationType === 'PRICE_GUIDE' &&
+          item.currency === seriesCurrency,
+      )
+      .sort(
+        (left, right) => left.observedAt.getTime() - right.observedAt.getTime(),
+      )
+      .map((item) => ({
+        observedAt: item.observedAt.toISOString(),
+        valueMinor: item.priceMinor.toString(),
+        currency: item.currency,
+      }));
+    const currentObservation =
+      mapping.currentPriceMinor !== null &&
+      mapping.currentCurrency &&
+      mapping.currentObservedAt
+        ? {
+            valueMinor: mapping.currentPriceMinor.toString(),
+            currency: mapping.currentCurrency,
+            observedAt: mapping.currentObservedAt.toISOString(),
+          }
+        : related[0]
+          ? {
+              valueMinor: related[0].priceMinor.toString(),
+              currency: related[0].currency,
+              observedAt: related[0].observedAt.toISOString(),
+            }
+          : null;
     return {
       id: mapping.id,
       provider: mapping.providerCode,
@@ -11661,29 +12233,38 @@ function buildAdminMarketData(
       matchStatus: statusFor(mapping),
       matchReasons:
         mapping.lastFailureCode === 'PRICECHARTING_REFERENCE_NOT_RESOLVED'
-          ? ['The URL was saved, but the provider returned no matching product record.']
+          ? [
+              'The URL was saved, but the provider returned no matching product record.',
+            ]
           : mapping.lastFailureCode === 'PRICECHARTING_REFERENCE_UNAVAILABLE'
-            ? ['The provider record matches, but no compatible current price is available for this grade.']
-          : mapping.status === 'NEEDS_REVIEW'
-            ? ['Provider identity needs staff confirmation.']
-            : [],
+            ? [
+                'The provider record matches, but no compatible current price is available for this grade.',
+              ]
+            : mapping.status === 'NEEDS_REVIEW'
+              ? ['Provider identity needs staff confirmation.']
+              : [],
       lastFailureCode: mapping.lastFailureCode,
-      fetchStatus:
-        [
-          'PRICECHARTING_REFERENCE_NOT_RESOLVED',
-          'PRICECHARTING_REFERENCE_UNAVAILABLE',
-        ].includes(mapping.lastFailureCode ?? '')
-          ? 'NOT_CHECKED'
-          : mapping.lastFailureAt &&
-              (!mapping.lastSuccessAt || mapping.lastFailureAt > mapping.lastSuccessAt)
-            ? 'UNAVAILABLE'
-            : currentObservation
-              ? 'AVAILABLE'
-              : 'NOT_CHECKED',
+      fetchStatus: [
+        'PRICECHARTING_REFERENCE_NOT_RESOLVED',
+        'PRICECHARTING_REFERENCE_UNAVAILABLE',
+      ].includes(mapping.lastFailureCode ?? '')
+        ? 'NOT_CHECKED'
+        : mapping.lastFailureAt &&
+            (!mapping.lastSuccessAt ||
+              mapping.lastFailureAt > mapping.lastSuccessAt)
+          ? 'UNAVAILABLE'
+          : currentObservation
+            ? 'AVAILABLE'
+            : 'NOT_CHECKED',
       currentObservation,
       sourceCurrency: mapping.currentCurrency ?? related[0]?.currency ?? null,
-      lastCheckedAt: mapping.lastSuccessAt?.toISOString() ?? mapping.lastFailureAt?.toISOString() ?? null,
-      freshness: mapping.lastSuccessAt ? freshnessLabel(now, mapping.lastSuccessAt) : 'UNAVAILABLE',
+      lastCheckedAt:
+        mapping.lastSuccessAt?.toISOString() ??
+        mapping.lastFailureAt?.toISOString() ??
+        null,
+      freshness: mapping.lastSuccessAt
+        ? freshnessLabel(now, mapping.lastSuccessAt)
+        : 'UNAVAILABLE',
       historicalObservationCount: graphSeries.length,
       graphSeries,
       availableCommands: {

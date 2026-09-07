@@ -68,6 +68,7 @@ export async function seedBrowserQa(prisma: PrismaClient, redis: Redis) {
         email: BROWSER_QA.email,
         passwordHash,
         accountStatus: 'ACTIVE',
+        financialDataClass: 'QA',
         emailVerifiedAt: now,
       },
       create: {
@@ -76,6 +77,7 @@ export async function seedBrowserQa(prisma: PrismaClient, redis: Redis) {
         normalizedEmail: BROWSER_QA.email,
         passwordHash,
         accountStatus: 'ACTIVE',
+        financialDataClass: 'QA',
         emailVerifiedAt: now,
       },
     });
@@ -100,6 +102,7 @@ export async function seedBrowserQa(prisma: PrismaClient, redis: Redis) {
         email: BROWSER_QA.staffEmail,
         passwordHash: staffPasswordHash,
         accountStatus: 'ACTIVE',
+        financialDataClass: 'QA',
         emailVerifiedAt: now,
       },
       create: {
@@ -108,12 +111,16 @@ export async function seedBrowserQa(prisma: PrismaClient, redis: Redis) {
         normalizedEmail: BROWSER_QA.staffEmail,
         passwordHash: staffPasswordHash,
         accountStatus: 'ACTIVE',
+        financialDataClass: 'QA',
         emailVerifiedAt: now,
       },
     });
     await tx.userProfile.upsert({
       where: { userId: BROWSER_QA.staffUserId },
-      update: { displayName: 'Browser QA Staff', publicUsername: 'qa-browser-staff' },
+      update: {
+        displayName: 'Browser QA Staff',
+        publicUsername: 'qa-browser-staff',
+      },
       create: {
         userId: BROWSER_QA.staffUserId,
         displayName: 'Browser QA Staff',
@@ -195,7 +202,11 @@ export async function seedBrowserQa(prisma: PrismaClient, redis: Redis) {
       },
     });
     const existingGrade = await tx.gradeScaleEntry.findFirst({
-      where: { companyId: BROWSER_QA.gradingCompanyId, grade: '10.00', designation: '' },
+      where: {
+        companyId: BROWSER_QA.gradingCompanyId,
+        grade: '10.00',
+        designation: '',
+      },
     });
     if (existingGrade) {
       await tx.gradeScaleEntry.update({
@@ -455,9 +466,7 @@ export async function cleanupBrowserQa(prisma: PrismaClient, redis: Redis) {
     await tx.idempotencyRecord.deleteMany({
       where: {
         actorScope: {
-          in: [
-            ...qaUserIds.map((userId) => `user:${userId}`),
-          ],
+          in: [...qaUserIds.map((userId) => `user:${userId}`)],
         },
       },
     });
@@ -561,13 +570,14 @@ async function upsertCollector(
   const email = `${id}@slice.test`;
   await tx.user.upsert({
     where: { normalizedEmail: email },
-    update: { accountStatus: 'ACTIVE' },
+    update: { accountStatus: 'ACTIVE', financialDataClass: 'QA' },
     create: {
       id,
       email,
       normalizedEmail: email,
       passwordHash: 'local-qa-collector-password-not-usable',
       accountStatus: 'ACTIVE',
+      financialDataClass: 'QA',
     },
   });
   await tx.userProfile.upsert({
@@ -619,6 +629,7 @@ async function upsertWorkspaceUser(
       email: input.email,
       passwordHash,
       accountStatus: 'ACTIVE',
+      financialDataClass: 'QA',
       emailVerifiedAt: input.now,
     },
     create: {
@@ -627,6 +638,7 @@ async function upsertWorkspaceUser(
       normalizedEmail: input.email,
       passwordHash,
       accountStatus: 'ACTIVE',
+      financialDataClass: 'QA',
       emailVerifiedAt: input.now,
     },
   });
@@ -664,9 +676,12 @@ async function clearQaRateLimits(redis: Redis) {
     BROWSER_QA.collectorEmail,
   ];
   const keys = operations.flatMap((operation) => [
-    ...localIps.map((ip) => `slice:${environment}:auth-${operation}-ip:${hash(ip)}`),
+    ...localIps.map(
+      (ip) => `slice:${environment}:auth-${operation}-ip:${hash(ip)}`,
+    ),
     ...accountEmails.map(
-      (email) => `slice:${environment}:auth-${operation}-account:${hash(email)}`,
+      (email) =>
+        `slice:${environment}:auth-${operation}-account:${hash(email)}`,
     ),
   ]);
   await redis.del(...keys);

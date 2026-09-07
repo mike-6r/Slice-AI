@@ -1109,6 +1109,7 @@ export type AdminFinanceRecord = {
 
 export type AdminFinanceRecordsResponse = {
   tab: string;
+  dataClassScope: "OPERATIONAL" | "QA_DEMO" | "ALL";
   items: AdminFinanceRecord[];
   pagination: { page: number; pageSize: number; total: number; totalPages: number };
 };
@@ -2854,6 +2855,7 @@ export interface AdminRepository {
     tab?: string;
     q?: string;
     status?: string;
+    dataClass?: "OPERATIONAL" | "QA_DEMO" | "ALL";
     page?: number;
     pageSize?: number;
   }): Promise<AdminFinanceRecordsResponse>;

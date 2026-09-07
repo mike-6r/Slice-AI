@@ -85,6 +85,7 @@ async function main() {
         email: `${run}@slice.test`,
         normalizedEmail: `${run}@slice.test`,
         passwordHash: 'manual-qa-not-a-login-password',
+        financialDataClass: 'QA',
       },
     });
     await db.category.create({
@@ -147,6 +148,7 @@ async function main() {
           code: 'CASH_AVAILABLE',
           currency: 'GBP',
           normalSide: 'CREDIT',
+          financialDataClass: 'QA',
         },
         {
           id: clearingAccountId,
@@ -155,6 +157,7 @@ async function main() {
           code: `${run}-CLEARING`,
           currency: 'GBP',
           normalSide: 'DEBIT',
+          financialDataClass: 'QA',
         },
       ],
     });

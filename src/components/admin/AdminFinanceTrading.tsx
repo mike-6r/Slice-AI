@@ -29,6 +29,7 @@ type Props = {
   tab: string;
   query: string;
   status: string;
+  dataClass: "OPERATIONAL" | "QA_DEMO" | "ALL";
   page: number;
   update: (patch: Record<string, string | undefined>) => void;
 };
@@ -172,6 +173,7 @@ export function AdminFinanceTrading({
   tab: rawTab,
   query,
   status,
+  dataClass,
   page,
   update,
 }: Props) {
@@ -555,7 +557,11 @@ export function AdminFinanceTrading({
             <h3>Accounts, movements &amp; settlement records</h3>
             <p>Filter the authoritative record stream without leaving the control room.</p>
           </div>
-          <b>{titleCase(activeTab)} view</b>
+          <b>
+            {dataClass === "OPERATIONAL"
+              ? `${titleCase(activeTab)} · operational`
+              : `${titleCase(activeTab)} · ${dataClass === "QA_DEMO" ? "QA / demo" : "all data"}`}
+          </b>
         </header>
         <nav className="admin-finance-tabs" aria-label="Finance sections">
           {tabs.map((entry) => (
@@ -594,7 +600,23 @@ export function AdminFinanceTrading({
               </option>
             ))}
           </select>
+          <select
+            aria-label="Financial data classification"
+            value={dataClass}
+            onChange={(event) => update({ financeDataClass: event.target.value, page: "1" })}
+          >
+            <option value="OPERATIONAL">Operational only</option>
+            <option value="QA_DEMO">QA / demo only</option>
+            <option value="ALL">All classifications</option>
+          </select>
         </div>
+        {dataClass !== "OPERATIONAL" ? (
+          <p className="admin-finance-scope-note">
+            {dataClass === "QA_DEMO"
+              ? "Non-authoritative fixture data — never used for finance controls."
+              : "Includes operational and non-authoritative QA / demo records."}
+          </p>
+        ) : null}
         {loading && !records ? (
           <div className="admin-finance-table-loading">
             <span />

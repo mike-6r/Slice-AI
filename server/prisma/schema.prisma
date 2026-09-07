@@ -189,6 +189,17 @@ enum FinancialAccountStatus {
   CLOSED
 }
 
+/// Financial provenance is explicit. Operational projections may only use
+/// OPERATIONAL and provider-backed SANDBOX_REAL records; fixture records stay
+/// queryable for QA without becoming a customer or company liability.
+enum FinancialDataClass {
+  OPERATIONAL
+  SANDBOX_REAL
+  QA
+  DEMO
+  SEED
+}
+
 enum JournalTransactionType {
   DEMO_FUNDING
   EXTERNAL_DEPOSIT
@@ -947,6 +958,7 @@ model User {
   phoneE164                           String?                            @unique
   phoneVerifiedAt                     DateTime?
   accountStatus                       AccountStatus                      @default(PENDING_REVIEW)
+  financialDataClass                  FinancialDataClass                 @default(OPERATIONAL)
   createdAt                           DateTime                           @default(now())
   updatedAt                           DateTime                           @updatedAt
   lastLoginAt                         DateTime?
@@ -2802,6 +2814,7 @@ model FinancialAccount {
   ownerType      FinancialAccountOwnerType
   ownerUserId    String?
   accountType    FinancialAccountType
+  financialDataClass FinancialDataClass     @default(OPERATIONAL)
   code           String
   currency       String
   normalSide     DebitCredit
@@ -2817,12 +2830,14 @@ model FinancialAccount {
 
   @@unique([ownerType, ownerUserId, code, currency])
   @@index([ownerUserId, currency, status])
+  @@index([financialDataClass, ownerType, currency])
 }
 
 model JournalTransaction {
   id                        String                     @id @default(cuid())
   type                      JournalTransactionType
   status                    JournalTransactionStatus   @default(POSTED)
+  financialDataClass        FinancialDataClass         @default(OPERATIONAL)
   currency                  String
   correlationId             String                     @unique
   descriptionCode           String
@@ -2839,6 +2854,7 @@ model JournalTransaction {
   platformRevenueSettlement PlatformRevenueSettlement?
 
   @@index([currency, effectiveAt, id])
+  @@index([financialDataClass, currency, effectiveAt, id])
 }
 
 model JournalEntry {
@@ -2870,6 +2886,7 @@ model AccountBalance {
 model CashReservation {
   id          String                @id @default(cuid())
   accountId   String
+  financialDataClass FinancialDataClass @default(OPERATIONAL)
   purposeType String
   purposeId   String
   amountMinor BigInt
@@ -2881,6 +2898,7 @@ model CashReservation {
 
   @@unique([accountId, purposeType, purposeId])
   @@index([accountId, status, expiresAt])
+  @@index([financialDataClass, status, purposeType])
 }
 
 /// A returned bank debit can leave Slice with a customer recovery obligation
@@ -2889,6 +2907,7 @@ model CashReservation {
 model FinancialDeficit {
   id               String                 @id @default(cuid())
   userId           String
+  financialDataClass FinancialDataClass   @default(OPERATIONAL)
   sourceMovementId String                 @unique
   currency         String
   amountMinor      BigInt
@@ -2902,6 +2921,7 @@ model FinancialDeficit {
   sourceMovement   MoneyMovement          @relation(fields: [sourceMovementId], references: [id], onDelete: Restrict)
 
   @@index([userId, status, createdAt, id])
+  @@index([financialDataClass, status, createdAt, id])
 }
 
 /// Dual-control finance workflow for a narrowly scoped deficit adjustment.
@@ -2911,6 +2931,7 @@ model FinancialDeficit {
 model FinancialAdjustmentRequest {
   id                           String                    @id @default(cuid())
   userId                       String
+  financialDataClass           FinancialDataClass        @default(OPERATIONAL)
   deficitId                    String
   initiatorUserId              String
   approverUserId               String?
@@ -2935,6 +2956,7 @@ model FinancialAdjustmentRequest {
   updatedAt                    DateTime                  @updatedAt
 
   @@index([status, createdAt, id])
+  @@index([financialDataClass, status, createdAt, id])
   @@index([userId, status, createdAt, id])
   @@index([deficitId, status, createdAt, id])
 }
@@ -2942,6 +2964,7 @@ model FinancialAdjustmentRequest {
 model PortfolioLot {
   id              String             @id @default(cuid())
   userId          String
+  financialDataClass FinancialDataClass @default(OPERATIONAL)
   assetId         String
   acquiredUnits   BigInt
   remainingUnits  BigInt
@@ -2956,6 +2979,7 @@ model PortfolioLot {
   disposals       LotDisposal[]
 
   @@index([userId, assetId, acquiredAt, id])
+  @@index([financialDataClass, userId, assetId, acquiredAt, id])
 }
 
 model LotDisposal {
@@ -2976,6 +3000,7 @@ model LotDisposal {
 model FinancialReconciliationRun {
   id            String                        @id @default(cuid())
   scope         String
+  financialDataClass FinancialDataClass       @default(OPERATIONAL)
   status        FinancialReconciliationStatus
   currency      String
   debitMinor    BigInt
@@ -2985,6 +3010,7 @@ model FinancialReconciliationRun {
   createdAt     DateTime                      @default(now())
 
   @@index([scope, createdAt, id])
+  @@index([financialDataClass, scope, createdAt, id])
 }
 
 model ComplianceCase {
@@ -3192,6 +3218,7 @@ model ExternalConnectAccount {
 model MoneyMovement {
   id                                     String                        @id @default(cuid())
   userId                                 String
+  financialDataClass                     FinancialDataClass            @default(OPERATIONAL)
   externalAccountId                      String?
   cashAccountId                          String
   type                                   MoneyMovementType
@@ -3245,6 +3272,7 @@ model MoneyMovement {
   @@index([provider, status, updatedAt])
   @@index([provider, providerAvailableOn, status])
   @@index([status, createdAt, id])
+  @@index([financialDataClass, status, createdAt, id])
 }
 
 model ProviderLiquidityReservation {
@@ -3511,6 +3539,7 @@ model TradingMarket {
 model TradingOrder {
   id                     String               @id @default(cuid())
   userId                 String?
+  financialDataClass     FinancialDataClass   @default(OPERATIONAL)
   principalType          TradingPrincipalType @default(USER)
   channel                TradingChannel       @default(SECONDARY_MARKET)
   principalId            String
@@ -3553,6 +3582,7 @@ model TradingOrder {
   @@index([actorUserId, createdAt, id])
   @@index([assetId, status, createdAt, id])
   @@index([assetId, status, expiresAt, id])
+  @@index([financialDataClass, assetId, status, createdAt, id])
 }
 
 /// Append-only externally-safe execution record. Settlement is internal and
@@ -3560,6 +3590,7 @@ model TradingOrder {
 model TradingExecution {
   id                String                           @id @default(cuid())
   assetId           String
+  financialDataClass FinancialDataClass              @default(OPERATIONAL)
   channel           TradingChannel                   @default(SECONDARY_MARKET)
   initialOfferingId String?
   buyOrderId        String
@@ -3586,6 +3617,7 @@ model TradingExecution {
 
   @@unique([assetId, marketSequence])
   @@index([assetId, executedAt, id])
+  @@index([financialDataClass, assetId, executedAt, id])
 }
 
 /// Immutable state-transition audit distinct from generic access audit.

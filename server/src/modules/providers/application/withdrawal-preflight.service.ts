@@ -4,6 +4,7 @@ import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { PrismaService } from '../../../database/prisma.service';
 import { FinancialLedgerService } from '../../finance/application/financial-ledger.service';
 import { feeForBps, WITHDRAWAL_FEE_BPS } from '../../finance/domain/fee-policy';
+import { authoritativeFinancialDataClasses } from '../../finance/domain/financial-data-classification';
 import { StripeClientFactory } from './stripe-provider.client';
 
 export type ProviderLiquidityStatus =
@@ -278,6 +279,7 @@ export class WithdrawalPreflightService {
           where: {
             ownerType: 'USER',
             currency: 'GBP',
+            financialDataClass: { in: [...authoritativeFinancialDataClasses] },
             code: {
               in: [
                 'CASH_AVAILABLE',
@@ -291,6 +293,7 @@ export class WithdrawalPreflightService {
         this.db.moneyMovement.aggregate({
           where: {
             type: 'DEPOSIT',
+            financialDataClass: { in: [...authoritativeFinancialDataClasses] },
             status: 'SETTLED',
             providerAvailableOn: { gt: new Date() },
           },
@@ -435,6 +438,9 @@ export class WithdrawalPreflightService {
         environment: this.stripeFactory.environment(),
         currency: 'GBP',
         status: 'ACTIVE',
+        movement: {
+          financialDataClass: { in: [...authoritativeFinancialDataClasses] },
+        },
       },
       _sum: { amountMinor: true },
     });

@@ -208,6 +208,7 @@ function AdminConsole() {
     accountLastActive,
     accountSort: accountSortParam,
     accountPage: accountPageParam,
+    financeDataClass: financeDataClassParam,
   } = Route.useSearch();
   const { user: selectedUser } = Route.useSearch();
   const membershipStatus = [
@@ -263,6 +264,10 @@ function AdminConsole() {
   const financeStatus = financeStatuses[financeTab]?.includes(reviewStatus ?? "")
     ? reviewStatus
     : undefined;
+  const financeDataClass: "OPERATIONAL" | "QA_DEMO" | "ALL" =
+    financeDataClassParam === "QA_DEMO" || financeDataClassParam === "ALL"
+      ? financeDataClassParam
+      : "OPERATIONAL";
   const trustTabs = ["compliance", "restrictions", "tickets", "escalations"];
   const trustTab = trustTabs.includes(selectedUserTab ?? "") ? selectedUserTab! : "compliance";
   const trustStatuses: Record<string, string[]> = {
@@ -597,6 +602,7 @@ function AdminConsole() {
       financeTab,
       reviewQuery,
       financeStatus,
+      financeDataClass,
       reviewPageParam,
       reviewPageSizeParam,
     ],
@@ -605,6 +611,7 @@ function AdminConsole() {
         tab: financeTab,
         q: reviewQuery,
         status: financeStatus,
+        dataClass: financeDataClass,
         page: Math.max(1, Number(reviewPageParam ?? 1)),
         pageSize: Math.min(100, Math.max(1, Number(reviewPageSizeParam ?? 10))),
       }),
@@ -1374,6 +1381,7 @@ function AdminConsole() {
             tab={financeTab}
             query={reviewQuery ?? ""}
             status={financeStatus ?? ""}
+            dataClass={financeDataClass}
             page={Math.max(1, Number(reviewPageParam ?? 1))}
             update={(patch) =>
               void navigate({
@@ -1731,7 +1739,11 @@ function PhysicalIntakeBoard({
     },
   });
   const custodyHandoff = useMutation({
-    mutationFn: ({ assetId, providerRef, facilityCode }: {
+    mutationFn: ({
+      assetId,
+      providerRef,
+      facilityCode,
+    }: {
       assetId: string;
       providerRef: string;
       facilityCode: string;
@@ -1753,7 +1765,11 @@ function PhysicalIntakeBoard({
     },
   });
   const custodyTransition = useMutation({
-    mutationFn: ({ assetId, toStatus, providerRef }: {
+    mutationFn: ({
+      assetId,
+      toStatus,
+      providerRef,
+    }: {
       assetId: string;
       toStatus: string;
       providerRef: string;
@@ -1842,7 +1858,8 @@ function PhysicalIntakeBoard({
           onCreateCustodyHandoff={async (providerRef) => {
             if (!detailRow.assetId) throw new Error("This intake has no linked asset for custody.");
             const facilityCode = detailRow.vault?.code ?? detailRow.vault?.id;
-            if (!facilityCode) throw new Error("Assign a receiving destination before custody handoff.");
+            if (!facilityCode)
+              throw new Error("Assign a receiving destination before custody handoff.");
             await custodyHandoff.mutateAsync({
               assetId: detailRow.assetId,
               providerRef,
@@ -1858,14 +1875,15 @@ function PhysicalIntakeBoard({
             });
           }}
           onRecordCoverage={async (insuredValueMinor) => {
-            if (!detailRow.assetId) throw new Error("This intake has no linked asset for coverage.");
+            if (!detailRow.assetId)
+              throw new Error("This intake has no linked asset for coverage.");
             await coverage.mutateAsync({ assetId: detailRow.assetId, insuredValueMinor });
           }}
           custodyPending={custodyHandoff.isPending || custodyTransition.isPending}
           custodyFailed={custodyHandoff.isError || custodyTransition.isError}
           custodyErrorMessage={
             (custodyHandoff.error ?? custodyTransition.error) instanceof Error
-              ? (custodyHandoff.error ?? custodyTransition.error)?.message ?? null
+              ? ((custodyHandoff.error ?? custodyTransition.error)?.message ?? null)
               : null
           }
           coveragePending={coverage.isPending}
@@ -2910,18 +2928,16 @@ function PhysicalIntakeDetailPage({
                 : row.stage === "RECEIVED" || row.stage === "VERIFICATION"
                   ? "Custody can progress once verification is complete."
                   : "The next authoritative intake step can be evaluated.",
-          action:
-            row.needsStaffAction
-              ? {
-                  label:
-                    row.allowedActions.includes("ASSIGN_DESTINATION")
-                      ? "Assign destination"
-                      : row.nextAction,
-                  onClick: guidanceAction,
-                  disabled: destinationSaving || deliveryPending || verificationStarting,
-                  unavailableReason: "The current intake command is already being processed.",
-                }
-              : undefined,
+          action: row.needsStaffAction
+            ? {
+                label: row.allowedActions.includes("ASSIGN_DESTINATION")
+                  ? "Assign destination"
+                  : row.nextAction,
+                onClick: guidanceAction,
+                disabled: destinationSaving || deliveryPending || verificationStarting,
+                unavailableReason: "The current intake command is already being processed.",
+              }
+            : undefined,
         }}
         progress={steps.map(([step, label]) => ({
           id: step,
@@ -4421,19 +4437,16 @@ function IntakeCustodyTab({
   const [providerRef, setProviderRef] = useState("");
   const [coverageMinor, setCoverageMinor] = useState("");
   const verificationStatus = detail?.intake?.verification?.status ?? row.verification?.status;
-  const ready = Boolean(
-    row.receipt && verificationStatus === "VERIFIED" && !row.issues.length,
-  );
+  const ready = Boolean(row.receipt && verificationStatus === "VERIFIED" && !row.issues.length);
   const nextStatus =
     status === "EXPECTED" ? "RECEIVED" : status === "RECEIVED" ? "INSPECTED" : "SECURED";
-  const actionLabel =
-    !status
-      ? "Start vault custody"
-      : nextStatus === "RECEIVED"
-        ? "Mark vault received"
-        : nextStatus === "INSPECTED"
-          ? "Mark inspected"
-          : "Secure in vault";
+  const actionLabel = !status
+    ? "Start vault custody"
+    : nextStatus === "RECEIVED"
+      ? "Mark vault received"
+      : nextStatus === "INSPECTED"
+        ? "Mark inspected"
+        : "Secure in vault";
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const reference = providerRef.trim();
@@ -4498,13 +4511,18 @@ function IntakeCustodyTab({
             className="admin-primary-button"
             disabled={pending || (!status && !ready) || !row.assetId}
             aria-busy={pending}
-            title={!status && !ready ? "Receipt, verification, and resolved exceptions are required." : undefined}
+            title={
+              !status && !ready
+                ? "Receipt, verification, and resolved exceptions are required."
+                : undefined
+            }
           >
             {pending ? "Saving…" : actionLabel}
           </button>
           {!status && !ready ? (
             <p className="admin-safe-note">
-              Complete physical receipt, verification, and all exception resolution before starting custody.
+              Complete physical receipt, verification, and all exception resolution before starting
+              custody.
             </p>
           ) : null}
         </form>
@@ -7946,7 +7964,8 @@ function ConsolidatedUserDetailExperience({
                 why: user.recommendedAction.explanation,
                 actor: "ADMIN",
                 blocker: user.actionCenter[0]?.title ?? "Account controls require review.",
-                afterThis: "The owning account-control workflow can apply the next protected change.",
+                afterThis:
+                  "The owning account-control workflow can apply the next protected change.",
                 action: {
                   label: "Open account control",
                   onClick: () => setTab(user.recommendedAction!.tab),
@@ -7956,7 +7975,8 @@ function ConsolidatedUserDetailExperience({
                 title: "No account action required",
                 why: "No backend-derived account control requires staff intervention.",
                 actor: "NO_ACTION_REQUIRED",
-                afterThis: "Continue monitoring account, finance, and compliance authority separately.",
+                afterThis:
+                  "Continue monitoring account, finance, and compliance authority separately.",
               }
         }
         blockers={user.actionCenter.map((item, index) => ({

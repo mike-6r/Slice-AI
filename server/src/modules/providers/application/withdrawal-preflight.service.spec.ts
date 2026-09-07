@@ -121,6 +121,36 @@ function service(options?: {
 }
 
 describe('WithdrawalPreflightService', () => {
+  it('asks the admin projection for operational and real-sandbox accounts only', async () => {
+    const { service: preflight, db } = service({
+      adminAccounts: [
+        {
+          code: 'CASH_AVAILABLE',
+          normalSide: 'CREDIT',
+          postedDebitMinor: 0n,
+          postedCreditMinor: 999_999_99n,
+        },
+      ],
+    });
+
+    await preflight.adminProjection();
+
+    expect(db.financialAccount.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          financialDataClass: { in: ['OPERATIONAL', 'SANDBOX_REAL'] },
+        }),
+      }),
+    );
+    expect(db.moneyMovement.aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          financialDataClass: { in: ['OPERATIONAL', 'SANDBOX_REAL'] },
+        }),
+      }),
+    );
+  });
+
   it('does not count pending provider funds as withdrawable liquidity', async () => {
     const { service: preflight } = service({
       availableMinor: -250,

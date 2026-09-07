@@ -56,10 +56,15 @@ export class PortfolioLotService {
             'PORTFOLIO_LOT_SOURCE_CONFLICT',
             'Lot source has already been recorded.',
           );
+        const owner = await db.user.findUniqueOrThrow({
+          where: { id: input.userId },
+          select: { financialDataClass: true },
+        });
         const lot = await db.portfolioLot.create({
           data: {
             id: randomUUID(),
             userId: input.userId,
+            financialDataClass: owner.financialDataClass,
             assetId: input.assetId,
             acquiredUnits: units,
             remainingUnits: units,

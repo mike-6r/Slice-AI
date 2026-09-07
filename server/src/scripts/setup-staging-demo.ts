@@ -198,6 +198,12 @@ export async function ensureDemoAccount(
     `staging-demo-profile-${randomUUID()}`,
     `staging-demo-profile:${demo.email}`,
   );
+  // The identity is useful for staging walkthroughs, but it is never an
+  // operational customer-liability source.
+  await db.user.update({
+    where: { id: actor.userId },
+    data: { financialDataClass: 'DEMO' },
+  });
 
   return { userId: actor.userId, actor };
 }
@@ -214,6 +220,7 @@ export async function ensureDemoFunding(
     accountType: 'LIABILITY',
     code: 'CASH_AVAILABLE',
     normalSide: 'CREDIT',
+    financialDataClass: 'DEMO',
   });
   const clearing = await ensureFinancialAccount(db, {
     ownerType: 'PLATFORM',
@@ -221,6 +228,7 @@ export async function ensureDemoFunding(
     accountType: 'ASSET',
     code: 'STAGING_DEMO_CLEARING',
     normalSide: 'DEBIT',
+    financialDataClass: 'DEMO',
   });
   const correlationId = `staging-demo-funding:${input.label}`;
   let transaction = await db.journalTransaction.findUnique({
@@ -326,6 +334,7 @@ async function ensureFinancialAccount(
     accountType: 'LIABILITY' | 'ASSET';
     code: string;
     normalSide: 'CREDIT' | 'DEBIT';
+    financialDataClass: 'DEMO';
   }>,
 ) {
   const existing = await db.financialAccount.findFirst({
@@ -345,6 +354,7 @@ async function ensureFinancialAccount(
       code: input.code,
       currency: 'GBP',
       normalSide: input.normalSide,
+      financialDataClass: input.financialDataClass,
     },
   });
 }

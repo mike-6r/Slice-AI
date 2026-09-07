@@ -22,7 +22,12 @@ import type { TransactionScreeningProvider } from '../domain/provider.types';
 import { moneyMovementProviderCode } from '../domain/money-movement-provider';
 import { providerTestFailurePoint } from './provider-test-failure-injection';
 import { OutboxWriter } from '../../outbox/application/outbox-writer.service';
-import { financialNotificationEvent, financialNotificationKind, formatGbpMinor, movementSettledEvent } from '../../outbox/domain/domain-event';
+import {
+  financialNotificationEvent,
+  financialNotificationKind,
+  formatGbpMinor,
+  movementSettledEvent,
+} from '../../outbox/domain/domain-event';
 import { feeForBps, WITHDRAWAL_FEE_BPS } from '../../finance/domain/fee-policy';
 import { BankConnectionService } from './external-provider-boundaries';
 import {
@@ -33,10 +38,7 @@ import { WithdrawalPreflightService } from './withdrawal-preflight.service';
 import { StripeCardFundingService } from './stripe-card-funding.service';
 
 type MovementType = 'DEPOSIT' | 'WITHDRAWAL';
-type MovementRail =
-  | 'BACS_DIRECT_DEBIT'
-  | 'CARD'
-  | 'CONNECT_STANDARD_PAYOUT';
+type MovementRail = 'BACS_DIRECT_DEBIT' | 'CARD' | 'CONNECT_STANDARD_PAYOUT';
 
 /**
  * Destination screening belongs to the local destination-based provider
@@ -75,9 +77,10 @@ export function calculateDepositVelocity(
   const dayStart = new Date(now);
   dayStart.setUTCHours(0, 0, 0, 0);
   const since7d = now.getTime() - 7 * 86_400_000;
-  const rapidSince = rapidWindowSeconds === undefined
-    ? null
-    : now.getTime() - rapidWindowSeconds * 1000;
+  const rapidSince =
+    rapidWindowSeconds === undefined
+      ? null
+      : now.getTime() - rapidWindowSeconds * 1000;
   return {
     dailyTotal: movements
       .filter((item) => item.createdAt >= dayStart)
@@ -86,13 +89,20 @@ export function calculateDepositVelocity(
       .filter((item) => item.createdAt.getTime() >= since7d)
       .reduce((total, item) => total + item.amountMinor, 0n),
     dailyCount: movements.filter((item) => item.createdAt >= dayStart).length,
-    rapidCount: rapidSince === null
-      ? 0
-      : movements.filter((item) => item.createdAt.getTime() >= rapidSince).length,
+    rapidCount:
+      rapidSince === null
+        ? 0
+        : movements.filter((item) => item.createdAt.getTime() >= rapidSince)
+            .length,
   };
 }
 
-export type DepositLimitCode = 'DEPOSIT_LIMIT_EXCEEDED' | 'DEPOSIT_DAILY_LIMIT_EXCEEDED' | 'DEPOSIT_ROLLING_LIMIT_EXCEEDED' | 'DEPOSIT_DAILY_COUNT_LIMIT_EXCEEDED' | 'DEPOSIT_RAPID_ATTEMPT_LIMIT_EXCEEDED';
+export type DepositLimitCode =
+  | 'DEPOSIT_LIMIT_EXCEEDED'
+  | 'DEPOSIT_DAILY_LIMIT_EXCEEDED'
+  | 'DEPOSIT_ROLLING_LIMIT_EXCEEDED'
+  | 'DEPOSIT_DAILY_COUNT_LIMIT_EXCEEDED'
+  | 'DEPOSIT_RAPID_ATTEMPT_LIMIT_EXCEEDED';
 export type DepositLimitPolicy = Readonly<{
   maxMinor?: number;
   dailyLimitMinor?: number;
@@ -103,24 +113,51 @@ export type DepositLimitPolicy = Readonly<{
 
 export function evaluateDepositLimits(
   amount: bigint,
-  velocity: { dailyTotal: bigint; rolling7dTotal: bigint; dailyCount: number; rapidCount: number },
+  velocity: {
+    dailyTotal: bigint;
+    rolling7dTotal: bigint;
+    dailyCount: number;
+    rapidCount: number;
+  },
   policy: DepositLimitPolicy,
 ): DepositLimitCode | null {
-  if (policy.maxMinor !== undefined && amount > BigInt(policy.maxMinor)) return 'DEPOSIT_LIMIT_EXCEEDED';
-  if (policy.dailyLimitMinor !== undefined && velocity.dailyTotal + amount > BigInt(policy.dailyLimitMinor)) return 'DEPOSIT_DAILY_LIMIT_EXCEEDED';
-  if (policy.rolling7dLimitMinor !== undefined && velocity.rolling7dTotal + amount > BigInt(policy.rolling7dLimitMinor)) return 'DEPOSIT_ROLLING_LIMIT_EXCEEDED';
-  if (policy.dailyCountLimit !== undefined && velocity.dailyCount + 1 > policy.dailyCountLimit) return 'DEPOSIT_DAILY_COUNT_LIMIT_EXCEEDED';
-  if (policy.rapidCountLimit !== undefined && velocity.rapidCount + 1 > policy.rapidCountLimit) return 'DEPOSIT_RAPID_ATTEMPT_LIMIT_EXCEEDED';
+  if (policy.maxMinor !== undefined && amount > BigInt(policy.maxMinor))
+    return 'DEPOSIT_LIMIT_EXCEEDED';
+  if (
+    policy.dailyLimitMinor !== undefined &&
+    velocity.dailyTotal + amount > BigInt(policy.dailyLimitMinor)
+  )
+    return 'DEPOSIT_DAILY_LIMIT_EXCEEDED';
+  if (
+    policy.rolling7dLimitMinor !== undefined &&
+    velocity.rolling7dTotal + amount > BigInt(policy.rolling7dLimitMinor)
+  )
+    return 'DEPOSIT_ROLLING_LIMIT_EXCEEDED';
+  if (
+    policy.dailyCountLimit !== undefined &&
+    velocity.dailyCount + 1 > policy.dailyCountLimit
+  )
+    return 'DEPOSIT_DAILY_COUNT_LIMIT_EXCEEDED';
+  if (
+    policy.rapidCountLimit !== undefined &&
+    velocity.rapidCount + 1 > policy.rapidCountLimit
+  )
+    return 'DEPOSIT_RAPID_ATTEMPT_LIMIT_EXCEEDED';
   return null;
 }
 
 export function depositLimitMessage(code: DepositLimitCode): string {
   switch (code) {
-    case 'DEPOSIT_LIMIT_EXCEEDED': return 'This deposit would exceed your current bank funding limit.';
-    case 'DEPOSIT_DAILY_LIMIT_EXCEEDED': return 'You’ve reached your current daily bank funding limit.';
-    case 'DEPOSIT_ROLLING_LIMIT_EXCEEDED': return 'This deposit would exceed your current rolling bank funding limit.';
-    case 'DEPOSIT_DAILY_COUNT_LIMIT_EXCEEDED': return 'You’ve reached the current number of bank deposits allowed today.';
-    case 'DEPOSIT_RAPID_ATTEMPT_LIMIT_EXCEEDED': return 'Please wait a little before trying another bank deposit.';
+    case 'DEPOSIT_LIMIT_EXCEEDED':
+      return 'This deposit would exceed your current bank funding limit.';
+    case 'DEPOSIT_DAILY_LIMIT_EXCEEDED':
+      return 'You’ve reached your current daily bank funding limit.';
+    case 'DEPOSIT_ROLLING_LIMIT_EXCEEDED':
+      return 'This deposit would exceed your current rolling bank funding limit.';
+    case 'DEPOSIT_DAILY_COUNT_LIMIT_EXCEEDED':
+      return 'You’ve reached the current number of bank deposits allowed today.';
+    case 'DEPOSIT_RAPID_ATTEMPT_LIMIT_EXCEEDED':
+      return 'Please wait a little before trying another bank deposit.';
   }
 }
 
@@ -273,13 +310,8 @@ export class WalletMovementService {
         message: 'Withdrawal requires compliance review.',
       });
     }
-    return (await this.create(
-      actor,
-      'WITHDRAWAL',
-      amountMinor,
-      requestId,
-      key,
-    )).movement;
+    return (await this.create(actor, 'WITHDRAWAL', amountMinor, requestId, key))
+      .movement;
   }
 
   private async createWithCapability(
@@ -354,9 +386,10 @@ export class WalletMovementService {
         });
         if (existingBeforeLock)
           return { movement: existingBeforeLock, reused: true };
-        const lockKey = type === 'WITHDRAWAL'
-          ? `WALLET_WITHDRAWAL_VELOCITY:${actor.userId}`
-          : `WALLET_DEPOSIT_VELOCITY:${actor.userId}`;
+        const lockKey =
+          type === 'WITHDRAWAL'
+            ? `WALLET_WITHDRAWAL_VELOCITY:${actor.userId}`
+            : `WALLET_DEPOSIT_VELOCITY:${actor.userId}`;
         await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
       }
       const existingAfterLock = await db.moneyMovement.findUnique({
@@ -419,8 +452,10 @@ export class WalletMovementService {
                 hasSufficientAvailable(account),
             ) ??
             cashAccounts.find((account) => account.code === 'CASH_AVAILABLE'))
-          : cashAccounts.find((account) =>
-              account.code === (bacsRiskHold ? 'BACS_RISK_HOLD' : 'CASH_AVAILABLE'),
+          : cashAccounts.find(
+              (account) =>
+                account.code ===
+                (bacsRiskHold ? 'BACS_RISK_HOLD' : 'CASH_AVAILABLE'),
             );
       if (!cash && type === 'DEPOSIT')
         cash = await this.ledger.depositCashAccount(
@@ -443,6 +478,7 @@ export class WalletMovementService {
           id: randomUUID(),
           userId: actor.userId,
           cashAccountId: cash.id,
+          financialDataClass: cash.financialDataClass,
           type,
           rail,
           amountMinor,
@@ -891,6 +927,7 @@ export class WalletMovementService {
             movement.type === 'DEPOSIT'
               ? 'EXTERNAL_DEPOSIT'
               : 'EXTERNAL_WITHDRAWAL',
+          financialDataClass: movement.financialDataClass,
           correlationId: `provider-movement:${movement.id}`,
           descriptionCode:
             movement.type === 'WITHDRAWAL' && movement.sliceFeeMinor > 0n
@@ -998,20 +1035,23 @@ export class WalletMovementService {
         createdAt: new Date(),
       });
       if (riskHeld) {
-        await this.outbox.append(db, financialNotificationEvent({
-          kind: financialNotificationKind.depositClearing,
-          title: 'Bank deposit clearing',
-          body: `Your ${formatGbpMinor(updated.amountMinor)} bank deposit was confirmed and is clearing. It is visible in your Wallet, but it cannot be used for trading or withdrawals until Slice releases it under the current risk policy.`,
-          resourceType: 'money-movement',
-          resourceId: updated.id,
-          aggregateType: 'money-movement',
-          aggregateId: updated.id,
-          amountMinor: updated.amountMinor.toString(),
-          actorUserId: updated.userId,
-          correlationId: input.requestId,
-          occurredAt: updated.settledAt!,
-          eventSuffix: 'clearing',
-        }));
+        await this.outbox.append(
+          db,
+          financialNotificationEvent({
+            kind: financialNotificationKind.depositClearing,
+            title: 'Bank deposit clearing',
+            body: `Your ${formatGbpMinor(updated.amountMinor)} bank deposit was confirmed and is clearing. It is visible in your Wallet, but it cannot be used for trading or withdrawals until Slice releases it under the current risk policy.`,
+            resourceType: 'money-movement',
+            resourceId: updated.id,
+            aggregateType: 'money-movement',
+            aggregateId: updated.id,
+            amountMinor: updated.amountMinor.toString(),
+            actorUserId: updated.userId,
+            correlationId: input.requestId,
+            occurredAt: updated.settledAt!,
+            eventSuffix: 'clearing',
+          }),
+        );
       } else {
         await this.outbox.append(
           db,
@@ -1156,7 +1196,9 @@ export class WalletMovementService {
     requestId: string;
   }) {
     const movement = await this.lockMovement(input.movementId);
-    if (['FAILED', 'CANCELLED', 'RETURNED', 'REVERSED'].includes(movement.status))
+    if (
+      ['FAILED', 'CANCELLED', 'RETURNED', 'REVERSED'].includes(movement.status)
+    )
       throw new ConflictException({
         code: 'MOVEMENT_TERMINAL',
         message: 'A terminal movement cannot be held.',
@@ -1165,8 +1207,7 @@ export class WalletMovementService {
       const current = await db.moneyMovement.findUniqueOrThrow({
         where: { id: movement.id },
       });
-      if (current.status === 'MANUAL_REVIEW')
-        return this.safe(current, true);
+      if (current.status === 'MANUAL_REVIEW') return this.safe(current, true);
       const updated = await db.moneyMovement.update({
         where: { id: movement.id },
         data: {
@@ -1222,19 +1263,22 @@ export class WalletMovementService {
         },
       });
       if (updated.type === 'DEPOSIT') {
-        await this.outbox.append(db, financialNotificationEvent({
-          kind: financialNotificationKind.depositUnderReview,
-          title: 'Bank deposit under review',
-          body: `Your ${formatGbpMinor(updated.amountMinor)} bank deposit is under review. It cannot be used for trading or withdrawals until the review is complete. We will notify you when the status changes.`,
-          resourceType: 'money-movement',
-          resourceId: updated.id,
-          aggregateType: 'money-movement',
-          aggregateId: updated.id,
-          amountMinor: updated.amountMinor.toString(),
-          actorUserId: updated.userId,
-          correlationId: input.requestId,
-          eventSuffix: 'review',
-        }));
+        await this.outbox.append(
+          db,
+          financialNotificationEvent({
+            kind: financialNotificationKind.depositUnderReview,
+            title: 'Bank deposit under review',
+            body: `Your ${formatGbpMinor(updated.amountMinor)} bank deposit is under review. It cannot be used for trading or withdrawals until the review is complete. We will notify you when the status changes.`,
+            resourceType: 'money-movement',
+            resourceId: updated.id,
+            aggregateType: 'money-movement',
+            aggregateId: updated.id,
+            amountMinor: updated.amountMinor.toString(),
+            actorUserId: updated.userId,
+            correlationId: input.requestId,
+            eventSuffix: 'review',
+          }),
+        );
       }
       return this.safe(updated, false);
     });
@@ -1312,7 +1356,10 @@ export class WalletMovementService {
   }) {
     const movement = await this.lockMovement(input.movementId);
     if (movement.status === 'RETURNED') return this.safe(movement, true);
-    if (!['SETTLED', 'HELD', 'MANUAL_REVIEW'].includes(movement.status) || !movement.ledgerTransactionId)
+    if (
+      !['SETTLED', 'HELD', 'MANUAL_REVIEW'].includes(movement.status) ||
+      !movement.ledgerTransactionId
+    )
       throw new ConflictException({
         code: 'MOVEMENT_RETURN_UNAVAILABLE',
         message: 'Only provider-confirmed movements can be returned.',
@@ -1368,13 +1415,14 @@ export class WalletMovementService {
           reasonCode: input.reasonCode,
         },
       });
-      const deficitMinor = await this.ledger.recordReturnedFundsDeficitInTransaction(
-        db,
-        updated.userId,
-        updated.id,
-        input.requestId,
-        input.reasonCode,
-      );
+      const deficitMinor =
+        await this.ledger.recordReturnedFundsDeficitInTransaction(
+          db,
+          updated.userId,
+          updated.id,
+          input.requestId,
+          input.reasonCode,
+        );
       await createIdentityTransaction(db).audit.append({
         id: randomUUID(),
         actorUserId: null,
@@ -1388,23 +1436,27 @@ export class WalletMovementService {
         metadata: { status: 'RETURNED', reasonCode: input.reasonCode },
         createdAt: new Date(),
       });
-      const returnBody = deficitMinor > 0n
-        ? `A ${formatGbpMinor(updated.amountMinor)} bank deposit was returned by your bank. Because some of those funds had already been used, your Slice account now has an outstanding balance of ${formatGbpMinor(deficitMinor)}. Buying and withdrawals are temporarily restricted until it is resolved.`
-        : `A ${formatGbpMinor(updated.amountMinor)} bank deposit was returned by your bank. Those funds are no longer available in Slice. If you think this is incorrect, please contact support.`;
-      await this.outbox.append(db, financialNotificationEvent({
-        kind: financialNotificationKind.depositReturned,
-        title: 'Bank deposit returned',
-        body: returnBody,
-        resourceType: 'money-movement',
-        resourceId: updated.id,
-        aggregateType: 'money-movement',
-        aggregateId: updated.id,
-        amountMinor: updated.amountMinor.toString(),
-        outstandingMinor: deficitMinor.toString(),
-        actorUserId: updated.userId,
-        correlationId: input.requestId,
-        eventSuffix: 'returned',
-      }));
+      const returnBody =
+        deficitMinor > 0n
+          ? `A ${formatGbpMinor(updated.amountMinor)} bank deposit was returned by your bank. Because some of those funds had already been used, your Slice account now has an outstanding balance of ${formatGbpMinor(deficitMinor)}. Buying and withdrawals are temporarily restricted until it is resolved.`
+          : `A ${formatGbpMinor(updated.amountMinor)} bank deposit was returned by your bank. Those funds are no longer available in Slice. If you think this is incorrect, please contact support.`;
+      await this.outbox.append(
+        db,
+        financialNotificationEvent({
+          kind: financialNotificationKind.depositReturned,
+          title: 'Bank deposit returned',
+          body: returnBody,
+          resourceType: 'money-movement',
+          resourceId: updated.id,
+          aggregateType: 'money-movement',
+          aggregateId: updated.id,
+          amountMinor: updated.amountMinor.toString(),
+          outstandingMinor: deficitMinor.toString(),
+          actorUserId: updated.userId,
+          correlationId: input.requestId,
+          eventSuffix: 'returned',
+        }),
+      );
       return this.safe(updated, false);
     });
   }
@@ -1840,21 +1892,32 @@ export class WalletMovementService {
     const dayStart = new Date(now);
     dayStart.setUTCHours(0, 0, 0, 0);
     const since7d = new Date(now.getTime() - 7 * 86_400_000);
-    const rapidSince = this.config.bacsDepositRapidWindowSeconds === undefined
-      ? null
-      : new Date(now.getTime() - this.config.bacsDepositRapidWindowSeconds * 1000);
+    const rapidSince =
+      this.config.bacsDepositRapidWindowSeconds === undefined
+        ? null
+        : new Date(
+            now.getTime() - this.config.bacsDepositRapidWindowSeconds * 1000,
+          );
     if (
       this.config.bacsDepositDailyLimitMinor === undefined &&
       this.config.bacsDepositRolling7dLimitMinor === undefined &&
       this.config.bacsDepositDailyCountLimit === undefined &&
-      (rapidSince === null || this.config.bacsDepositRapidCountLimit === undefined)
-    ) return;
+      (rapidSince === null ||
+        this.config.bacsDepositRapidCountLimit === undefined)
+    )
+      return;
     const rows = await db.moneyMovement.findMany({
       where: {
         userId,
         type: 'DEPOSIT',
         status: { notIn: ['FAILED', 'CANCELLED', 'RETURNED', 'REVERSED'] },
-        createdAt: { gte: this.config.bacsDepositDailyLimitMinor !== undefined || this.config.bacsDepositDailyCountLimit !== undefined ? dayStart : since7d },
+        createdAt: {
+          gte:
+            this.config.bacsDepositDailyLimitMinor !== undefined ||
+            this.config.bacsDepositDailyCountLimit !== undefined
+              ? dayStart
+              : since7d,
+        },
       },
       select: { amountMinor: true, createdAt: true },
     });
@@ -1867,9 +1930,12 @@ export class WalletMovementService {
       dailyLimitMinor: this.config.bacsDepositDailyLimitMinor,
       rolling7dLimitMinor: this.config.bacsDepositRolling7dLimitMinor,
       dailyCountLimit: this.config.bacsDepositDailyCountLimit,
-      rapidCountLimit: rapidSince ? this.config.bacsDepositRapidCountLimit : undefined,
+      rapidCountLimit: rapidSince
+        ? this.config.bacsDepositRapidCountLimit
+        : undefined,
     });
-    if (code) throw new ConflictException({ code, message: depositLimitMessage(code) });
+    if (code)
+      throw new ConflictException({ code, message: depositLimitMessage(code) });
   }
 
   private async lockMovement(id: string) {
@@ -2034,12 +2100,12 @@ export class WalletMovementService {
           );
     const sourceLabel = item.externalAccount
       ? `${item.externalAccount.institutionName ?? item.externalAccount.accountName ?? (item.externalAccount.accountType === 'bacs_debit' ? 'UK bank account' : 'Connected account')}${item.externalAccount.accountMask ? ` · •••• ${item.externalAccount.accountMask}` : ''}`
-      : item.providerInstrumentLabel ??
+      : (item.providerInstrumentLabel ??
         (item.rail === 'CARD'
           ? 'Card payment'
           : item.type === 'WITHDRAWAL'
             ? 'GBP wallet → verified payout account'
-            : 'GBP wallet');
+            : 'GBP wallet'));
     const failure = customerFailure(
       item.type,
       item.status,
@@ -2077,10 +2143,9 @@ export class WalletMovementService {
           ? (knownProviderCost ?? 0n).toString()
           : null,
         providerFeeStatus: providerFeeKnown ? 'KNOWN' : 'PENDING',
-        netPayoutMinor: (
-          item.type === 'WITHDRAWAL'
-            ? item.providerAmountMinor ?? item.amountMinor
-            : item.providerNetMinor ?? item.amountMinor
+        netPayoutMinor: (item.type === 'WITHDRAWAL'
+          ? (item.providerAmountMinor ?? item.amountMinor)
+          : (item.providerNetMinor ?? item.amountMinor)
         ).toString(),
       },
       availability: movementAvailability(
@@ -2107,9 +2172,7 @@ export class WalletMovementService {
     providerReferenceCiphertext?: string | null;
   }) {
     const reference = this.decryptMovementReference(item);
-    return reference
-      ? `STR-${reference.slice(-6).toUpperCase()}`
-      : null;
+    return reference ? `STR-${reference.slice(-6).toUpperCase()}` : null;
   }
 
   private decryptMovementReference(item: {
@@ -2197,7 +2260,8 @@ function movementAvailability(
   if (status === 'HELD') {
     return {
       state: 'CLEARING',
-      label: 'Visible in your wallet, but not yet available to trade or withdraw',
+      label:
+        'Visible in your wallet, but not yet available to trade or withdraw',
       availableOn: availableOn?.toISOString() ?? null,
     };
   }
@@ -2215,8 +2279,16 @@ function movementAvailability(
   };
 }
 
-function customerFailure(type: string, status: string, failureCode: string | null) {
-  if (!['FAILED', 'CANCELLED', 'MANUAL_REVIEW', 'RETURNED', 'REVERSED'].includes(status)) {
+function customerFailure(
+  type: string,
+  status: string,
+  failureCode: string | null,
+) {
+  if (
+    !['FAILED', 'CANCELLED', 'MANUAL_REVIEW', 'RETURNED', 'REVERSED'].includes(
+      status,
+    )
+  ) {
     return null;
   }
   if (status === 'MANUAL_REVIEW') {
@@ -2236,7 +2308,8 @@ function customerFailure(type: string, status: string, failureCode: string | nul
   if (status === 'RETURNED' || status === 'REVERSED') {
     return {
       title: 'Provider movement returned',
-      detail: 'The provider reported that this movement was returned or reversed.',
+      detail:
+        'The provider reported that this movement was returned or reversed.',
       moneyDisposition:
         type === 'WITHDRAWAL'
           ? 'The withdrawal was not completed. Check your Wallet balance before trying again.'
@@ -2289,7 +2362,8 @@ function customerTimelineLabel(
         : 'Bank deposit requested';
   }
   if (status === 'PROCESSING') return 'Provider is processing this movement';
-  if (status === 'HELD') return 'Provider payment confirmed; funds are clearing';
+  if (status === 'HELD')
+    return 'Provider payment confirmed; funds are clearing';
   if (status === 'SETTLED') {
     return type === 'WITHDRAWAL'
       ? 'Provider confirmed the payout'

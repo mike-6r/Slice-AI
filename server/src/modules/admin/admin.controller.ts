@@ -154,14 +154,26 @@ const intakeReceiptChecklistAliases: Record<
   string[]
 > = {
   packageReceived: ['packagereceived', 'received', 'packagereceivedby_slice'],
-  correctIntakeReference: ['correctintakereference', 'intakereference', 'correctreference'],
-  correctCollectible: ['correctcollectible', 'collectiblecorrect', 'correctitem'],
+  correctIntakeReference: [
+    'correctintakereference',
+    'intakereference',
+    'correctreference',
+  ],
+  correctCollectible: [
+    'correctcollectible',
+    'collectiblecorrect',
+    'correctitem',
+  ],
   visibleConditionAcceptable: [
     'visibleconditionacceptable',
     'conditionacceptable',
     'visiblecondition',
   ],
-  tamperDamageChecked: ['tamperdamagechecked', 'tamperchecked', 'damagedchecked'],
+  tamperDamageChecked: [
+    'tamperdamagechecked',
+    'tamperchecked',
+    'damagedchecked',
+  ],
   trackingMatches: ['trackingmatches', 'trackingmatch', 'trackingcorrect'],
 };
 const intakeCarrierDeliveryConfirmation = z.object({}).strict();
@@ -250,6 +262,7 @@ const financeRecordsQuery = z
       .default('wallets'),
     q: z.string().trim().max(120).optional(),
     status: z.string().trim().max(64).optional(),
+    dataClass: z.enum(['OPERATIONAL', 'QA_DEMO', 'ALL']).default('OPERATIONAL'),
     page: z.coerce.number().int().min(1).max(10_000).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(10),
   })
@@ -1043,19 +1056,23 @@ export class AdminController {
     // Older admin bundles used the human-readable condition value and, in one
     // rollout, placed checklist flags beside the checklist object. Normalize
     // those wire representations without defaulting any staff attestation.
-    const packageCondition = value.packageCondition === 'GOOD'
-      ? 'ACCEPTABLE'
-      : value.packageCondition;
+    const packageCondition =
+      value.packageCondition === 'GOOD' ? 'ACCEPTABLE' : value.packageCondition;
     const checklistRecord = this.receiptChecklistRecord(checklist, value);
     const topLevel = Object.fromEntries(
       Object.entries(value).filter(
         ([key]) =>
           key !== 'checklist' &&
-          !intakeReceiptChecklistKeys.some((checklistKey) => checklistKey === key),
+          !intakeReceiptChecklistKeys.some(
+            (checklistKey) => checklistKey === key,
+          ),
       ),
     );
     const normalizedChecklist = Object.fromEntries(
-      intakeReceiptChecklistKeys.map((key) => [key, this.receiptChecklistValue(checklistRecord, key)]),
+      intakeReceiptChecklistKeys.map((key) => [
+        key,
+        this.receiptChecklistValue(checklistRecord, key),
+      ]),
     );
 
     return {
@@ -1067,7 +1084,11 @@ export class AdminController {
 
   private decodeReceiptJson(value: unknown) {
     let decoded = value;
-    for (let attempt = 0; attempt < 3 && typeof decoded === 'string'; attempt += 1) {
+    for (
+      let attempt = 0;
+      attempt < 3 && typeof decoded === 'string';
+      attempt += 1
+    ) {
       try {
         decoded = JSON.parse(decoded) as unknown;
       } catch {

@@ -473,6 +473,7 @@ export const mockRepositories: AppRepositories = {
     async listFinanceRecords() {
       return {
         tab: "wallets",
+        dataClassScope: "OPERATIONAL" as const,
         items: [],
         pagination: { page: 1, pageSize: 10, total: 0, totalPages: 0 },
       };

@@ -692,9 +692,14 @@ export class InitialOfferingService {
           },
         });
         if (existingOrder) return this.projectionFromRecord(offering);
+        const beneficiary = await db.user.findUniqueOrThrow({
+          where: { id: offering.beneficiaryUserId },
+          select: { financialDataClass: true },
+        });
         const order = await db.tradingOrder.create({
           data: {
             id: randomUUID(),
+            financialDataClass: beneficiary.financialDataClass,
             principalType: 'INITIAL_OFFERING',
             channel: 'INITIAL_OFFERING',
             principalId: offering.id,
@@ -799,10 +804,17 @@ export class InitialOfferingService {
   async prepareInventoryForPreSale(db: Db, offeringId: string) {
     const offering = await db.initialOffering.findUnique({
       where: { id: offeringId },
-      include: { asset: { select: { ownershipSupply: true } }, inventory: { include: { account: true } } },
+      include: {
+        asset: { select: { ownershipSupply: true } },
+        inventory: { include: { account: true } },
+      },
     });
     if (!offering) fail('INITIAL_OFFERING_NOT_FOUND', 'Offering not found.');
-    return this.allocateIssuedOwnershipForOffering(db, offering, `presale:${offeringId}`);
+    return this.allocateIssuedOwnershipForOffering(
+      db,
+      offering,
+      `presale:${offeringId}`,
+    );
   }
 
   private async allocateIssuedOwnershipForOffering(
