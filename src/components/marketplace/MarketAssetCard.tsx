@@ -5,7 +5,9 @@ import {
   Bookmark,
   CheckCircle2,
   Coins,
+  Clock3,
   Info,
+  PackageCheck,
   TrendingUp,
   UserRound,
 } from "lucide-react";
@@ -132,6 +134,18 @@ function formatIssuedOwnership(issuedUnits: string | undefined) {
   const percentage = 100 / Number(units);
   if (!Number.isFinite(percentage)) return null;
   return `${percentage >= 1 ? percentage.toFixed(1) : percentage.toFixed(2)}% ownership`;
+}
+
+/**
+ * Valuation decisions are whole-collectible amounts. Convert them to the
+ * displayed unit quote only when the public ownership supply is usable.
+ */
+function formatPerSliceMinor(amountMinor: number | undefined, issuedUnits: string | undefined) {
+  if (amountMinor === undefined || !Number.isSafeInteger(amountMinor)) return undefined;
+  if (!issuedUnits || !/^\d+$/.test(issuedUnits)) return undefined;
+  const units = BigInt(issuedUnits);
+  if (units <= 0n || units > BigInt(Number.MAX_SAFE_INTEGER)) return undefined;
+  return Math.round(amountMinor / Number(units));
 }
 
 function formatMovementBps(movementBps: number | undefined) {
@@ -371,13 +385,14 @@ function formatHomepageOwnership(percentageBps: number | undefined) {
 function HomepageAssetBody({ asset }: { asset: MarketplaceAsset }) {
   const { formatMoney } = useCurrency();
   const preSale = asset.preSale;
-  const priceMinor = preSale
-    ? Number(preSale.pricePerUnitMinor)
-    : (asset.sliceValuationAmountMinor ?? asset.estimatedMarketValueMinor);
+  const wholeValue = asset.sliceValuationAmountMinor ?? asset.estimatedMarketValueMinor;
+  const perSliceValue = formatPerSliceMinor(wholeValue, asset.issuedUnits);
+  const priceMinor = preSale ? Number(preSale.pricePerUnitMinor) : (perSliceValue ?? wholeValue);
   const priceCurrency = preSale
     ? preSale.currency
     : (asset.sliceValuationCurrency ?? asset.estimatedMarketValueCurrency);
   const ownership = formatHomepageOwnership(preSale?.sliceOwnershipPercentageBps);
+  const isPerSlicePrice = Boolean(preSale || perSliceValue !== undefined);
 
   return (
     <div className="market-card-home-body">
@@ -398,12 +413,14 @@ function HomepageAssetBody({ asset }: { asset: MarketplaceAsset }) {
 
       <div className="market-card-home-metrics">
         <div>
-          <span className="market-card-label">{preSale ? "Price per Slice" : "Market value"}</span>
+          <span className="market-card-label">
+            {isPerSlicePrice ? "Price per Slice" : "Market value"}
+          </span>
           <strong>
             {priceMinor !== undefined && priceCurrency
               ? formatMoney(priceMinor, priceCurrency)
               : "Unavailable"}
-            {preSale ? <small> / Slice</small> : null}
+            {isPerSlicePrice ? <small> / Slice</small> : null}
           </strong>
         </div>
         {ownership ? (
@@ -481,7 +498,9 @@ function LiveMarketTrend({ asset }: { asset: MarketplaceAsset }) {
 
 function LiveMarketBody({ asset }: { asset: MarketplaceAsset }) {
   const { formatMoney } = useCurrency();
-  const price = asset.sliceValuationAmountMinor ?? asset.estimatedMarketValueMinor;
+  const wholeValue = asset.sliceValuationAmountMinor ?? asset.estimatedMarketValueMinor;
+  const perSlicePrice = formatPerSliceMinor(wholeValue, asset.issuedUnits);
+  const price = perSlicePrice ?? wholeValue;
   const priceCurrency = asset.sliceValuationCurrency ?? asset.estimatedMarketValueCurrency;
   const reference = asset.marketReference;
   const ownershipPerSlice = formatIssuedOwnership(asset.issuedUnits);
@@ -521,14 +540,20 @@ function LiveMarketBody({ asset }: { asset: MarketplaceAsset }) {
 
       <section className="market-card-live-valuation" aria-label="Live valuation">
         <div>
-          <span className="market-card-label">Price per Slice</span>
+          <span className="market-card-label">
+            {perSlicePrice !== undefined ? "Price per Slice" : "Market value"}
+          </span>
           <strong>
             {price !== undefined && priceCurrency
               ? formatMoney(price, priceCurrency)
               : "Unavailable"}
           </strong>
           <small>
-            {ownershipPerSlice ? `1 Slice = ${ownershipPerSlice}` : "Fractional ownership"}
+            {perSlicePrice !== undefined
+              ? ownershipPerSlice
+                ? `1 Slice = ${ownershipPerSlice}`
+                : "Derived from issued supply"
+              : "Whole collectible valuation"}
           </small>
         </div>
         <div>
@@ -598,6 +623,115 @@ function LiveMarketBody({ asset }: { asset: MarketplaceAsset }) {
 
       <Link to="/asset/$id" params={{ id: asset.slug }} className="market-card-live-buy">
         {hasListings ? "Buy Slices" : "View market"} <ArrowRight aria-hidden="true" />
+      </Link>
+      <Link to="/asset/$id" params={{ id: asset.slug }} className="market-card-live-view">
+        View collectible
+      </Link>
+    </div>
+  );
+}
+
+function PreSaleMarketBody({ asset }: { asset: MarketplaceAsset }) {
+  const { formatMoney } = useCurrency();
+  const preSale = asset.preSale;
+  if (!preSale) return null;
+  const reference = asset.marketReference;
+  const ownershipPerSlice =
+    formatHomepageOwnership(preSale.sliceOwnershipPercentageBps) ?? "Defined Slice ownership";
+  const countdown = formatPreSaleCountdown(preSale.deadlineAt);
+
+  return (
+    <div className="market-card-live-body market-card-presale-body">
+      <div className="market-card-live-heading">
+        <div>
+          <h2>
+            <Link to="/asset/$id" params={{ id: asset.slug }}>
+              {cleanCardTitle(asset)}
+            </Link>
+          </h2>
+          <p>{cardIdentity(asset)}</p>
+        </div>
+        <span className="market-card-live-heading__verified market-card-presale-heading__status">
+          <Clock3 aria-hidden="true" />
+          Reservations open
+        </span>
+      </div>
+
+      <div className="market-card-live-grade-row">
+        <span>
+          <Coins aria-hidden="true" />
+          {officialGradeLabel(asset)}
+        </span>
+        {asset.conditionLabel ? <span>Condition: {asset.conditionLabel}</span> : null}
+      </div>
+
+      <ListingAttribution asset={asset} />
+
+      <section className="market-card-live-valuation" aria-label="Pre-Sale valuation">
+        <div>
+          <span className="market-card-label">Price per Slice</span>
+          <strong>{formatMoney(Number(preSale.pricePerUnitMinor), preSale.currency)}</strong>
+          <small>Conditional Pre-Sale price</small>
+        </div>
+        <div>
+          <span className="market-card-label">Market reference</span>
+          <strong>
+            {reference ? formatMoney(reference.amountMinor, reference.currency) : "Not linked"}
+          </strong>
+          <small>
+            {reference?.source ??
+              asset.marketReferenceLink?.provider ??
+              "External reference pending"}
+            {reference?.freshness ? ` · ${reference.freshness.toLowerCase()}` : ""}
+          </small>
+        </div>
+      </section>
+
+      <PreSaleCardSummary asset={asset} />
+
+      <section className="market-card-live-stats" aria-label="Pre-Sale status">
+        <div>
+          <span>MARKET STATUS</span>
+          <strong>Pre-Sale</strong>
+          <small>Conditional reservations</small>
+        </div>
+        <div>
+          <span>AVAILABLE TO RESERVE</span>
+          <strong>{preSale.availableUnits}</strong>
+          <small>of {preSale.offeredUnits} Slices</small>
+        </div>
+        <div>
+          <span>RESERVATION WINDOW</span>
+          <strong>{countdown}</strong>
+          <small>{preSale.reservedUnits} reserved</small>
+        </div>
+      </section>
+
+      <div className="market-card-live-ownership">
+        <span className="market-card-live-ownership__icon">
+          <PackageCheck aria-hidden="true" />
+        </span>
+        <span>
+          <strong>Reserve a fractional position</strong>
+          <small>{ownershipPerSlice} per Slice · converts after intake</small>
+        </span>
+        <ArrowRight aria-hidden="true" />
+      </div>
+
+      <div className="market-card-live-marketline market-card-presale-marketline">
+        <Clock3 aria-hidden="true" />
+        <span>
+          <strong>Conditional access</strong>
+          <small>
+            {homepagePhysicalStatus(preSale.physicalStatus)} · reservations remain subject to final
+            intake
+          </small>
+        </span>
+        <span className="market-card-live-marketline__dot" aria-hidden="true" />
+      </div>
+
+      <Link to="/asset/$id" params={{ id: asset.slug }} className="market-card-live-buy">
+        View Pre-Sale <ArrowRight aria-hidden="true" />
       </Link>
       <Link to="/asset/$id" params={{ id: asset.slug }} className="market-card-live-view">
         View collectible
@@ -740,6 +874,8 @@ export function MarketAssetCard({
           <HomepageAssetBody asset={asset} />
         ) : !asset.preSale && !compact && marketStatusPresentation(asset).isOpen ? (
           <LiveMarketBody asset={asset} />
+        ) : asset.preSale && !compact ? (
+          <PreSaleMarketBody asset={asset} />
         ) : (
           <>
             <div className="market-card-heading">

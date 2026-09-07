@@ -17,6 +17,7 @@ import { useSession } from "@/auth/use-session";
 import { useCurrency } from "@/currency/CurrencyProvider";
 import { isBetaEnvironment } from "@/config/environment";
 import { useTrendingAssets } from "@/queries/hooks";
+import { CinematicHomepageStory } from "@/components/home/CinematicHomepageStory";
 import { MarketAssetCard } from "@/components/marketplace/MarketAssetCard";
 import { toMarketplaceAsset } from "@/components/marketplace/market-api-presentation";
 import { FeaturedMarketHero } from "@/components/home/FeaturedMarketHero";
@@ -86,12 +87,10 @@ const howSliceWorks = [
 ] as const;
 
 function HomePage() {
-  const { isAuthenticated } = useSession();
-  const { formatMoney } = useCurrency();
-  const trending = useTrendingAssets();
-
-  return (
-    <div className="approved-home">
+  return <CinematicHomepageStory />;
+  /*
+    return (
+      <div className="approved-home">
       <section className="page-shell approved-home__hero" aria-labelledby="home-heading">
         <div className="approved-home__copy">
           <p className="page-kicker">Slice - The collectible investment platform</p>
@@ -274,8 +273,9 @@ function HomePage() {
           </Link>
         </div>
       </section>
-    </div>
-  );
+      </div>
+    );
+  */
 }
 
 function MarketPulseState({ kind }: { kind: "loading" | "empty" }) {

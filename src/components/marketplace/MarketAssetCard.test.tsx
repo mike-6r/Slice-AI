@@ -196,6 +196,10 @@ describe("MarketAssetCard layout contracts", () => {
           insuranceActive: true,
           activeListingsCount: 8420,
           availableListingUnits: "412",
+          sliceValuationAmountMinor: 1_850_000,
+          sliceValuationCurrency: "GBP",
+          estimatedMarketValueMinor: 1_850_000,
+          estimatedMarketValueCurrency: "GBP",
           change24hBps: 280,
           tradingHasExecutionHistory: true,
           marketReference: {
@@ -214,6 +218,8 @@ describe("MarketAssetCard layout contracts", () => {
 
     expect(html).toContain("market-card-live-body");
     expect(html).toContain("Price per Slice");
+    expect(html).toContain("£18.50");
+    expect(html).not.toContain("£18,500.00");
     expect(html).toContain("1 Slice = 0.10% ownership");
     expect(html).toContain("30D MARKET REFERENCE");
     expect(html).toContain("+12.4%");
@@ -248,6 +254,8 @@ describe("MarketAssetCard layout contracts", () => {
       />,
     );
 
+    expect(html).toContain("market-card-presale-body");
+    expect(html).toContain("Reservations open");
     expect(html).toContain("Pre-Sale availability");
     expect(html).toContain("9880");
     expect(html).toContain("120");
