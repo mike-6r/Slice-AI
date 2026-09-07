@@ -1,17 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ArrowDownToLine,
   ArrowRight,
-  ArrowUpRight,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
-  Landmark,
-  LoaderCircle,
   RefreshCw,
   Search,
-  WalletCards,
 } from "lucide-react";
 
 import type {
@@ -120,19 +114,6 @@ const liquidityState = (status: unknown) => {
       return "Not applicable";
     default:
       return "—";
-  }
-};
-
-const liquidityTone = (status: unknown) => {
-  switch (status) {
-    case "AVAILABLE":
-      return "green";
-    case "INSUFFICIENT":
-      return "red";
-    case "UNAVAILABLE":
-      return "gold";
-    default:
-      return "blue";
   }
 };
 
@@ -366,117 +347,97 @@ export function AdminFinanceTrading({
             Finance &amp; Trading <span>›</span> Finance Dashboard
           </p>
           <h2>Finance &amp; Trading</h2>
-          <p>Monitor wallets, orders, executions, and financial activity across the platform.</p>
+          <p>One control surface for customer funds, provider liquidity, and company revenue.</p>
+        </div>
+        <div
+          className={`admin-finance-posture tone-${operationalLiquidityTone(liquidityOperationalStatus)}`}
+        >
+          <span>Live control posture</span>
+          <strong>{titleCase(liquidityOperationalStatus ?? "UNKNOWN")}</strong>
+          <small>
+            {liquidityOperationalStatus === "DEFICIT"
+              ? "Payout rail is protected"
+              : "Finance controls are monitoring"}
+          </small>
         </div>
       </header>
 
       <GuidancePanel compact currentState="Financial operations" nextAction={financeGuidance} />
 
-      <div className="admin-finance-separation-grid">
-        <section className="admin-finance-authority-section">
-          <div className="admin-finance-authority-heading">
+      <section className="admin-finance-domain-grid" aria-label="Financial control domains">
+        <article className="admin-finance-domain-card is-customer">
+          <header className="admin-finance-domain-heading">
             <div>
-              <h3>Customer liabilities</h3>
-              <p>
-                Slice internal ledger authority. Separate from provider liquidity and company
-                revenue.
-              </p>
+              <span>Ledger authority</span>
+              <h3>Customer funds</h3>
+              <p>Internal liabilities held for collectors. This is never provider liquidity.</p>
             </div>
-            <span>GBP</span>
+            <b>GBP</b>
+          </header>
+          <div className="admin-finance-domain-primary">
+            <span>Total customer cash</span>
+            <strong>{money(dashboard.kpis.totalCustomerCashMinor)}</strong>
+            <small>Every active collector wallet, in one protected ledger.</small>
           </div>
-          <div className="admin-finance-kpis">
-            <FinanceKpi
-              icon={<WalletCards />}
-              label="Total customer cash"
-              value={money(dashboard.kpis.totalCustomerCashMinor)}
-              detail="All customer GBP liabilities"
-            />
-            <FinanceKpi
-              icon={<Landmark />}
-              label="Available customer cash"
+          <div className="admin-finance-domain-metrics">
+            <Metric
+              label="Available"
               value={money(dashboard.kpis.availableCustomerCashMinor)}
-              detail="Eligible ledger balance"
               tone="cyan"
             />
-            <FinanceKpi
-              icon={<Landmark />}
-              label="Reserved funds"
-              value={money(dashboard.kpis.reservedFundsMinor)}
-              detail="Orders and withdrawals"
-              tone="blue"
-            />
-            <FinanceKpi
-              icon={<ArrowDownToLine />}
-              label="Pending deposits"
-              value={money(dashboard.kpis.pendingDepositsMinor)}
-              detail="Pending money movements"
-              tone="purple"
-            />
-            <FinanceKpi
-              icon={<ArrowUpRight />}
-              label="Pending withdrawals"
-              value={money(dashboard.kpis.pendingWithdrawalsMinor)}
-              detail="Pending money movements"
-              tone="gold"
-            />
-            <FinanceKpi
-              icon={<Landmark />}
-              label="Available to withdraw"
+            <Metric label="Reserved" value={money(dashboard.kpis.reservedFundsMinor)} tone="blue" />
+            <Metric
+              label="Withdrawal eligible"
               value={money(financialSeparation?.customerLiabilities.withdrawalEligibleMinor)}
-              detail="Provider/risk eligible cash"
               tone="green"
             />
-            <FinanceKpi
-              icon={<WalletCards />}
+            <Metric
               label="Collector proceeds"
               value={money(financialSeparation?.customerLiabilities.collectorProceedsMinor)}
-              detail="Payable customer proceeds"
               tone="purple"
             />
-            <FinanceKpi
-              icon={<ArrowUpRight />}
-              label="Withdrawal reservations"
+            <Metric
+              label="Withdrawal holds"
               value={money(financialSeparation?.customerLiabilities.withdrawalReservationMinor)}
-              detail="Active external payout holds"
-              tone="blue"
+              tone="gold"
             />
           </div>
-        </section>
+          <footer className="admin-finance-domain-footer">
+            Pending deposits {money(dashboard.kpis.pendingDepositsMinor)} · pending withdrawals{" "}
+            {money(dashboard.kpis.pendingWithdrawalsMinor)}
+          </footer>
+        </article>
 
-        <section className="admin-finance-authority-section is-provider">
-          <div className="admin-finance-authority-heading">
+        <article className="admin-finance-domain-card is-provider">
+          <header className="admin-finance-domain-heading">
             <div>
-              <h3>Stripe platform liquidity</h3>
-              <p>Provider evidence only. It never changes the customer wallet ledger.</p>
+              <span>Provider evidence</span>
+              <h3>Stripe payout capacity</h3>
+              <p>Live provider proof for the withdrawal rail, kept separate from wallets.</p>
             </div>
-            <span>{liquidityOperationalStatus ?? "UNKNOWN"}</span>
-          </div>
-          <div className="admin-finance-separation-metrics">
-            <Metric
-              label="Available GBP balance"
-              value={providerMoney(
+            <b>{liquidityOperationalStatus ?? "UNKNOWN"}</b>
+          </header>
+          <div className="admin-finance-domain-primary">
+            <span>Available GBP at Stripe</span>
+            <strong>
+              {providerMoney(
                 separatedStripe?.providerAvailableMinor ??
                   dashboard.payoutLiquidity?.providerAvailableMinor,
                 separatedStripe?.payoutLiquidityStatus ??
                   dashboard.payoutLiquidity?.providerLiquidityStatus,
               )}
-              tone={liquidityTone(
+            </strong>
+            <small>
+              {liquidityState(
                 separatedStripe?.payoutLiquidityStatus ??
                   dashboard.payoutLiquidity?.providerLiquidityStatus,
-              )}
-            />
+              )}{" "}
+              Payments Balance.
+            </small>
+          </div>
+          <div className="admin-finance-domain-metrics">
             <Metric
-              label="Pending GBP balance"
-              value={providerMoney(
-                separatedStripe?.providerPendingMinor ??
-                  dashboard.payoutLiquidity?.providerPendingMinor,
-                separatedStripe?.payoutLiquidityStatus ??
-                  dashboard.payoutLiquidity?.providerLiquidityStatus,
-              )}
-              tone="purple"
-            />
-            <Metric
-              label="After payout reservations"
+              label="After reservations"
               value={providerMoney(
                 separatedStripe?.availableAfterReservationsMinor ??
                   dashboard.payoutLiquidity?.availableAfterReservationsMinor,
@@ -486,12 +447,22 @@ export function AdminFinanceTrading({
               tone="cyan"
             />
             <Metric
-              label="Pending provider payouts"
+              label="Pending at Stripe"
+              value={providerMoney(
+                separatedStripe?.providerPendingMinor ??
+                  dashboard.payoutLiquidity?.providerPendingMinor,
+                separatedStripe?.payoutLiquidityStatus ??
+                  dashboard.payoutLiquidity?.providerLiquidityStatus,
+              )}
+              tone="purple"
+            />
+            <Metric
+              label="Payout obligations"
               value={money(separatedStripe?.pendingPayoutObligationMinor)}
               tone="gold"
             />
             <Metric
-              label="Liquidity coverage"
+              label="Coverage"
               value={providerCoverage(
                 separatedStripe?.payoutLiquidityCoverageBps ??
                   dashboard.payoutLiquidity?.payoutLiquidityCoverageBps,
@@ -501,59 +472,47 @@ export function AdminFinanceTrading({
               tone={operationalLiquidityTone(liquidityOperationalStatus)}
             />
             <Metric
-              label="Required operating reserve"
-              value={
-                separatedStripe?.requiredOperationalReserveMinor === null
-                  ? "Not configured"
-                  : money(separatedStripe?.requiredOperationalReserveMinor)
-              }
-              tone="gold"
-            />
-            <Metric
-              label="Liquidity surplus / deficit"
-              value={
-                separatedStripe?.liquiditySurplusOrDeficitMinor === null
-                  ? "Unknown"
-                  : money(separatedStripe?.liquiditySurplusOrDeficitMinor)
-              }
+              label="Projected shortfall"
+              value={money(separatedStripe?.liquidityShortfallMinor)}
               tone={operationalLiquidityTone(liquidityOperationalStatus)}
             />
-            <Metric
-              label="Connected balance evidence"
-              value={money(separatedStripe?.connectedAvailableEvidenceMinor)}
-              tone="purple"
-            />
           </div>
-          <p className="admin-finance-muted">
+          <footer className="admin-finance-domain-footer">
             {separatedStripe?.payoutLiquidityStatus === "UNAVAILABLE"
-              ? "Stripe could not be read. Provider liquidity is unknown and all release decisions remain fail-closed."
+              ? "Stripe could not be read. Preflight stays fail-closed until provider evidence returns."
               : liquidityOperationalStatus === "DEFICIT"
-                ? `${money(separatedStripe?.liquidityShortfallMinor)} is below the protected customer-liability, payout-obligation, and explicit-reserve requirement.`
-                : `Liquidity status: ${titleCase(liquidityOperationalStatus)}. Only the Stripe Platform Payments Balance is used for withdrawal preflight; Connect balances are retained as trace evidence.`}
-          </p>
-        </section>
+                ? `${money(separatedStripe?.liquidityShortfallMinor)} below the protected liability and reserve projection.`
+                : "Only Stripe Platform Payments Balance can release a customer withdrawal."}
+          </footer>
+        </article>
 
-        <section className="admin-finance-authority-section is-company">
-          <div className="admin-finance-authority-heading">
+        <article className="admin-finance-domain-card is-company">
+          <header className="admin-finance-domain-heading">
             <div>
-              <h3>Slice company revenue</h3>
-              <p>
-                Recognised fees less provider expenses. Never customer cash or Stripe liquidity.
-              </p>
+              <span>Company ledger</span>
+              <h3>Slice revenue</h3>
+              <p>Recognised fees, provider costs, and controlled settlement readiness.</p>
             </div>
-            <span>{separatedRevenue?.safeToSweepStatus ?? "BLOCKED"}</span>
-          </div>
-          <div className="admin-finance-separation-metrics">
-            <Metric
-              label="Recognised net revenue"
-              value={money(
+            <b>{separatedRevenue?.safeToSweepStatus ?? "BLOCKED"}</b>
+          </header>
+          <div className="admin-finance-domain-primary">
+            <span>Recognised net revenue</span>
+            <strong>
+              {money(
                 separatedRevenue?.recognisedNetRevenueMinor ??
                   dashboard.platformRevenue?.estimatedNetContributionMinor,
               )}
-              tone="green"
+            </strong>
+            <small>Company revenue only — never customer cash or Stripe liquidity.</small>
+          </div>
+          <div className="admin-finance-domain-metrics">
+            <Metric
+              label="Safe to sweep"
+              value={money(separatedRevenue?.safeToSweepMinor)}
+              tone={separatedRevenue?.safeToSweepStatus === "READY" ? "green" : "red"}
             />
             <Metric
-              label="Explicit operating reserve"
+              label="Operating reserve"
               value={
                 separatedRevenue?.operationalReserveConfigured
                   ? money(separatedRevenue.operationalReserveMinor)
@@ -562,17 +521,7 @@ export function AdminFinanceTrading({
               tone="gold"
             />
             <Metric
-              label="Safe to sweep"
-              value={money(separatedRevenue?.safeToSweepMinor)}
-              tone={separatedRevenue?.safeToSweepStatus === "READY" ? "green" : "red"}
-            />
-            <Metric
-              label="Already swept"
-              value={money(separatedRevenue?.alreadySweptMinor)}
-              tone="purple"
-            />
-            <Metric
-              label="Provider cost evidence"
+              label="Provider evidence"
               value={
                 separatedRevenue?.pendingProviderCostCount
                   ? `${separatedRevenue.pendingProviderCostCount} pending`
@@ -580,239 +529,201 @@ export function AdminFinanceTrading({
               }
               tone={separatedRevenue?.pendingProviderCostCount ? "gold" : "green"}
             />
-            <Metric label="External execution" value="Not configured" tone="blue" />
+            <Metric
+              label="Already swept"
+              value={money(separatedRevenue?.alreadySweptMinor)}
+              tone="purple"
+            />
+            <Metric label="External settlement" value="Not configured" tone="blue" />
           </div>
-          <p
-            className={`admin-finance-muted${separatedRevenue?.safeToSweepStatus === "BLOCKED" ? " is-warning" : ""}`}
+          <footer
+            className={`admin-finance-domain-footer${separatedRevenue?.safeToSweepStatus === "BLOCKED" ? " is-warning" : ""}`}
           >
             {separatedRevenue?.safeToSweepStatus === "READY"
-              ? "A dual-control sweep request may be recorded. Approval does not send a Stripe payout."
+              ? "A dual-control sweep request may be recorded; approval does not send a Stripe payout."
               : separatedRevenue?.blockedReasons.length
-                ? `Sweep is blocked: ${separatedRevenue.blockedReasons.map(titleCase).join(", ")}.`
-                : "Sweep readiness is intentionally blocked until the server can prove a safe amount."}
-          </p>
-        </section>
-      </div>
+                ? `Sweep blocked: ${separatedRevenue.blockedReasons.map(titleCase).join(", ")}.`
+                : "Sweep readiness remains blocked until the server proves a safe amount."}
+          </footer>
+        </article>
+      </section>
 
-      <div className="admin-finance-layout">
-        <div className="admin-finance-main-card">
-          <nav className="admin-finance-tabs" aria-label="Finance sections">
-            {tabs.map((entry) => (
-              <button
-                className={entry.id === activeTab ? "active" : ""}
-                key={entry.id}
-                onClick={() => selectTab(entry.id)}
-                type="button"
-              >
-                {entry.label}
-              </button>
-            ))}
-          </nav>
-          <div className="admin-finance-toolbar">
-            <label className="admin-finance-search">
-              <Search size={15} />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={
-                  activeTab === "wallets"
-                    ? "Search by collector, email, username…"
-                    : "Search finance records…"
-                }
-              />
-            </label>
-            <select
-              aria-label="Status"
-              value={activeStatus}
-              onChange={(event) => update({ status: event.target.value || undefined, page: "1" })}
-            >
-              <option value="">Status: All</option>
-              {statuses[activeTab].map((entry) => (
-                <option key={entry} value={entry}>
-                  {titleCase(entry)}
-                </option>
-              ))}
-            </select>
+      <section className="admin-finance-ledger-card">
+        <header className="admin-finance-ledger-heading">
+          <div>
+            <span>Finance ledger</span>
+            <h3>Accounts, movements &amp; settlement records</h3>
+            <p>Filter the authoritative record stream without leaving the control room.</p>
           </div>
-          {loading && !records ? (
-            <div className="admin-finance-table-loading">
-              <span />
-              <span />
-              <span />
-              <span />
-            </div>
-          ) : (
-            table
-          )}
-          {records ? <FinancePagination info={pageInfo} update={update} /> : null}
-        </div>
-
-        <aside className="admin-finance-rail">
-          <section className="admin-finance-side-card">
-            <div className="admin-finance-side-heading">
-              <h3>Finance Overview</h3>
-              <span>Last 7 days</span>
-            </div>
-            <strong className="admin-finance-total">
-              {money(dashboard?.overview.totalVolumeMinor)}
-            </strong>
-            <div className="admin-finance-chart" aria-label="Seven day volume history">
-              {(dashboard?.overview.history ?? []).map((entry) => (
-                <div
-                  className="admin-finance-bar"
-                  key={entry.date}
-                  title={`${date(entry.date)} ${money(entry.volumeMinor)}`}
-                >
-                  <i
-                    style={{
-                      height: `${Math.max(8, (Number(entry.volumeMinor) / maxVolume) * 100)}%`,
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-            <div className="admin-finance-side-grid">
-              <Metric
-                label="Buy volume"
-                value={money(dashboard?.overview.buyVolumeMinor)}
-                tone="green"
-              />
-              <Metric
-                label="Sell volume"
-                value={money(dashboard?.overview.sellVolumeMinor)}
-                tone="purple"
-              />
-              <Metric label="Total fees" value={money(dashboard?.overview.totalFeesMinor)} />
-              <Metric label="Net fees" value={money(dashboard?.overview.netFeesMinor)} />
-            </div>
-          </section>
-          <section className="admin-finance-side-card">
-            <div className="admin-finance-side-heading">
-              <h3>Slice revenue</h3>
-              <span>GBP authority</span>
-            </div>
-            <div className="admin-finance-side-grid">
-              <Metric
-                label="Fee revenue"
-                value={money(dashboard?.platformRevenue?.grossRevenueMinor)}
-                tone="green"
-              />
-              <Metric
-                label="Provider expense"
-                value={money(dashboard?.platformRevenue?.providerExpensesMinor)}
-                tone="gold"
-              />
-              <Metric
-                label="Known provider costs"
-                value={money(dashboard?.platformRevenue?.knownProviderCostsMinor)}
-                tone="gold"
-              />
-              <Metric
-                label="Net contribution"
-                value={money(dashboard?.platformRevenue?.estimatedNetContributionMinor)}
-                tone="purple"
-              />
-              <Metric
-                label="Eligible to settle"
-                value={money(dashboard?.platformRevenue?.eligibleSettlementMinor)}
-                tone="cyan"
-              />
-            </div>
-            <p className="admin-finance-muted">
-              {dashboard?.platformRevenue?.pendingProviderCostCount
-                ? `${dashboard.platformRevenue.pendingProviderCostCount} provider cost record${dashboard.platformRevenue.pendingProviderCostCount === 1 ? "" : "s"} awaiting evidence.`
-                : "Provider expenses are shown only from recorded provider evidence."}
-            </p>
-            <p className="admin-finance-muted">
-              External settlement:{" "}
-              {dashboard?.platformRevenue?.externalSettlement.status ?? "Not configured"}. No payout
-              is implied.
-            </p>
-          </section>
-          <section
-            className={`admin-finance-side-card${dashboard?.payoutLiquidity?.warning ? " is-warning" : ""}`}
+          <b>{titleCase(activeTab)} view</b>
+        </header>
+        <nav className="admin-finance-tabs" aria-label="Finance sections">
+          {tabs.map((entry) => (
+            <button
+              className={entry.id === activeTab ? "active" : ""}
+              key={entry.id}
+              onClick={() => selectTab(entry.id)}
+              type="button"
+            >
+              {entry.label}
+            </button>
+          ))}
+        </nav>
+        <div className="admin-finance-toolbar">
+          <label className="admin-finance-search">
+            <Search size={15} />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={
+                activeTab === "wallets"
+                  ? "Search by collector, email, username…"
+                  : "Search finance records…"
+              }
+            />
+          </label>
+          <select
+            aria-label="Status"
+            value={activeStatus}
+            onChange={(event) => update({ status: event.target.value || undefined, page: "1" })}
           >
-            <div className="admin-finance-side-heading">
-              <h3>Stripe platform liquidity</h3>
+            <option value="">Status: All</option>
+            {statuses[activeTab].map((entry) => (
+              <option key={entry} value={entry}>
+                {titleCase(entry)}
+              </option>
+            ))}
+          </select>
+        </div>
+        {loading && !records ? (
+          <div className="admin-finance-table-loading">
+            <span />
+            <span />
+            <span />
+            <span />
+          </div>
+        ) : (
+          table
+        )}
+        {records ? <FinancePagination info={pageInfo} update={update} /> : null}
+      </section>
+
+      <section className="admin-finance-insights-grid" aria-label="Finance operations insight">
+        <article className="admin-finance-insight-card is-volume">
+          <header className="admin-finance-insight-heading">
+            <div>
+              <span>Market pulse</span>
+              <h3>Seven-day volume</h3>
+            </div>
+            <b>GBP</b>
+          </header>
+          <strong className="admin-finance-total">
+            {money(dashboard.overview.totalVolumeMinor)}
+          </strong>
+          <div className="admin-finance-chart" aria-label="Seven day volume history">
+            {(dashboard.overview.history ?? []).map((entry) => (
+              <div
+                className="admin-finance-bar"
+                key={entry.date}
+                title={`${date(entry.date)} ${money(entry.volumeMinor)}`}
+              >
+                <i
+                  style={{
+                    height: `${Math.max(8, (Number(entry.volumeMinor) / maxVolume) * 100)}%`,
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="admin-finance-insight-metrics">
+            <Metric
+              label="Buy volume"
+              value={money(dashboard.overview.buyVolumeMinor)}
+              tone="green"
+            />
+            <Metric
+              label="Sell volume"
+              value={money(dashboard.overview.sellVolumeMinor)}
+              tone="purple"
+            />
+            <Metric
+              label="Total fees"
+              value={money(dashboard.overview.totalFeesMinor)}
+              tone="gold"
+            />
+            <Metric label="Net fees" value={money(dashboard.overview.netFeesMinor)} tone="cyan" />
+          </div>
+        </article>
+
+        <article className="admin-finance-insight-card is-operations">
+          <header className="admin-finance-insight-heading">
+            <div>
+              <span>Operations pulse</span>
+              <h3>Trading &amp; controls</h3>
+            </div>
+            <button type="button" onClick={() => selectTab("reconciliation")}>
+              Review
+            </button>
+          </header>
+          <div className="admin-finance-operation-counts">
+            <div>
+              <small>Orders</small>
+              <strong>{number(dashboard.orderSummary.total)}</strong>
+              <span>{number(dashboard.orderSummary.open)} open</span>
+            </div>
+            <div>
+              <small>Executions</small>
+              <strong>{number(dashboard.executionSummary.total)}</strong>
               <span>
-                {dashboard?.payoutLiquidity?.liquiditySource === "STRIPE_PLATFORM_PAYMENTS_BALANCE"
-                  ? "GBP Payments Balance"
-                  : liquidityState(dashboard?.payoutLiquidity?.providerLiquidityStatus)}
+                {number(dashboard.executionSummary.buyInitiated)} buy /{" "}
+                {number(dashboard.executionSummary.sellInitiated)} sell
               </span>
             </div>
-            <div className="admin-finance-side-grid">
-              <Metric
-                label="Available GBP Payments Balance"
-                value={providerMoney(
-                  dashboard?.payoutLiquidity?.providerAvailableMinor,
-                  dashboard?.payoutLiquidity?.providerLiquidityStatus,
-                )}
-                tone={liquidityTone(dashboard?.payoutLiquidity?.providerLiquidityStatus)}
-              />
-              <Metric
-                label="Pending GBP Payments Balance"
-                value={providerMoney(
-                  dashboard?.payoutLiquidity?.providerPendingMinor,
-                  dashboard?.payoutLiquidity?.providerLiquidityStatus,
-                )}
-                tone="purple"
-              />
-              <Metric
-                label="Active withdrawal reservations"
-                value={money(dashboard?.payoutLiquidity?.activeReservationMinor)}
-                tone="blue"
-              />
-              <Metric
-                label="Available after reservations"
-                value={providerMoney(
-                  dashboard?.payoutLiquidity?.availableAfterReservationsMinor,
-                  dashboard?.payoutLiquidity?.providerLiquidityStatus,
-                )}
-                tone={liquidityTone(dashboard?.payoutLiquidity?.providerLiquidityStatus)}
-              />
-              <Metric
-                label="Eligible withdrawal liabilities"
-                value={money(dashboard?.payoutLiquidity?.withdrawalEligibleLiabilityMinor)}
-                tone="cyan"
-              />
-              <Metric
-                label="Liquidity coverage"
-                value={providerCoverage(
-                  dashboard?.payoutLiquidity?.payoutLiquidityCoverageBps,
-                  dashboard?.payoutLiquidity?.providerLiquidityStatus,
-                )}
-                tone={liquidityTone(dashboard?.payoutLiquidity?.providerLiquidityStatus)}
-              />
-              <Metric
-                label="Liquidity state"
-                value={liquidityState(dashboard?.payoutLiquidity?.providerLiquidityStatus)}
-                tone={liquidityTone(dashboard?.payoutLiquidity?.providerLiquidityStatus)}
-              />
+            <div>
+              <small>Recon mismatches</small>
+              <strong>{number(reconciliationMismatches)}</strong>
+              <span>{reconciliationMismatches ? "Needs review" : "All clear"}</span>
             </div>
-            <p
-              className={`admin-finance-muted${dashboard?.payoutLiquidity?.warning ? " is-warning" : ""}`}
-            >
-              {dashboard?.payoutLiquidity?.providerLiquidityStatus === "UNAVAILABLE"
-                ? "Stripe Platform Payments Balance could not be retrieved. Provider liquidity is unavailable until Stripe responds; withdrawal preflight remains fail-closed."
-                : dashboard?.payoutLiquidity?.warning
-                  ? "Stripe platform available balance is below eligible customer withdrawal liabilities. Pending GBP is not spendable for withdrawals."
-                  : dashboard?.payoutLiquidity?.providerLiquidityStatus === "NOT_APPLICABLE"
-                    ? "No external payout rail is configured in this environment."
-                    : "Stripe platform available balance covers current eligible withdrawal liabilities. Pending GBP is not spendable for withdrawals."}
-            </p>
-            <p className="admin-finance-authority-note">
-              Customer withdrawals use the Stripe Platform Payments Balance. Treasury / Financial
-              Account and Connect account balances are not liquidity sources for this rail.
-            </p>
-          </section>
-          <section className="admin-finance-side-card">
-            <div className="admin-finance-side-heading">
-              <h3>Recent Activity</h3>
-              <button type="button" onClick={() => selectTab("movements")}>
-                View all
-              </button>
+          </div>
+          <div className="admin-finance-recon-list">
+            {(dashboard.reconciliationSummary ?? []).length ? (
+              dashboard.reconciliationSummary.map((entry) => (
+                <div className="admin-finance-recon" key={entry.status}>
+                  <span>{titleCase(entry.status)}</span>
+                  <b>{money(entry.amountMinor)}</b>
+                  <small>{number(entry.count)} records</small>
+                </div>
+              ))
+            ) : (
+              <p className="admin-finance-muted">No reconciliation runs recorded yet.</p>
+            )}
+          </div>
+          <div className="admin-finance-action-row">
+            <QuickAction
+              label="Orders"
+              icon={<ExternalLink />}
+              onClick={() => selectTab("orders")}
+            />
+            <QuickAction
+              label="Executions"
+              icon={<ExternalLink />}
+              onClick={() => selectTab("executions")}
+            />
+          </div>
+        </article>
+
+        <article className="admin-finance-insight-card is-activity">
+          <header className="admin-finance-insight-heading">
+            <div>
+              <span>Audit trail</span>
+              <h3>Recent financial activity</h3>
             </div>
-            {(dashboard?.recentActivity ?? []).slice(0, 6).map((entry) => (
+            <button type="button" onClick={() => selectTab("movements")}>
+              View all
+            </button>
+          </header>
+          <div className="admin-finance-activity-list">
+            {(dashboard.recentActivity ?? []).slice(0, 5).map((entry) => (
               <div className="admin-finance-activity" key={entry.id}>
                 <span />
                 <div>
@@ -824,82 +735,16 @@ export function AdminFinanceTrading({
                 <b>{entry.amountMinor ? money(entry.amountMinor) : ""}</b>
               </div>
             ))}
-          </section>
-          <section className="admin-finance-side-card">
-            <h3>Quick Actions</h3>
-            <QuickAction
-              label="View All Orders"
-              icon={<ExternalLink />}
-              onClick={() => selectTab("orders")}
-            />
-            <QuickAction
-              label="View All Executions"
-              icon={<ExternalLink />}
-              onClick={() => selectTab("executions")}
-            />
-          </section>
-        </aside>
-      </div>
-
-      <div className="admin-finance-bottom-grid">
-        <SummaryCard
-          title="Order Summary"
-          total={dashboard?.orderSummary.total ?? 0}
-          items={[
-            ["Buy orders", dashboard?.orderSummary.buy ?? 0, "green"],
-            ["Sell orders", dashboard?.orderSummary.sell ?? 0, "purple"],
-            ["Open", dashboard?.orderSummary.open ?? 0, "gold"],
-          ]}
-        />
-        <SummaryCard
-          title="Execution Summary"
-          total={dashboard?.executionSummary.total ?? 0}
-          items={[
-            ["Buy executions", dashboard?.executionSummary.buyInitiated ?? 0, "green"],
-            ["Sell executions", dashboard?.executionSummary.sellInitiated ?? 0, "purple"],
-          ]}
-        />
-        <section className="admin-finance-bottom-card">
-          <h3>Reconciliation Status</h3>
-          {(dashboard?.reconciliationSummary ?? []).length ? (
-            dashboard?.reconciliationSummary.map((entry) => (
-              <div className="admin-finance-recon" key={entry.status}>
-                <span>{titleCase(entry.status)}</span>
-                <b>{money(entry.amountMinor)}</b>
-                <small>{number(entry.count)} records</small>
-              </div>
-            ))
-          ) : (
-            <p className="admin-finance-muted">No reconciliation runs have been recorded.</p>
-          )}
-        </section>
-      </div>
+            {!(dashboard.recentActivity ?? []).length ? (
+              <p className="admin-finance-muted">No recent financial activity.</p>
+            ) : null}
+          </div>
+        </article>
+      </section>
     </section>
   );
 }
 
-function FinanceKpi({
-  icon,
-  label,
-  value,
-  detail,
-  tone = "green",
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  detail: string;
-  tone?: string;
-}) {
-  return (
-    <article className={`admin-finance-kpi tone-${tone}`}>
-      <span className="admin-finance-kpi-icon">{icon}</span>
-      <small>{label}</small>
-      <strong>{value}</strong>
-      <em>{detail}</em>
-    </article>
-  );
-}
 function Metric({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
     <div className="admin-finance-metric">
@@ -1166,29 +1011,4 @@ function FinanceRow({
 }
 function Status({ value }: { value: unknown }) {
   return <span className="admin-finance-status">{titleCase(value)}</span>;
-}
-function SummaryCard({
-  title,
-  total,
-  items,
-}: {
-  title: string;
-  total: number;
-  items: Array<[string, number, string]>;
-}) {
-  return (
-    <section className="admin-finance-bottom-card">
-      <h3>{title}</h3>
-      <div className="admin-finance-summary-total">{number(total)}</div>
-      {items.map(([label, value, tone]) => (
-        <div className="admin-finance-summary-row" key={label}>
-          <span>
-            <i className={tone} />
-            {label}
-          </span>
-          <b>{number(value)}</b>
-        </div>
-      ))}
-    </section>
-  );
 }
