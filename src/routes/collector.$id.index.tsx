@@ -97,10 +97,14 @@ function CollectorPage() {
         </Link>
         <section className="collector-profile-hero">
           <div className="collector-profile-identity-block">
+            <div className="collector-profile-identity-topline">
+              <span>Collector&apos;s room</span>
+              <span>Public catalogue</span>
+            </div>
             <div className="collector-profile-identity">
               <CollectorAvatar collector={collector} featured />
               <div>
-                <span className="collector-profile-active">Active Collector</span>
+                <span className="collector-profile-active">Active public collector</span>
                 <h1>{collector.displayName}</h1>
                 <p>@{collector.handle}</p>
               </div>
@@ -117,45 +121,62 @@ function CollectorPage() {
                 ))}
               </div>
             ) : null}
+            <div className="collector-profile-identity-footer">
+              <span>Catalogue status</span>
+              <strong>
+                {collector.publishedListingCount ?? listings.length} published collectible
+                {(collector.publishedListingCount ?? listings.length) === 1 ? "" : "s"} in view
+              </strong>
+            </div>
           </div>
           {featured ? <FeaturedAsset listing={featured} /> : <EmptyFeatured />}
         </section>
-        <dl className="collector-profile-stats">
-          <Stat
-            value={collector.publishedListingCount ?? listings.length}
-            label="Published assets"
-          />
-          <Stat
-            value={
-              collector.preSaleListingCount ??
-              listings.filter((listing) => Boolean(listing.preSale)).length
-            }
-            label="Pre-Sale"
-          />
-          <Stat
-            value={
-              collector.liveListingCount ?? listings.filter((listing) => !listing.preSale).length
-            }
-            label="Market Live"
-          />
-          <Stat value={categories.length} label="Categories" />
-          <Stat
-            value={collector.publicSince ? new Date(collector.publicSince).getFullYear() : "—"}
-            label="Collector since"
-          />
-        </dl>
-        <nav className="collector-profile-tabs" aria-label="Collector profile sections">
-          {(["catalogue", "about", "activity"] as ProfileTab[]).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              className={search.tab === tab ? "is-active" : ""}
-              onClick={() => updateSearch({ tab, page: 1 })}
-            >
-              {tab[0].toUpperCase() + tab.slice(1)}
-            </button>
-          ))}
-        </nav>
+        <section className="collector-profile-metrics" aria-label="Collector catalogue signals">
+          <div className="collector-profile-metrics__lead">
+            <p className="collector-profile-eyebrow">Catalogue signal</p>
+            <strong>Follow the pieces, not the noise.</strong>
+            <span>Every number below reflects this collector&apos;s published public catalogue.</span>
+          </div>
+          <dl className="collector-profile-stats">
+            <Stat
+              value={collector.publishedListingCount ?? listings.length}
+              label="Published assets"
+            />
+            <Stat
+              value={
+                collector.preSaleListingCount ??
+                listings.filter((listing) => Boolean(listing.preSale)).length
+              }
+              label="Pre-Sale"
+            />
+            <Stat
+              value={
+                collector.liveListingCount ?? listings.filter((listing) => !listing.preSale).length
+              }
+              label="Market Live"
+            />
+            <Stat value={categories.length} label="Categories" />
+            <Stat
+              value={collector.publicSince ? new Date(collector.publicSince).getFullYear() : "—"}
+              label="Collector since"
+            />
+          </dl>
+        </section>
+        <div className="collector-profile-explore-nav">
+          <span>Explore this collector</span>
+          <nav className="collector-profile-tabs" aria-label="Collector profile sections">
+            {(["catalogue", "about", "activity"] as ProfileTab[]).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                className={search.tab === tab ? "is-active" : ""}
+                onClick={() => updateSearch({ tab, page: 1 })}
+              >
+                {tab === "about" ? "Story" : tab[0].toUpperCase() + tab.slice(1)}
+              </button>
+            ))}
+          </nav>
+        </div>
         {search.tab === "catalogue" ? (
           <Catalogue
             collector={collector}
@@ -274,12 +295,12 @@ function Catalogue({
     <section className="collector-profile-catalogue">
       <div className="collector-profile-section-heading">
         <div>
-          <p className="collector-profile-eyebrow">Collector&apos;s assets</p>
-          <h2>{collector.displayName}&apos;s assets</h2>
-          <span>Explore the collectibles published by {collector.displayName}.</span>
+          <p className="collector-profile-eyebrow">The public vault</p>
+          <h2>Pieces currently in view.</h2>
+          <span>Open a collectible to inspect its public listing and market route.</span>
         </div>
         <span className="collector-profile-view-list">
-          <List aria-hidden="true" /> View as list
+          <List aria-hidden="true" /> {collector.publishedListingCount ?? listings.length} in catalogue
         </span>
       </div>
       <div className="collector-profile-filters">
@@ -332,9 +353,9 @@ function Catalogue({
         />
       </div>
       <div className="collector-profile-results-line">
-        <strong>{pagination?.total ?? listings.length} assets</strong>
+        <strong>{pagination?.total ?? listings.length} pieces</strong>
         <span>
-          {pagination?.total ? `Showing ${displayStart}–${displayEnd}` : "Public catalogue"}
+          {pagination?.total ? `Showing ${displayStart}–${displayEnd} from the public vault` : "Public catalogue"}
         </span>
       </div>
       {listings.length ? (
@@ -405,8 +426,8 @@ function About({ collector, categories }: { collector: any; categories: string[]
   return (
     <section className="collector-profile-lower-grid">
       <article className="collector-profile-info-card">
-        <p className="collector-profile-eyebrow">About {collector.displayName}</p>
-        <h2>A public catalogue built for inspection.</h2>
+        <p className="collector-profile-eyebrow">Collector&apos;s story</p>
+        <h2>A point of view, made public.</h2>
         <p>
           {collector.focus ||
             collector.featuredCaption ||
@@ -453,8 +474,8 @@ function Activity({
   return (
     <section className="collector-profile-activity-panel">
       <div>
-        <p className="collector-profile-eyebrow">Public activity</p>
-        <h2>Recent public activity</h2>
+        <p className="collector-profile-eyebrow">Public record</p>
+        <h2>Catalogue movement</h2>
       </div>
       {activity.length ? (
         <div className="collector-profile-activity-list">

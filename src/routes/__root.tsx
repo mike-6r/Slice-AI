@@ -12,6 +12,7 @@ import { type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import investorUxCss from "../investor-ux.css?url";
 import collectorsDirectoryCss from "../styles/collectors-directory.css?url";
+import collectorStorefrontCss from "../styles/collector-storefront.css?url";
 import { QaHarnessBoundary } from "@/auth/QaHarnessBoundary";
 import { SessionBoundary } from "@/auth/SessionBoundary";
 import { AppShell } from "@/components/layout/AppShell";
@@ -99,6 +100,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "stylesheet", href: appCss },
       { rel: "stylesheet", href: investorUxCss },
       { rel: "stylesheet", href: collectorsDirectoryCss },
+      { rel: "stylesheet", href: collectorStorefrontCss },
       { rel: "icon", href: "/favicon.png", type: "image/png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
+  ArrowDown,
   ArrowLeft,
   ArrowRight,
   ChevronDown,
@@ -101,6 +102,9 @@ function CollectorsPage() {
   const specialties = data?.specialties ?? [];
   const page = data?.pagination;
   const hasFilters = Boolean(search.q || search.specialty || status !== "all");
+  const collectorCount = data?.stats.eligibleCollectorCount ?? page?.total ?? 0;
+  const publishedAssetCount = data?.stats.publishedAssetCount ?? 0;
+  const featuredCollectorCount = data?.stats.featuredCollectorCount ?? 0;
 
   const setSearch = (next: Partial<CollectorSearch>) => {
     void navigate({
@@ -124,30 +128,68 @@ function CollectorsPage() {
     <div className="collectors-page">
       <section className="collectors-shell collectors-hero collectors-hero--directory">
         <div className="collectors-hero-copy">
-          <p className="collectors-kicker">The Slice community</p>
-          <h1>Collectors worth knowing.</h1>
+          <p className="collectors-kicker">The collector network</p>
+          <h1>
+            Meet the people <span>behind the market.</span>
+          </h1>
           <p>
-            Discover active Collectors and the published collectibles they choose to showcase on
-            Slice.
+            Every collectible has context. Explore the people who source it, stand behind it, and
+            bring it to the Slice market.
           </p>
           <div className="collectors-hero-note">
             <UsersRound aria-hidden="true" />
-            <span>Only collectors with at least one listed asset are shown.</span>
+            <span>Every profile has at least one published collectible to explore.</span>
           </div>
         </div>
-        <div className="collectors-hero-aside" aria-label="Collector directory summary">
-          <span className="collectors-hero-aside__eyebrow">A better way to explore</span>
-          <strong>Find the next point of view for your collection.</strong>
-          <span>
-            Search by name or specialty, then open a profile to see the published assets behind it.
-          </span>
-        </div>
+        <aside className="collectors-hero-atlas" aria-label="Collector network summary">
+          <div className="collectors-hero-atlas__topline">
+            <span>Public collector index</span>
+            <i aria-hidden="true" />
+          </div>
+          <strong>Follow the point of view, then inspect the assets.</strong>
+          <p>
+            Find a specialty, open a profile, and see the published catalogue that makes that
+            perspective real.
+          </p>
+          <dl className="collectors-hero-atlas__stats">
+            <div>
+              <dt>Collectors</dt>
+              <dd>{collectorCount}</dd>
+            </div>
+            <div>
+              <dt>Published</dt>
+              <dd>{publishedAssetCount}</dd>
+            </div>
+            <div>
+              <dt>Featured</dt>
+              <dd>{featuredCollectorCount}</dd>
+            </div>
+          </dl>
+          <a href="#directory-heading" className="collectors-hero-atlas__link">
+            Enter the directory <ArrowDown aria-hidden="true" />
+          </a>
+        </aside>
       </section>
 
       <section
         className="collectors-shell collectors-directory"
         aria-labelledby="directory-heading"
       >
+        <header className="collectors-directory-command">
+          <div>
+            <p className="collectors-kicker">Collector discovery</p>
+            <h2 id="directory-heading">Find the collector behind the card.</h2>
+            <p>
+              Search by name or specialty, then move from a point of view to the published
+              collectibles that define it.
+            </p>
+          </div>
+          <div className="collectors-directory-command__signal">
+            <span><i aria-hidden="true" /> Public directory</span>
+            <strong>{collectorCount}<small> active profiles</small></strong>
+          </div>
+        </header>
+
         <div className="collectors-directory-toolbar">
           <form className="collectors-directory-search" onSubmit={submitSearch}>
             <Search aria-hidden="true" />
@@ -215,16 +257,6 @@ function CollectorsPage() {
           </label>
         </div>
 
-        <div className="collectors-directory-results-bar">
-          <UsersRound aria-hidden="true" />
-          <div>
-            <strong id="directory-heading">
-              {data?.stats?.eligibleCollectorCount ?? page?.total ?? 0} Active Collectors
-            </strong>
-            <span>Public directory</span>
-          </div>
-        </div>
-
         <dl className="collectors-directory-stats" aria-label="Collector directory totals">
           <div><dt>Active Collectors</dt><dd>{data?.stats.eligibleCollectorCount ?? 0}</dd></div>
           <div><dt>Published Assets</dt><dd>{data?.stats.publishedAssetCount ?? 0}</dd></div>
@@ -276,8 +308,8 @@ function CollectorsPage() {
               <section className="collectors-public-directory" aria-labelledby="public-directory-heading">
                 <div className="collectors-directory-heading">
                   <div>
-                    <p className="collectors-kicker">Explore the community</p>
-                    <h2 id="public-directory-heading">Public Directory</h2>
+                    <p className="collectors-kicker">Published perspectives</p>
+                    <h2 id="public-directory-heading">Collectors in view.</h2>
                   </div>
                   {page ? (
                     <span>

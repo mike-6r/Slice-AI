@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import {
   ArrowRight,
+  ArrowUp,
   Boxes,
   Check,
   CircleDollarSign,
@@ -935,6 +936,9 @@ function RealityMarketScene() {
     : trending.isError || publicAssets.length === 0
       ? "unavailable"
       : "published";
+  const returnToTop = () => {
+    window.scrollTo({ top: 0, behavior: reducedMotion ? "auto" : "smooth" });
+  };
 
   return (
     <Scene id="v2-real-market-scene" className="v2-scene--reality" label="Real Slice marketplace">
@@ -1020,13 +1024,16 @@ function RealityMarketScene() {
               you.
             </p>
           </div>
-          <div>
+          <div className="v2-market-reveal__final-actions">
             <Link to="/marketplace" className="v2-button v2-button--primary">
               Explore Markets <ArrowRight aria-hidden="true" />
             </Link>
             <Link to="/collectors" className="v2-inline-link">
               Explore Collectors <ArrowRight aria-hidden="true" />
             </Link>
+            <button className="v2-return-top" onClick={returnToTop} type="button">
+              Return to top <ArrowUp aria-hidden="true" />
+            </button>
           </div>
         </footer>
       </div>
