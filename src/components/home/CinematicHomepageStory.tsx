@@ -1,26 +1,19 @@
 import { Link } from "@tanstack/react-router";
 import {
   ArrowRight,
-  BadgeCheck,
   Boxes,
   Check,
   CircleDollarSign,
+  LockKeyhole,
+  ScanLine,
   Sparkles,
   TrendingUp,
   Vault,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { useSession } from "@/auth/use-session";
-import { useCurrency } from "@/currency/CurrencyProvider";
-import { isBetaEnvironment } from "@/config/environment";
-import {
-  HOMEPAGE_FEATURED_ASSET,
-  HOMEPAGE_OWNERSHIP_EXAMPLE,
-  HOMEPAGE_TRENDING_ASSETS,
-  showcaseDestination,
-  type HomepageShowcaseAsset,
-} from "@/data/homepage-showcase";
+import { HOMEPAGE_FEATURED_ASSET, HOMEPAGE_OWNERSHIP_EXAMPLE } from "@/data/homepage-showcase";
 import { MarketAssetCard } from "@/components/marketplace/MarketAssetCard";
 import { toMarketplaceAsset } from "@/components/marketplace/market-api-presentation";
 import { useTrendingAssets } from "@/queries/hooks";
@@ -60,11 +53,84 @@ function useSceneVisibility() {
   return { ref, visible };
 }
 
+function usePointerTilt() {
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element || window.matchMedia("(pointer: coarse)").matches) return;
+
+    const move = (event: PointerEvent) => {
+      const bounds = element.getBoundingClientRect();
+      const x = ((event.clientX - bounds.left) / bounds.width - 0.5) * 10;
+      const y = ((event.clientY - bounds.top) / bounds.height - 0.5) * -10;
+      element.style.setProperty("--v2-pointer-x", x.toFixed(2));
+      element.style.setProperty("--v2-pointer-y", y.toFixed(2));
+    };
+    const reset = () => {
+      element.style.setProperty("--v2-pointer-x", "0");
+      element.style.setProperty("--v2-pointer-y", "0");
+    };
+
+    element.addEventListener("pointermove", move, { passive: true });
+    element.addEventListener("pointerleave", reset, { passive: true });
+    return () => {
+      element.removeEventListener("pointermove", move);
+      element.removeEventListener("pointerleave", reset);
+    };
+  }, []);
+
+  return ref;
+}
+
+function useSceneScrollProgress(sceneSelector: string, variableName: string) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const scene = element.closest<HTMLElement>(sceneSelector);
+      if (!scene) return;
+
+      const availableScroll = Math.max(scene.offsetHeight - window.innerHeight, 1);
+      const nextProgress = Math.min(
+        1,
+        Math.max(0, -scene.getBoundingClientRect().top / availableScroll),
+      );
+      element.style.setProperty(variableName, nextProgress.toFixed(3));
+      setProgress((current) => (Math.abs(current - nextProgress) > 0.008 ? nextProgress : current));
+    };
+    const requestUpdate = () => {
+      if (!frame) frame = window.requestAnimationFrame(update);
+    };
+
+    update();
+    const settleTimer = window.setTimeout(update, 80);
+    window.addEventListener("scroll", requestUpdate, { passive: true });
+    window.addEventListener("resize", requestUpdate);
+    return () => {
+      window.removeEventListener("scroll", requestUpdate);
+      window.removeEventListener("resize", requestUpdate);
+      window.clearTimeout(settleTimer);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [sceneSelector, variableName]);
+
+  return { ref, progress };
+}
+
 function Scene({
+  id,
   className,
   label,
   children,
 }: {
+  id?: string;
   className: string;
   label: string;
   children: ReactNode;
@@ -73,6 +139,7 @@ function Scene({
   return (
     <section
       ref={scene.ref}
+      id={id}
       className={`v2-scene ${className}${scene.visible ? " is-visible" : ""}`}
       aria-label={label}
     >
@@ -114,354 +181,854 @@ function CardVisual({ compact = false }: { compact?: boolean }) {
 }
 
 function HeroScene({ authenticated }: { authenticated: boolean }) {
+  const visualRef = usePointerTilt();
+  const heroScroll = useSceneScrollProgress(".v2-scene--hero", "--v2-hero-progress");
+  const illustrativeValue = HOMEPAGE_OWNERSHIP_EXAMPLE.illustrativeValuation.replace(".00", "");
+  const slicePrice = HOMEPAGE_OWNERSHIP_EXAMPLE.slicePrice.replace(".00", "");
+  const exampleInvestment = HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestment.replace(".00", "");
+  const exampleOwnership = HOMEPAGE_OWNERSHIP_EXAMPLE.exampleOwnership.replace(/0%$/, "%");
+
   return (
     <Scene className="v2-scene--hero" label="One real collectible, one Slice">
-      <div className="v2-sticky v2-hero">
+      <div
+        ref={heroScroll.ref}
+        className="v2-sticky v2-hero"
+        style={{ "--v2-hero-progress": heroScroll.progress.toFixed(3) } as CSSProperties}
+      >
         <div className="v2-hero__copy">
           <p className="v2-kicker">Slice / collectible ownership</p>
           <h1>
-            <span>One real</span>
-            <span>collectible.</span>
-            <span className="is-muted">Own a piece</span>
-            <span className="is-accent">of it.</span>
+            <span>One real collectible.</span>
+            <span className="is-accent">A new way to own it.</span>
           </h1>
-          <div className="v2-hero__promise">
-            <span>1 Slice</span>
-            <b>=</b>
-            <strong>0.10% ownership</strong>
-          </div>
+          <p className="v2-hero__lede">
+            You do not need to buy the entire card. Choose how many Slices you want.
+          </p>
           <div className="v2-actions">
             <Link to="/marketplace" className="v2-button v2-button--primary">
               Explore Markets <ArrowRight aria-hidden="true" />
             </Link>
             <ListAssetLink authenticated={authenticated} />
           </div>
+          <a className="v2-hero__scroll-cue" href="#v2-ownership-scene">
+            <span>See how ownership works</span>
+            <i aria-hidden="true" />
+          </a>
+          <p className="v2-hero__fineprint">Illustrative homepage scene · Demo only</p>
         </div>
-        <div className="v2-hero__visual">
+        <div ref={visualRef} className="v2-hero__visual">
+          <div className="v2-hero__vault-field" aria-hidden="true">
+            <span className="v2-hero__vault-ring" />
+            <span className="v2-hero__vault-line v2-hero__vault-line--one" />
+            <span className="v2-hero__vault-line v2-hero__vault-line--two" />
+          </div>
+          <div className="v2-hero__asset-passport">
+            <span>Real collectible</span>
+            <strong>1999 Base Set 1st Edition Charizard</strong>
+            <small>PSA 10 GEM-MT</small>
+            <em>External reference available</em>
+          </div>
           <CardVisual />
-          <div className="v2-card-note v2-card-note--top">
-            <BadgeCheck aria-hidden="true" />
-            <span>Graded collectible</span>
+          <div className="v2-hero__market-reference" aria-label="External market reference">
+            <span>Market reference</span>
+            <strong>{HOMEPAGE_FEATURED_ASSET.displayPrice.replace(/\.00(?=\s)/, "")}</strong>
+            <small>PriceCharting · External reference</small>
           </div>
-          <div className="v2-card-note v2-card-note--bottom">
-            <span>Illustrative experience</span>
-            <small>Demo only</small>
+          <div className="v2-hero__asset-meta">
+            <span>1999 Pokémon Base Set</span>
+            <i aria-hidden="true" />
+            <span>1st Edition</span>
+            <i aria-hidden="true" />
+            <span>#4</span>
+            <small>Illustrative / Demo only</small>
           </div>
+
+          <aside
+            className="v2-hero__ownership-example"
+            aria-label="Illustrative Slice purchase example"
+          >
+            <div className="v2-hero__ownership-example-heading">
+              <span>What would I actually buy?</span>
+              <small>Illustrative example</small>
+            </div>
+            <div
+              className="v2-hero__ownership-math"
+              aria-label="Ten thousand pounds divided by one thousand Slices equals ten pounds per Slice"
+            >
+              <div>
+                <b>{illustrativeValue}</b>
+                <span>collectible</span>
+              </div>
+              <i aria-hidden="true">÷</i>
+              <div>
+                <b>1,000</b>
+                <span>Slices</span>
+              </div>
+              <i aria-hidden="true">=</i>
+              <div className="is-accent">
+                <b>{slicePrice}</b>
+                <span>per Slice</span>
+              </div>
+            </div>
+            <div className="v2-hero__ownership-buy">
+              <div>
+                <span>Example buy</span>
+                <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.exampleSlices}</strong>
+              </div>
+              <div>
+                <span>You pay</span>
+                <strong>{exampleInvestment}</strong>
+              </div>
+              <div className="is-accent">
+                <span>You own</span>
+                <strong>{exampleOwnership}</strong>
+              </div>
+            </div>
+            <p>
+              <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.exampleSlices}</strong> gives you{" "}
+              <strong>{exampleOwnership}</strong> ownership of this collectible.
+            </p>
+          </aside>
         </div>
       </div>
     </Scene>
   );
 }
 
+const ownershipChoices = [
+  { count: 1, slices: "1 Slice", price: "£10", ownership: "0.10%" },
+  { count: 10, slices: "10 Slices", price: "£100", ownership: "1%" },
+  { count: 25, slices: "25 Slices", price: "£250", ownership: "2.5%" },
+  { count: 100, slices: "100 Slices", price: "£1,000", ownership: "10%" },
+] as const;
+
+const ownershipStoryStages = [
+  { label: "Real collectible", copy: "A physical card stays whole." },
+  { label: "Slices created", copy: "Ownership becomes 1,000 units." },
+  { label: "You choose", copy: "Pick the amount that fits you." },
+  { label: "Position created", copy: "Your selected Slices become one position." },
+  { label: "Portfolio", copy: "Track the position you own." },
+] as const;
+
 function OwnershipScene() {
+  const ownershipScroll = useSceneScrollProgress(".v2-scene--ownership", "--v2-ownership-progress");
+  const [selectedSliceCount, setSelectedSliceCount] = useState(25);
+  const selectedChoice =
+    ownershipChoices.find((choice) => choice.count === selectedSliceCount) ?? ownershipChoices[2];
+  const activeStage = Math.min(
+    ownershipStoryStages.length - 1,
+    Math.floor(ownershipScroll.progress * 5),
+  );
+  const illustrativeValue = HOMEPAGE_OWNERSHIP_EXAMPLE.illustrativeValuation.replace(".00", "");
+  const slicePrice = HOMEPAGE_OWNERSHIP_EXAMPLE.slicePrice.replace(".00", "");
+
   return (
-    <Scene className="v2-scene--ownership" label="What a Slice is">
-      <div className="v2-sticky v2-ownership">
-        <div className="v2-ownership__visual">
-          <div className="v2-ownership__planes" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </div>
-          <CardVisual compact />
-          <div className="v2-your-slice">
-            <span>YOUR SLICE</span>
-            <strong>0.10%</strong>
-            <small>of this collectible</small>
-          </div>
+    <Scene
+      id="v2-ownership-scene"
+      className="v2-scene--ownership"
+      label="How Slice ownership works"
+    >
+      <div
+        ref={ownershipScroll.ref}
+        className={`v2-sticky v2-ownership v2-ownership-story is-stage-${activeStage}`}
+        style={
+          {
+            "--v2-ownership-progress": ownershipScroll.progress.toFixed(3),
+          } as CSSProperties
+        }
+      >
+        <div className="v2-ownership-story__atmosphere" aria-hidden="true">
+          <span className="v2-ownership-story__grid" />
+          <span className="v2-ownership-story__glow" />
+          <span className="v2-ownership-story__scan" />
         </div>
-        <div className="v2-ownership__copy">
-          <p className="v2-kicker">01 / Your percentage</p>
+
+        <header className="v2-ownership-story__intro">
+          <p className="v2-kicker">How ownership works</p>
           <h2>
-            A whole card.
-            <br />
-            <em>Shared ownership.</em>
+            <span>Own part of it.</span>
+            <span className="is-accent">Not the whole thing.</span>
           </h2>
-          <div className="v2-math-row">
-            <div>
-              <b>1</b>
-              <span>collectible</span>
+          <p>
+            The collectible stays whole. Slice creates ownership units tied to that exact item.
+            Choose how many you want, see what you pay, and track your position in Portfolio.
+          </p>
+        </header>
+
+        <nav className="v2-ownership-story__rail" aria-label="Ownership story progress">
+          {ownershipStoryStages.map((stage, index) => (
+            <div
+              className={
+                index === activeStage ? "is-active" : index < activeStage ? "is-complete" : ""
+              }
+              key={stage.label}
+            >
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <strong>{stage.label}</strong>
+              {index === activeStage ? <small>{stage.copy}</small> : null}
             </div>
-            <ArrowRight aria-hidden="true" />
+          ))}
+        </nav>
+
+        <div
+          className="v2-ownership-story__system"
+          aria-label="One collectible becoming a portfolio position"
+        >
+          <article className="v2-ownership-story__stage v2-ownership-story__stage--collectible">
+            <div className="v2-ownership-story__stage-heading">
+              <span>01</span>
+              <p>Real collectible</p>
+            </div>
+            <CardVisual compact />
+            <div className="v2-ownership-story__collectible-detail">
+              <strong>1999 Base Set Charizard</strong>
+              <span>PSA 10 GEM-MT</span>
+              <small>
+                Market context: {HOMEPAGE_FEATURED_ASSET.displayPrice.replace(/\.00(?=\s)/, "")}{" "}
+                external reference
+              </small>
+            </div>
+            <p>
+              <b>The card stays whole.</b> You are buying a position tied to this physical item.
+            </p>
+          </article>
+
+          <div
+            className="v2-ownership-story__connector v2-ownership-story__connector--one"
+            aria-hidden="true"
+          >
+            <span />
+          </div>
+
+          <article className="v2-ownership-story__stage v2-ownership-story__stage--formation">
+            <div className="v2-ownership-story__stage-heading">
+              <span>02</span>
+              <p>Slices created</p>
+            </div>
+            <div className="v2-ownership-story__slice-engine" aria-hidden="true">
+              <div className="v2-ownership-story__slice-stack">
+                {Array.from({ length: 18 }, (_, index) => (
+                  <i key={index} style={{ "--v2-layer": index } as CSSProperties} />
+                ))}
+                <b>1 Slice</b>
+              </div>
+              <span className="v2-ownership-story__slice-count">1,000</span>
+            </div>
+            <div className="v2-ownership-story__math" aria-label="Illustrative ownership math">
+              <div>
+                <span>Collectible value</span>
+                <strong>{illustrativeValue}</strong>
+              </div>
+              <i aria-hidden="true">÷</i>
+              <div>
+                <span>Total Slices</span>
+                <strong>1,000</strong>
+              </div>
+              <i aria-hidden="true">=</i>
+              <div className="is-accent">
+                <span>Price per Slice</span>
+                <strong>{slicePrice}</strong>
+              </div>
+            </div>
+            <p>
+              Slice divides ownership into <b>1,000 units</b> tied to this exact collectible.
+            </p>
+          </article>
+
+          <div
+            className="v2-ownership-story__connector v2-ownership-story__connector--two"
+            aria-hidden="true"
+          >
+            <span />
+          </div>
+
+          <article className="v2-ownership-story__stage v2-ownership-story__stage--choose">
+            <div className="v2-ownership-story__stage-heading">
+              <span>03</span>
+              <p>You choose</p>
+            </div>
+            <div className="v2-ownership-story__choice-grid" aria-label="Choose a number of Slices">
+              {ownershipChoices.map((choice) => (
+                <button
+                  className={choice.count === selectedChoice.count ? "is-selected" : ""}
+                  key={choice.slices}
+                  onClick={() => setSelectedSliceCount(choice.count)}
+                  type="button"
+                  aria-pressed={choice.count === selectedChoice.count}
+                >
+                  <span>{choice.slices}</span>
+                  <b>Pay {choice.price}</b>
+                  <small>Own {choice.ownership}</small>
+                </button>
+              ))}
+            </div>
+            <div className="v2-ownership-story__selection-summary" aria-live="polite">
+              <div>
+                <span>You buy</span>
+                <strong>{selectedChoice.slices}</strong>
+              </div>
+              <div>
+                <span>You pay</span>
+                <strong>{selectedChoice.price}</strong>
+              </div>
+              <div className="is-accent">
+                <span>You own</span>
+                <strong>{selectedChoice.ownership}</strong>
+              </div>
+            </div>
+            <p>
+              Buying <b>{selectedChoice.slices}</b> gives you <b>{selectedChoice.ownership}</b>{" "}
+              ownership of this collectible.
+            </p>
+          </article>
+
+          <div className="v2-ownership-story__transfer" aria-hidden="true">
+            <span>Selected Slices</span>
             <div>
-              <b>1,000</b>
-              <span>Slices</span>
+              {Array.from({ length: 25 }, (_, index) => (
+                <i
+                  className={index < Math.min(selectedChoice.count, 25) ? "is-claimed" : ""}
+                  key={index}
+                  style={{ "--v2-transfer-index": index } as CSSProperties}
+                />
+              ))}
             </div>
           </div>
-          <p className="v2-short-copy">
-            The physical card stays whole. You own the percentage you choose.
-          </p>
+
+          <div
+            className="v2-ownership-story__connector v2-ownership-story__connector--three"
+            aria-hidden="true"
+          >
+            <span />
+          </div>
+
+          <article className="v2-ownership-story__stage v2-ownership-story__stage--portfolio">
+            <div className="v2-ownership-story__stage-heading">
+              <span>04</span>
+              <p>Position created</p>
+            </div>
+            <div className="v2-ownership-story__portfolio-card">
+              <div className="v2-ownership-story__portfolio-card-top">
+                <span>Your position</span>
+                <b>Portfolio</b>
+              </div>
+              <div className="v2-ownership-story__portfolio-values">
+                <div>
+                  <span>Slices</span>
+                  <strong>{selectedChoice.count}</strong>
+                </div>
+                <div>
+                  <span>Ownership</span>
+                  <strong>{selectedChoice.ownership}</strong>
+                </div>
+                <div>
+                  <span>Position value</span>
+                  <strong>{selectedChoice.price}</strong>
+                </div>
+              </div>
+              <div className="v2-ownership-story__portfolio-track">
+                <i style={{ width: selectedChoice.ownership }} />
+              </div>
+              <small>Avg cost {slicePrice} / Slice</small>
+            </div>
+            <p>
+              Your purchased Slices are <b>recorded and tracked in Portfolio.</b>
+            </p>
+          </article>
         </div>
+
+        <footer className="v2-ownership-story__footer">
+          <span>01 Real collectible</span>
+          <ArrowRight aria-hidden="true" />
+          <span>1,000 priced Slices</span>
+          <ArrowRight aria-hidden="true" />
+          <span>Your position in Portfolio</span>
+          <small>Illustrative example · Demo only</small>
+        </footer>
       </div>
     </Scene>
   );
 }
 
 const lifecycle = [
-  { label: "Pre-Sale", copy: "Reserve early.", tone: "amber", icon: CircleDollarSign },
-  { label: "Awaiting Intake", copy: "Slice receives it.", tone: "neutral", icon: Vault },
-  { label: "Verified", copy: "Verified and secured.", tone: "teal", icon: BadgeCheck },
-  { label: "Market Live", copy: "Market opens.", tone: "emerald", icon: TrendingUp },
+  {
+    label: "Reserve",
+    status: "Reservation placed",
+    copy: "Choose how many Slices you want before the collectible is fully processed.",
+    hint: "Choose how many Slices you want to reserve.",
+    trust: "Your reservation holds your place. It is not final ownership yet.",
+    tone: "amber",
+    icon: CircleDollarSign,
+  },
+  {
+    label: "Receive",
+    status: "Asset intake",
+    copy: "Slice receives the physical collectible from the collector or seller.",
+    hint: "The physical collectible arrives and its intake is recorded.",
+    trust: "Physical intake is recorded before the next stage.",
+    tone: "receive",
+    icon: Vault,
+  },
+  {
+    label: "Verify",
+    status: "Details checked",
+    copy: "Slice checks identity, condition, grade, and submission details.",
+    hint: "Slice checks its identity, grade, and condition against the offering.",
+    trust: "The collectible must match the offering before ownership is finalized.",
+    tone: "verify",
+    icon: ScanLine,
+  },
+  {
+    label: "Secure",
+    status: "Custody secured",
+    copy: "The collectible is placed into protected custody and secured storage.",
+    hint: "The card moves into protected custody and stays physically whole.",
+    trust: "The physical asset stays protected while ownership is prepared.",
+    tone: "secure",
+    icon: LockKeyhole,
+  },
+  {
+    label: "Market Live",
+    status: "Ownership active",
+    copy: "Ownership becomes active and the market can open when the offering is ready.",
+    hint: "The offering is ready, so Slices can be bought and sold.",
+    trust: "The reservation lifecycle is complete and trading can begin.",
+    tone: "live",
+    icon: TrendingUp,
+  },
+  {
+    label: "Portfolio",
+    status: "Position settled",
+    copy: "Your settled position is tracked in your Slice Portfolio.",
+    hint: "Your settled Slices appear in Portfolio for clear tracking.",
+    trust: "You can see the Slices you own in one clear place.",
+    tone: "portfolio",
+    icon: Boxes,
+  },
 ] as const;
 
 function LifecycleMarketScene() {
-  const { formatMoney } = useCurrency();
+  const lifecycleScroll = useSceneScrollProgress(".v2-scene--lifecycle", "--v2-lifecycle-progress");
+  const chamberRef = usePointerTilt();
+  const [pinnedStage, setPinnedStage] = useState<number | null>(null);
+  const scrollStage = Math.min(
+    lifecycle.length - 1,
+    Math.floor(lifecycleScroll.progress * lifecycle.length),
+  );
+  const activeIndex = pinnedStage ?? scrollStage;
+  const activeStage = lifecycle[activeIndex];
+  const nextStage = lifecycle[Math.min(activeIndex + 1, lifecycle.length - 1)];
+  const ActiveIcon = activeStage.icon;
+
   return (
-    <Scene className="v2-scene--lifecycle" label="From Pre-Sale to Market Live">
-      <div className="v2-sticky v2-lifecycle">
-        <div className="v2-lifecycle__asset">
-          <CardVisual compact />
-          <span className="v2-demo-label">Illustrative lifecycle / demo only</span>
+    <Scene
+      id="v2-lifecycle-scene"
+      className="v2-scene--lifecycle"
+      label="What happens after you reserve"
+    >
+      <div
+        ref={lifecycleScroll.ref}
+        className={"v2-sticky v2-lifecycle-story is-stage-" + activeIndex}
+        data-stage={activeIndex}
+        style={
+          {
+            "--v2-lifecycle-progress": lifecycleScroll.progress.toFixed(3),
+            "--v2-lifecycle-stage": activeIndex,
+          } as CSSProperties
+        }
+      >
+        <div className="v2-lifecycle-story__atmosphere" aria-hidden="true">
+          <span className="v2-lifecycle-story__grid" />
+          <span className="v2-lifecycle-story__beam" />
+          <span className="v2-lifecycle-story__glow" />
         </div>
-        <div className="v2-lifecycle__copy">
-          <p className="v2-kicker">02 / The asset journey</p>
+
+        <header className="v2-lifecycle-story__intro">
+          <p className="v2-kicker">After you reserve</p>
           <h2>
-            Secure it.
-            <br />
-            <span>Open the market.</span>
+            Your reservation becomes <span>a real position.</span>
           </h2>
-          <ol className="v2-lifecycle__rail">
-            {lifecycle.map((stage, index) => {
-              const Icon = stage.icon;
-              return (
-                <li key={stage.label} className={`is-${stage.tone}`}>
-                  <span className="v2-lifecycle__number">0{index + 1}</span>
-                  <Icon aria-hidden="true" />
-                  <div>
-                    <b>{stage.label}</b>
-                    <small>{stage.copy}</small>
-                  </div>
-                  {index === lifecycle.length - 1 ? <Check aria-hidden="true" /> : null}
-                </li>
-              );
-            })}
-          </ol>
-        </div>
-        <div className="v2-market-seed">
-          <div>
-            <span>Price per Slice</span>
-            <strong>{formatMoney(HOMEPAGE_OWNERSHIP_EXAMPLE.slicePriceMinor, "GBP")}</strong>
+          <p>
+            A reservation is only the first step. Slice receives, checks, secures, and prepares the
+            collectible before ownership is finalized in your account.
+          </p>
+        </header>
+
+        <div ref={chamberRef} className="v2-lifecycle-story__chamber" data-stage={activeIndex}>
+          <div className="v2-lifecycle-story__chamber-meta">
+            <span>Collectible lifecycle</span>
+            <b>0{activeIndex + 1} / 06</b>
           </div>
-          <div>
-            <span>Ownership per Slice</span>
-            <strong>0.10%</strong>
+          <div className="v2-lifecycle-story__portal" aria-hidden="true">
+            <i className="v2-lifecycle-story__ring v2-lifecycle-story__ring--outer" />
+            <i className="v2-lifecycle-story__ring v2-lifecycle-story__ring--inner" />
+            <i className="v2-lifecycle-story__scan" />
+            <CardVisual compact />
+            <i className="v2-lifecycle-story__floor" />
           </div>
-          <small>Market UI assembles after verification.</small>
+          <div className="v2-lifecycle-story__asset-state">
+            <ActiveIcon aria-hidden="true" />
+            <div>
+              <span>Current state</span>
+              <strong>{activeStage.status}</strong>
+            </div>
+            <i aria-hidden="true" />
+          </div>
+          <small>Illustrative lifecycle / demo only</small>
         </div>
+
+        <article className="v2-lifecycle-story__active-panel" aria-live="polite">
+          <div className="v2-lifecycle-story__active-panel-top">
+            <span>Now processing</span>
+            <b>0{activeIndex + 1} / 06</b>
+          </div>
+          <div className="v2-lifecycle-story__active-icon">
+            <ActiveIcon aria-hidden="true" />
+          </div>
+          <p className="v2-kicker">{activeStage.label}</p>
+          <h3>{activeStage.status}</h3>
+          <p>{activeStage.copy}</p>
+          <aside>
+            <Check aria-hidden="true" />
+            <span>{activeStage.trust}</span>
+          </aside>
+          <footer>
+            <span>{activeIndex === lifecycle.length - 1 ? "Lifecycle complete" : "Up next"}</span>
+            <strong>{nextStage.label}</strong>
+          </footer>
+        </article>
+
+        <nav className="v2-lifecycle-story__rail" aria-label="Post-reservation lifecycle">
+          {lifecycle.map((stage, index) => {
+            const Icon = stage.icon;
+            const isActive = index === activeIndex;
+            return (
+              <button
+                aria-pressed={isActive}
+                className={isActive ? "is-active" : index < activeIndex ? "is-complete" : ""}
+                key={stage.label}
+                onClick={() => setPinnedStage(index)}
+                type="button"
+              >
+                <Icon aria-hidden="true" />
+                <b>{stage.label}</b>
+                <span className="v2-lifecycle-story__step-tooltip" role="tooltip">
+                  {stage.hint}
+                </span>
+              </button>
+            );
+          })}
+          <div className="v2-lifecycle-story__rail-context" aria-live="polite">
+            <span>
+              <ActiveIcon aria-hidden="true" />
+              Current stage <b>{activeStage.label}</b>
+            </span>
+            <p>{activeStage.hint}</p>
+            <small>Click a stage to preview it.</small>
+          </div>
+        </nav>
+
+        <p className="v2-lifecycle-story__clarifier">
+          <strong>Reserve starts the process.</strong>
+          Ownership is finalized after verification and custody, then tracked in Portfolio.
+        </p>
       </div>
     </Scene>
   );
 }
 
 function PortfolioScene({ authenticated }: { authenticated: boolean }) {
-  const { formatMoney } = useCurrency();
+  const portfolioScroll = useSceneScrollProgress(".v2-scene--portfolio", "--v2-portfolio-progress");
+  const positionRef = usePointerTilt();
+  const reducedMotion = useReducedMotion();
+  const progress = reducedMotion ? 1 : portfolioScroll.progress;
+  const positionProgress = Math.min(1, Math.max(0, (progress - 0.16) / 0.34));
+  const expansionProgress = Math.min(1, Math.max(0, (progress - 0.54) / 0.28));
+  const slices = Math.round(25 * positionProgress);
+  const ownership = (slices * 0.1).toFixed(1);
+  const positionValue = slices * 10;
+  const totalValue = Math.round(positionValue + 300 * expansionProgress);
+
   return (
-    <Scene className="v2-scene--portfolio" label="Buy a Slice and find it in Portfolio">
-      <div className="v2-sticky v2-portfolio">
-        <div className="v2-trade-panel">
-          <div className="v2-panel-label">
-            <span>Market Live</span>
-            <small>Illustrative controls</small>
-          </div>
-          <h2>Buy a Slice.</h2>
-          <div className="v2-trade-price">
-            <span>Price per Slice</span>
-            <strong>{formatMoney(HOMEPAGE_OWNERSHIP_EXAMPLE.slicePriceMinor, "GBP")}</strong>
-          </div>
-          <div className="v2-quantity">
-            <span>Quantity</span>
-            <b>25</b>
-            <small>Slices</small>
-          </div>
-          <div className="v2-trade-total">
-            <span>Your position</span>
-            <strong>2.5% ownership</strong>
-            <small>Illustrative example</small>
-          </div>
-          <button type="button" className="v2-button v2-button--primary">
-            Review Buy <ArrowRight aria-hidden="true" />
-          </button>
-          <small className="v2-disclaimer">No order is submitted from the homepage.</small>
+    <Scene
+      id="v2-portfolio-scene"
+      className="v2-scene--portfolio"
+      label="Where your ownership goes"
+    >
+      <div
+        ref={portfolioScroll.ref}
+        className="v2-sticky v2-portfolio-reveal"
+        style={
+          {
+            "--v2-portfolio-progress": progress.toFixed(3),
+            "--v2-portfolio-position-progress": positionProgress.toFixed(3),
+            "--v2-portfolio-expansion-progress": expansionProgress.toFixed(3),
+          } as CSSProperties
+        }
+      >
+        <div className="v2-portfolio-reveal__atmosphere" aria-hidden="true">
+          <i className="v2-portfolio-reveal__grid" />
+          <i className="v2-portfolio-reveal__beam" />
+          <i className="v2-portfolio-reveal__glow" />
         </div>
-        <div className="v2-portfolio-copy">
-          <p className="v2-kicker">03 / Your position</p>
+
+        <header className="v2-portfolio-reveal__intro">
+          <p className="v2-kicker">Your ownership, together</p>
           <h2>
-            Every Slice you own.
-            <br />
-            <span>One Portfolio.</span>
+            Your Slices. <span>One Portfolio.</span>
           </h2>
-          <p className="v2-short-copy">
-            Your settled ownership, cost basis and activity live together.
+          <p>
+            Every position shows your Slices, ownership percentage, value, and current status in one
+            place.
+          </p>
+        </header>
+
+        <div
+          ref={positionRef}
+          className="v2-portfolio-reveal__position"
+          aria-label="Illustrative selected position"
+        >
+          <span className="v2-portfolio-reveal__position-label">Your selected position</span>
+          <div className="v2-portfolio-reveal__card-stage">
+            <i className="v2-portfolio-reveal__card-ring v2-portfolio-reveal__card-ring--outer" />
+            <i className="v2-portfolio-reveal__card-ring v2-portfolio-reveal__card-ring--inner" />
+            <CardVisual compact />
+            <i className="v2-portfolio-reveal__card-floor" />
+          </div>
+          <div className="v2-portfolio-reveal__position-summary">
+            <span>Base Set Charizard</span>
+            <div>
+              <b>{slices} Slices</b>
+              <strong>{ownership}% ownership</strong>
+            </div>
+            <small>£{positionValue} position · £10 avg cost / Slice</small>
+          </div>
+          <small className="v2-demo-label">Illustrative ownership position</small>
+        </div>
+
+        <div className="v2-portfolio-reveal__transfer" aria-hidden="true">
+          <span>25 selected Slices</span>
+          <div>
+            <i />
+            <i />
+            <i />
+            <i />
+            <i />
+          </div>
+          <b>→</b>
+        </div>
+
+        <section className="v2-portfolio-reveal__product" aria-label="Illustrative Portfolio">
+          <header>
+            <div>
+              <p>Portfolio</p>
+              <span>Illustrative Portfolio</span>
+            </div>
+            <b>{expansionProgress > 0.55 ? "3 positions" : "1 position"}</b>
+          </header>
+
+          <div className="v2-portfolio-reveal__total">
+            <span>Total position value</span>
+            <strong>£{totalValue}</strong>
+            <small>Illustrative example</small>
+            <i aria-hidden="true" />
+          </div>
+
+          <div className="v2-portfolio-reveal__product-heading">
+            <span>Your positions</span>
+            <small>Slices · ownership · value</small>
+          </div>
+
+          <article className="v2-portfolio-position-row v2-portfolio-position-row--primary">
+            <span className="v2-portfolio-position-row__icon">
+              <Boxes aria-hidden="true" />
+            </span>
+            <div className="v2-portfolio-position-row__asset">
+              <b>Base Set Charizard</b>
+              <small>Pre-Sale · position continues after finalization</small>
+            </div>
+            <div className="v2-portfolio-position-row__metric">
+              <span>Slices</span>
+              <b>{slices}</b>
+            </div>
+            <div className="v2-portfolio-position-row__metric">
+              <span>Ownership</span>
+              <b>{ownership}%</b>
+            </div>
+            <strong>£{positionValue}</strong>
+            <em>Pre-Sale</em>
+          </article>
+
+          <article className="v2-portfolio-position-row v2-portfolio-position-row--secondary">
+            <span className="v2-portfolio-position-row__icon">
+              <Boxes aria-hidden="true" />
+            </span>
+            <div className="v2-portfolio-position-row__asset">
+              <b>Umbreon VMAX</b>
+              <small>Ownership position</small>
+            </div>
+            <div className="v2-portfolio-position-row__metric">
+              <span>Slices</span>
+              <b>10</b>
+            </div>
+            <div className="v2-portfolio-position-row__metric">
+              <span>Ownership</span>
+              <b>1.0%</b>
+            </div>
+            <strong>£100</strong>
+            <em>Market Live</em>
+          </article>
+
+          <article className="v2-portfolio-position-row v2-portfolio-position-row--secondary">
+            <span className="v2-portfolio-position-row__icon">
+              <Boxes aria-hidden="true" />
+            </span>
+            <div className="v2-portfolio-position-row__asset">
+              <b>Wembanyama Rookie</b>
+              <small>Ownership position</small>
+            </div>
+            <div className="v2-portfolio-position-row__metric">
+              <span>Slices</span>
+              <b>15</b>
+            </div>
+            <div className="v2-portfolio-position-row__metric">
+              <span>Ownership</span>
+              <b>1.5%</b>
+            </div>
+            <strong>£200</strong>
+            <em>Market Live</em>
+          </article>
+        </section>
+
+        <footer className="v2-portfolio-reveal__footer">
+          <div>
+            <span>25 Slices</span>
+            <ArrowRight aria-hidden="true" />
+            <span>2.5% ownership</span>
+            <ArrowRight aria-hidden="true" />
+            <span>£250 position</span>
+          </div>
+          <p>
+            <b>Know what you own.</b> Know what it’s worth. Know what happens next.
           </p>
           <Link
             to={authenticated ? "/portfolio" : "/login"}
             search={authenticated ? undefined : { returnTo: "/portfolio" }}
-            className="v2-inline-link"
+            className="v2-button v2-button--primary"
           >
-            See Portfolio <ArrowRight aria-hidden="true" />
+            Open Portfolio <ArrowRight aria-hidden="true" />
           </Link>
-        </div>
-        <div className="v2-portfolio-window">
-          <div className="v2-window-bar">
-            <i />
-            <i />
-            <i />
-            <span>Portfolio / Position</span>
-          </div>
-          <div className="v2-position-hero">
-            <span>Your position</span>
-            <strong>25 Slices</strong>
-            <b>2.5% ownership</b>
-          </div>
-          {[
-            ["Base Set Charizard", "25 Slices", "2.50%"],
-            ["Umbreon VMAX", "10 Slices", "1.00%"],
-            ["Wembanyama Rookie", "15 Slices", "1.50%"],
-          ].map(([name, slices, ownership]) => (
-            <div className="v2-position-row" key={name}>
-              <span>
-                <Boxes aria-hidden="true" />
-              </span>
-              <b>{name}</b>
-              <small>{slices}</small>
-              <strong>{ownership}</strong>
-            </div>
-          ))}
-          <span className="v2-demo-label">Illustrative portfolio view</span>
-        </div>
+        </footer>
       </div>
     </Scene>
-  );
-}
-
-function CollectorScene({ authenticated }: { authenticated: boolean }) {
-  return (
-    <Scene className="v2-scene--collector" label="Collector ownership story">
-      <div className="v2-sticky v2-collector">
-        <div className="v2-collector__copy">
-          <p className="v2-kicker">04 / For collectors</p>
-          <h2>
-            Own part of a collectible.
-            <br />
-            <span>Or unlock part of one.</span>
-          </h2>
-          <p className="v2-short-copy">
-            Offer a percentage while keeping the rest of the story yours.
-          </p>
-          <div className="v2-actions">
-            <Link to="/collectors" className="v2-button v2-button--primary">
-              Explore Collectors <ArrowRight aria-hidden="true" />
-            </Link>
-            <ListAssetLink authenticated={authenticated} />
-          </div>
-        </div>
-        <div className="v2-collector__visual">
-          <CardVisual compact />
-          <div className="v2-collector__split">
-            <div>
-              <b>25%</b>
-              <span>Collector retains</span>
-            </div>
-            <div>
-              <b>75%</b>
-              <span>Offered to market</span>
-            </div>
-          </div>
-          <small className="v2-demo-label">Illustrative split / demo only</small>
-        </div>
-      </div>
-    </Scene>
-  );
-}
-
-function ShowcaseLink({ asset }: { asset: HomepageShowcaseAsset }) {
-  const destination = showcaseDestination(asset);
-  const content = (
-    <>
-      <img src={asset.image} alt="" loading="lazy" />
-      <span>{asset.category}</span>
-      <b>{asset.title}</b>
-      <strong>{asset.displayPrice}</strong>
-      <small>Illustrative catalogue example</small>
-    </>
-  );
-  return destination.kind === "asset" ? (
-    <Link to="/asset/$id" params={{ id: destination.id }} className="v2-showcase-card">
-      {content}
-    </Link>
-  ) : (
-    <Link to={destination.to} className="v2-showcase-card">
-      {content}
-    </Link>
   );
 }
 
 function RealityMarketScene() {
   const trending = useTrendingAssets();
+  const reducedMotion = useReducedMotion();
+  const marketScroll = useSceneScrollProgress(".v2-scene--reality", "--v2-real-market-progress");
+  const progress = reducedMotion ? 1 : marketScroll.progress;
+  const publicAssets = trending.data ?? [];
+  const marketState = trending.isPending
+    ? "checking"
+    : trending.isError || publicAssets.length === 0
+      ? "unavailable"
+      : "published";
+
   return (
-    <Scene className="v2-scene--reality" label="Real Slice marketplace">
-      <div className="v2-reality">
-        <div className="v2-reality__heading">
+    <Scene id="v2-real-market-scene" className="v2-scene--reality" label="Real Slice marketplace">
+      <div
+        ref={marketScroll.ref}
+        className={`v2-market-reveal is-${marketState}`}
+        style={{ "--v2-real-market-progress": progress.toFixed(3) } as CSSProperties}
+      >
+        <div className="v2-market-reveal__atmosphere" aria-hidden="true">
+          <i className="v2-market-reveal__grid" />
+          <i className="v2-market-reveal__beam" />
+          <i className="v2-market-reveal__glow" />
+        </div>
+
+        <header className="v2-market-reveal__heading">
           <div>
-            <p className="v2-kicker">05 / The real market</p>
+            <p className="v2-kicker">The examples end here</p>
             <h2>
-              Enough explaining.
-              <br />
-              <span>See the real market.</span>
+              Enough explaining. <span>See the real market.</span>
             </h2>
-          </div>
-          <Link to="/marketplace" className="v2-inline-link">
-            View all markets <ArrowRight aria-hidden="true" />
-          </Link>
-        </div>
-        <p className="v2-reality__lead">
-          The illustrative experience ends here. What follows is the current public Slice market.
-        </p>
-        {isBetaEnvironment ? (
-          trending.isPending ? (
-            <div className="v2-market-state">
-              <Sparkles aria-hidden="true" />
-              Checking current public assets…
-            </div>
-          ) : trending.isError || !trending.data?.length ? (
-            <div className="v2-market-state">
-              <Sparkles aria-hidden="true" />
-              No public market assets yet.
-            </div>
-          ) : (
-            <div className="v2-real-cards">
-              {trending.data.map((asset) => (
-                <MarketAssetCard key={asset.id} asset={toMarketplaceAsset(asset)} homepageCompact />
-              ))}
-            </div>
-          )
-        ) : (
-          <div className="v2-real-cards v2-real-cards--illustrative">
-            {HOMEPAGE_TRENDING_ASSETS.slice(0, 3).map((asset) => (
-              <ShowcaseLink key={asset.showcaseKey} asset={asset} />
-            ))}
-          </div>
-        )}
-        <div className="v2-journey-line" aria-label="Slice journey">
-          <span>Discover</span>
-          <i />
-          <span>Reserve</span>
-          <i />
-          <span>Verify</span>
-          <i />
-          <span>Own</span>
-          <i />
-          <span>Trade</span>
-        </div>
-        <div className="v2-final-cta">
-          <div>
-            <p className="v2-kicker">Start with one Slice</p>
-            <h3>You don’t need the entire collectible.</h3>
+            <p>
+              The illustrative experience is over. What follows is the published public market on
+              Slice.
+            </p>
           </div>
           <Link to="/marketplace" className="v2-button v2-button--primary">
-            Explore Markets <ArrowRight aria-hidden="true" />
+            View all markets <ArrowRight aria-hidden="true" />
           </Link>
+        </header>
+
+        <div className="v2-market-reveal__transition" aria-hidden="true">
+          <span>Illustrative guide</span>
+          <i />
+          <b>Public market</b>
         </div>
+
+        <div className="v2-market-reveal__status" role="status">
+          <span aria-hidden="true" />
+          {marketState === "checking"
+            ? "Checking public market data"
+            : marketState === "unavailable"
+              ? "Public market data unavailable"
+              : "Published public assets"}
+        </div>
+
+        {marketState === "published" ? (
+          <div className="v2-market-reveal__cards" data-count={Math.min(publicAssets.length, 3)}>
+            {publicAssets.slice(0, 3).map((asset, index) => (
+              <div
+                className={`v2-market-reveal__card${asset.preSale ? " is-presale" : " is-live"}`}
+                key={asset.id}
+                style={{ "--v2-market-card-index": index } as CSSProperties}
+              >
+                <MarketAssetCard asset={toMarketplaceAsset(asset)} homepageCompact />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="v2-market-reveal__state">
+            <Sparkles aria-hidden="true" />
+            <div>
+              <b>
+                {marketState === "checking" ? "Finding public assets" : "No public assets to show"}
+              </b>
+              <p>
+                {marketState === "checking"
+                  ? "The market will appear here as soon as the current public projection is available."
+                  : "We can’t verify a published market projection right now. Explore the marketplace for the latest availability."}
+              </p>
+            </div>
+            <Link to="/marketplace" className="v2-inline-link">
+              Open marketplace <ArrowRight aria-hidden="true" />
+            </Link>
+          </div>
+        )}
+
+        <footer className="v2-market-reveal__final">
+          <div>
+            <p className="v2-kicker">Start with one Slice</p>
+            <h3>Explore the market. Build your position.</h3>
+            <p>
+              Choose a collectible, see its published details, and decide what ownership means to
+              you.
+            </p>
+          </div>
+          <div>
+            <Link to="/marketplace" className="v2-button v2-button--primary">
+              Explore Markets <ArrowRight aria-hidden="true" />
+            </Link>
+            <Link to="/collectors" className="v2-inline-link">
+              Explore Collectors <ArrowRight aria-hidden="true" />
+            </Link>
+          </div>
+        </footer>
       </div>
     </Scene>
   );
@@ -479,7 +1046,6 @@ export function CinematicHomepageStory() {
       <OwnershipScene />
       <LifecycleMarketScene />
       <PortfolioScene authenticated={isAuthenticated} />
-      <CollectorScene authenticated={isAuthenticated} />
       <RealityMarketScene />
     </div>
   );
