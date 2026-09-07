@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, Box, Sparkles, UsersRound } from "lucide-react";
+import { ArrowRight, Box, Clock3, Sparkles, UsersRound } from "lucide-react";
 import type { CollectorProfile, CollectorPublishedListing } from "@/domain";
 import { useCurrency } from "@/currency/CurrencyProvider";
+import { formatPreSaleCountdown } from "@/components/marketplace/PreSaleDisclosure";
 import { collectorCategoryLabel, collectorSpecialties } from "./collector-specialties";
 
 export function CollectorAvatar({
@@ -63,6 +64,19 @@ export function CollectorAssetPreview({
       ? formatMoney(listing.estimatedMarketValue.amount, listing.estimatedMarketValue.currency)
       : null;
   const state = listing.preSale ? "PRE-SALE" : "LIVE";
+  const identity = [
+    listing.year,
+    listing.variant,
+    listing.cardNumber ? `#${listing.cardNumber}` : null,
+    listing.grade,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const ownership = listing.preSale?.sliceOwnershipPercentageBps;
+  const preSaleStatus = listing.preSale?.physicalStatus
+    .toLowerCase()
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
   return (
     <Link
       to="/asset/$id"
@@ -74,11 +88,58 @@ export function CollectorAssetPreview({
         <>
           <span className="collector-mini-holding__media">
             <AssetMedia listing={listing} compact />
+            <span
+              className={`collector-mini-holding__status is-${listing.preSale ? "presale" : "live"}`}
+            >
+              {listing.preSale ? "Pre-Sale" : "Market Live"}
+            </span>
           </span>
           <span className="collector-mini-holding__copy">
-            <strong>{listing.title}</strong>
-            <small>{price ?? listing.grade ?? collectorCategoryLabel(listing.category)}</small>
-            <em className={listing.preSale ? "is-presale" : "is-live"}>{state}</em>
+            <span className="collector-mini-holding__identity">
+              <strong>{listing.title}</strong>
+              <small>{identity || collectorCategoryLabel(listing.category)}</small>
+            </span>
+            {listing.preSale ? (
+              <>
+                <span className="collector-mini-holding__metrics">
+                  <span>
+                    <small>Price per Slice</small>
+                    <strong>{price ?? "Unavailable"}</strong>
+                  </span>
+                  {ownership !== undefined ? (
+                    <span>
+                      <small>Ownership</small>
+                      <strong>{(ownership / 100).toFixed(2)}%</strong>
+                    </span>
+                  ) : null}
+                </span>
+                <span className="collector-mini-holding__availability">
+                  <strong>{listing.preSale.availableUnits} available</strong>
+                  <small>{listing.preSale.reservedUnits} reserved</small>
+                </span>
+                {listing.preSale.deadlineAt ? (
+                  <span className="collector-mini-holding__deadline">
+                    <Clock3 aria-hidden="true" />{" "}
+                    {formatPreSaleCountdown(listing.preSale.deadlineAt)}
+                  </span>
+                ) : null}
+                {preSaleStatus ? (
+                  <span className="collector-mini-holding__state">{preSaleStatus}</span>
+                ) : null}
+              </>
+            ) : (
+              <>
+                {price ? (
+                  <span className="collector-mini-holding__metrics is-live">
+                    <span>
+                      <small>Market reference</small>
+                      <strong>{price}</strong>
+                    </span>
+                  </span>
+                ) : null}
+                <span className="collector-mini-holding__state">Live on market</span>
+              </>
+            )}
           </span>
         </>
       ) : (
@@ -191,7 +252,11 @@ export function FeaturedCollector({ collector }: { collector: CollectorProfile }
         >
           View profile <ArrowRight aria-hidden="true" />
         </Link>
-        <Link to="/collector/$id/assets" params={{ id: collector.handle }} className="featured-assets-link">
+        <Link
+          to="/collector/$id/assets"
+          params={{ id: collector.handle }}
+          className="featured-assets-link"
+        >
           View all assets <ArrowRight aria-hidden="true" />
         </Link>
       </div>
@@ -236,9 +301,27 @@ export function CollectorCard({
   collector: CollectorProfile;
   toneIndex?: number;
 }) {
-  const listings = collector.publishedListings ?? [];
+  const listings = collector.featuredPreviewAssets?.length
+    ? collector.featuredPreviewAssets
+    : (collector.publishedListings ?? []);
   const specialties = collectorSpecialties(collector);
   const count = collector.publishedListingCount ?? listings.length;
+  const preSaleCount =
+    collector.preSaleListingCount ?? listings.filter((listing) => Boolean(listing.preSale)).length;
+  const liveCount =
+    collector.liveListingCount ?? listings.filter((listing) => !listing.preSale).length;
+  const categories = collector.categories?.length
+    ? collector.categories
+    : [...new Set(listings.map((listing) => listing.category).filter(Boolean))];
+  const activity = (collector.activity ?? []).slice(0, 2);
+  const showHeadline =
+    Boolean(collector.focus) &&
+    collector.focus !== "Collector profile" &&
+    collector.focus !== "Public collector profile" &&
+    Boolean(collector.specialties?.length || specialties.length === 0);
+  const collectorSince = collector.publicSince
+    ? new Date(collector.publicSince).getUTCFullYear()
+    : null;
   return (
     <article
       className={`collector-directory-card is-tone-${toneIndex % 4}${collector.isFeatured ? " is-featured" : ""}`}
@@ -248,9 +331,94 @@ export function CollectorCard({
           <Sparkles aria-hidden="true" /> Featured
         </span>
       ) : null}
-      <header>
-        <CollectorAvatar collector={collector} />
-        <div className="collector-card-identity">
+      <div className="collector-directory-card__identity">
+        <header>
+          <CollectorAvatar collector={collector} />
+          <div className="collector-card-identity">
+            <Link
+              to="/collector/$id"
+              search={{
+                tab: "catalogue",
+                status: "all",
+                q: "",
+                category: "all",
+                sort: "recent",
+                page: 1,
+              }}
+              params={{ id: collector.handle }}
+            >
+              {collector.displayName}
+            </Link>
+            <small>@{collector.handle}</small>
+          </div>
+          <span className="collector-public-status">
+            <UsersRound aria-hidden="true" /> Active Collector
+          </span>
+        </header>
+        <div className="collector-profile-copy">
+          {showHeadline ? <strong>{collector.focus}</strong> : null}
+          {specialties.length > 0 ? (
+            <div className="collector-specialty-chips" aria-label="Collector specialties">
+              {specialties.slice(0, 3).map((item) => (
+                <span key={item}>{item}</span>
+              ))}
+            </div>
+          ) : null}
+          {collectorSince ? <small>Collector since {collectorSince}</small> : null}
+          <p className="collector-catalogue-summary">
+            <span>Public catalogue</span>
+            <strong>
+              {count} {count === 1 ? "asset" : "assets"} · {preSaleCount} Pre-Sale · {liveCount}{" "}
+              Market Live
+            </strong>
+          </p>
+        </div>
+        <dl
+          className="collector-directory-stats"
+          aria-label={`${collector.displayName} catalogue stats`}
+        >
+          <div>
+            <dt>Published</dt>
+            <dd>{count}</dd>
+          </div>
+          <div>
+            <dt>Pre-Sale</dt>
+            <dd>{preSaleCount}</dd>
+          </div>
+          <div>
+            <dt>Market Live</dt>
+            <dd>{liveCount}</dd>
+          </div>
+          <div>
+            <dt>Categories</dt>
+            <dd>{categories.length}</dd>
+          </div>
+        </dl>
+        {activity.length > 0 ? (
+          <section className="collector-card-activity" aria-label="Recent public activity">
+            <span>Recent public activity</span>
+            <ul>
+              {activity.map((item) => (
+                <li key={item.id}>
+                  <Link to="/asset/$id" params={{ id: item.assetSlug }}>
+                    <i
+                      className={`is-${item.type === "PRE_SALE" ? "presale" : "live"}`}
+                      aria-hidden="true"
+                    />
+                    <span>
+                      <strong>{item.title}</strong>
+                      <small>
+                        {item.detail ||
+                          (item.type === "PRE_SALE" ? "Pre-Sale opened" : "Market Live")}
+                      </small>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+        <footer className="collector-card-footer">
           <Link
             to="/collector/$id"
             search={{
@@ -262,92 +430,42 @@ export function CollectorCard({
               page: 1,
             }}
             params={{ id: collector.handle }}
+            className="collector-card-profile-link"
           >
-            {collector.displayName}
+            View Collector <ArrowRight aria-hidden="true" />
           </Link>
-          <small>@{collector.handle}</small>
-        </div>
-        <span className="collector-public-status">
-          <UsersRound aria-hidden="true" /> Active Collector
-        </span>
-      </header>
-      <div className="collector-profile-copy">
-        <strong>{collector.focus || "Public collector profile"}</strong>
-        <p>
-          {specialties.length > 0 ? specialties.slice(0, 3).join(" · ") : "Published catalogue"}
-        </p>
-        {collector.latestPublicListingAt ? (
-          <small>
-            Latest listing {new Date(collector.latestPublicListingAt).toLocaleDateString()}
-          </small>
-        ) : null}
+          <Link
+            to="/collector/$id/assets"
+            params={{ id: collector.handle }}
+            className="collector-card-assets-link"
+          >
+            View all {count} {count === 1 ? "asset" : "assets"} <ArrowRight aria-hidden="true" />
+          </Link>
+        </footer>
       </div>
-      <dl className="collector-directory-stats">
-        <div>
-          <dt>Published</dt>
-          <dd>{count}</dd>
-        </div>
-        <div>
-          <dt>Live</dt>
-          <dd>
-            {collector.liveListingCount ?? listings.filter((listing) => !listing.preSale).length}
-          </dd>
-        </div>
-        <div>
-          <dt>Pre-Sale</dt>
-          <dd>
-            {collector.preSaleListingCount ??
-              listings.filter((listing) => Boolean(listing.preSale)).length}
-          </dd>
-        </div>
-        <div>
-          <dt>Since</dt>
-          <dd>{collector.publicSince ? new Date(collector.publicSince).getFullYear() : "—"}</dd>
-        </div>
-      </dl>
       {listings.length > 0 ? (
         <div
           className="collector-card-listings"
           aria-label={`${collector.displayName} published collectibles`}
         >
           <div className="collector-card-listings__heading">
-            <span>{collector.isFeatured ? "Featured assets" : "Published assets"}</span>
-            <small>{count} listed</small>
+            <span>{collector.isFeatured ? "Featured public assets" : "Public catalogue"}</span>
+            <small>
+              {count} {count === 1 ? "asset" : "assets"}
+            </small>
           </div>
           <div className={`collector-mini-strip${listings.length === 1 ? " is-single" : ""}`}>
-            {listings.slice(0, 3).map((listing) => (
+            {listings.slice(0, 2).map((listing) => (
               <CollectorAssetPreview key={listing.assetId} listing={listing} compact />
             ))}
-            {count > 3 ? <span className="collector-more-assets">+{count - 3} more</span> : null}
+            {count > 2 ? (
+              <span className="collector-more-assets">+{count - 2} more assets</span>
+            ) : null}
           </div>
         </div>
       ) : (
         <p className="collector-card-empty">Published previews unavailable.</p>
       )}
-      <footer className="collector-card-footer">
-        <Link
-          to="/collector/$id"
-          search={{
-            tab: "catalogue",
-            status: "all",
-            q: "",
-            category: "all",
-            sort: "recent",
-            page: 1,
-          }}
-          params={{ id: collector.handle }}
-          className="collector-card-profile-link"
-        >
-          View profile <ArrowRight aria-hidden="true" />
-        </Link>
-        <Link
-          to="/collector/$id/assets"
-          params={{ id: collector.handle }}
-          className="collector-card-assets-link"
-        >
-          View all {count} assets <ArrowRight aria-hidden="true" />
-        </Link>
-      </footer>
     </article>
   );
 }

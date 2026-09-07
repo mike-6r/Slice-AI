@@ -57,10 +57,12 @@ const summary: PortfolioSummary = {
   valuationStatus: "FULL" as const,
 };
 
-function renderPortfolio(options: {
-  portfolioSummary?: PortfolioSummary;
-  reservations?: PreSaleReservationView[];
-} = {}) {
+function renderPortfolio(
+  options: {
+    portfolioSummary?: PortfolioSummary;
+    reservations?: PreSaleReservationView[];
+  } = {},
+) {
   const portfolioSummary = options.portfolioSummary ?? summary;
   const reservations = options.reservations ?? [];
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
@@ -146,7 +148,8 @@ describe("approved portfolio workspace", () => {
     expect(html).toContain("Recent activity");
     expect(html).toContain("Deposit");
     expect(html).toContain("Reserved cash");
-    expect(html).toContain("Total value (GBP)");
+    expect(html).toContain("Current account value (GBP)");
+    expect(html).toContain("Value history");
     expect(html).toContain("No portfolio performance history is available for this period.");
     expect(html).toContain("Recent orders");
     expect(html).toContain("View all holdings");

@@ -2580,3 +2580,735 @@ body:has(.collectors-page) .collectors-directory-grid > .collector-directory-car
     padding-top: clamp(1.6rem, 2.8vw, 2.3rem);
   }
 }
+
+/* Collector directory storefront cards. The directory exposes only public
+ * catalogue projections, so the data density stays useful without inventing
+ * follower, sales, or market-performance signals. */
+body:has(.collectors-page) .collectors-directory-grid {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 1rem;
+}
+
+body:has(.collectors-page) .collectors-directory-grid .collector-directory-card {
+  position: relative;
+  display: grid;
+  min-height: 18.5rem;
+  grid-template-columns: minmax(16.5rem, 0.72fr) minmax(0, 1.28fr);
+  gap: clamp(1.1rem, 2.5vw, 2.25rem);
+  padding: clamp(1rem, 2vw, 1.45rem);
+  border: 1px solid color-mix(in srgb, var(--collector-accent) 36%, rgb(116 167 157 / 0.2));
+  border-radius: 1.15rem;
+  background:
+    radial-gradient(ellipse 55% 75% at 0% 0%, color-mix(in srgb, var(--collector-accent) 12%, transparent), transparent 74%),
+    linear-gradient(145deg, rgb(9 28 31 / 0.99), rgb(3 12 16 / 0.995));
+  box-shadow:
+    inset 0 1px rgb(235 255 248 / 0.07),
+    inset 0 -1px rgb(0 0 0 / 0.26),
+    0 1.25rem 3rem rgb(0 0 0 / 0.24);
+}
+
+body:has(.collectors-page) .collectors-directory-grid .collector-directory-card:hover {
+  border-color: color-mix(in srgb, var(--collector-accent) 65%, rgb(132 203 188 / 0.42));
+  box-shadow:
+    inset 0 1px rgb(235 255 248 / 0.09),
+    0 1.5rem 3.4rem rgb(0 0 0 / 0.31),
+    0 0 2.25rem color-mix(in srgb, var(--collector-accent) 10%, transparent);
+  transform: translateY(-0.18rem);
+}
+
+body:has(.collectors-page) .collectors-directory-grid .collector-directory-card:only-child {
+  display: grid;
+  width: 100%;
+  max-width: none;
+  min-height: 18.5rem;
+  grid-column: auto;
+  grid-template-areas: none;
+  grid-template-columns: minmax(16.5rem, 0.72fr) minmax(0, 1.28fr);
+  grid-template-rows: none;
+  align-items: stretch;
+  padding: clamp(1rem, 2vw, 1.45rem);
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-featured-badge {
+  position: absolute;
+  z-index: 2;
+  top: -0.58rem;
+  left: 1.35rem;
+  margin: 0;
+  box-shadow: 0 0.45rem 1.15rem rgb(0 0 0 / 0.2);
+}
+
+body:has(.collectors-page) .collector-directory-card__identity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+body:has(.collectors-page) .collector-directory-card__identity > header {
+  display: grid;
+  grid-template-columns: 3.15rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-avatar {
+  width: 3.15rem;
+  height: 3.15rem;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--collector-accent) 38%, transparent);
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-identity a {
+  display: block;
+  overflow: hidden;
+  color: #f0fbf7;
+  font-family: var(--font-display);
+  font-size: clamp(1rem, 1.4vw, 1.22rem);
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-identity small {
+  display: block;
+  margin-top: 0.2rem;
+  color: #86a49f;
+  font-size: 0.64rem;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-public-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  margin: 0;
+  color: #3ce1b5;
+  font-size: 0.56rem;
+  font-weight: 780;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-public-status svg {
+  width: 0.76rem;
+  height: 0.76rem;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-profile-copy {
+  display: grid;
+  gap: 0.52rem;
+  min-height: 0;
+  margin-top: 0.95rem;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-profile-copy > strong {
+  overflow: hidden;
+  color: #c9ddd7;
+  font-size: 0.73rem;
+  font-weight: 650;
+  line-height: 1.42;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-specialty-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-specialty-chips span {
+  min-height: 1.45rem;
+  padding: 0.22rem 0.48rem;
+  border: 1px solid rgb(119 178 167 / 0.22);
+  border-radius: 999px;
+  background: rgb(40 122 105 / 0.08);
+  color: #afcec5;
+  font-size: 0.54rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-profile-copy > small {
+  color: #79968f;
+  font-size: 0.58rem;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-catalogue-summary {
+  display: grid;
+  gap: 0.16rem;
+  margin: 0.1rem 0 0;
+  padding-top: 0.62rem;
+  border-top: 1px solid rgb(128 187 175 / 0.14);
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-catalogue-summary > span {
+  color: #6f958b;
+  font-size: 0.51rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-catalogue-summary > strong {
+  color: #dff4ed;
+  font-size: 0.64rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-directory-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 0.82rem 0 0;
+  padding: 0.62rem 0;
+  border-top: 1px solid rgb(132 191 180 / 0.16);
+  border-bottom: 1px solid rgb(132 191 180 / 0.16);
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-directory-stats > div {
+  min-width: 0;
+  padding: 0 0.48rem;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-directory-stats > div + div {
+  border-left: 1px solid rgb(132 191 180 / 0.13);
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-directory-stats dt {
+  overflow: hidden;
+  color: #72948d;
+  font-size: 0.46rem;
+  font-weight: 780;
+  letter-spacing: 0.075em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-directory-stats dd {
+  margin: 0.24rem 0 0;
+  color: #f0fff9;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  letter-spacing: -0.055em;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-activity {
+  display: grid;
+  gap: 0.42rem;
+  margin-top: 0.8rem;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-activity > span {
+  color: #769991;
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-activity ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-activity a {
+  display: grid;
+  grid-template-columns: 0.48rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.42rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-activity i {
+  width: 0.38rem;
+  height: 0.38rem;
+  border-radius: 50%;
+  background: #32dcae;
+  box-shadow: 0 0 0.55rem rgb(50 220 174 / 0.65);
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-activity i.is-presale {
+  background: #e7b841;
+  box-shadow: 0 0 0.55rem rgb(231 184 65 / 0.54);
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-activity a > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.1rem;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-activity strong,
+body:has(.collectors-page) .collector-directory-card .collector-card-activity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-activity strong {
+  color: #bcd6cf;
+  font-size: 0.58rem;
+  font-weight: 700;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-activity small {
+  color: #6f9189;
+  font-size: 0.52rem;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-footer {
+  display: flex;
+  gap: 0.52rem;
+  margin-top: auto;
+  padding-top: 0.95rem;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-footer a {
+  display: inline-flex;
+  min-height: 2.35rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  margin: 0;
+  padding: 0.45rem 0.72rem;
+  border: 1px solid rgb(119 183 170 / 0.32);
+  border-radius: 0.65rem;
+  color: #bde9dc;
+  font-size: 0.6rem;
+  font-weight: 780;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-footer .collector-card-profile-link {
+  flex: 1 1 auto;
+  border-color: transparent;
+  background: linear-gradient(110deg, #28d8aa, #14a887);
+  box-shadow: inset 0 1px rgb(255 255 255 / 0.18), 0 0.65rem 1.2rem rgb(15 150 118 / 0.16);
+  color: #03130f;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-footer .collector-card-assets-link {
+  flex: 0 0 auto;
+  background: rgb(7 23 26 / 0.75);
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-footer a:hover {
+  border-color: #49e4bc;
+  color: #effff9;
+  transform: translateY(-1px);
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-footer .collector-card-profile-link:hover {
+  background: linear-gradient(110deg, #4ae7bd, #1cc69d);
+  color: #02110d;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-listings {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  margin: 0;
+  padding: 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--collector-accent) 24%, rgb(119 177 165 / 0.17));
+  border-radius: 0.92rem;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--collector-accent) 7%, transparent), transparent 54%),
+    rgb(2 14 17 / 0.7);
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-listings__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin: 0 0 0.68rem;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-listings__heading > span {
+  color: #dcf5ed;
+  font-size: 0.61rem;
+  font-weight: 780;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-listings__heading small {
+  color: #759991;
+  font-size: 0.58rem;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-strip {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.58rem;
+  margin: 0;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-strip.is-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding {
+  display: grid;
+  min-width: 0;
+  min-height: 10.25rem;
+  height: auto;
+  grid-template-columns: minmax(4.7rem, 0.58fr) minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid rgb(123 183 170 / 0.2);
+  border-radius: 0.72rem;
+  background: linear-gradient(145deg, rgb(13 36 39 / 0.94), rgb(4 16 19 / 0.96));
+  color: inherit;
+  text-decoration: none;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding:hover {
+  border-color: rgb(76 223 185 / 0.56);
+  box-shadow: 0 0.65rem 1.35rem rgb(0 0 0 / 0.25), 0 0 1rem rgb(38 214 170 / 0.07);
+  transform: translateY(-0.12rem);
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__media {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  place-items: center;
+  overflow: hidden;
+  border-right: 1px solid rgb(126 187 174 / 0.14);
+  background:
+    radial-gradient(circle at 50% 45%, rgb(47 211 171 / 0.14), transparent 65%),
+    rgb(4 18 21 / 0.94);
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__media img {
+  width: 100%;
+  height: 100%;
+  padding: 0.45rem;
+  filter: drop-shadow(0 0.7rem 0.7rem rgb(0 0 0 / 0.36));
+  object-fit: contain;
+  transition: transform 220ms ease;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding:hover .collector-mini-holding__media img {
+  transform: scale(1.035);
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__status {
+  position: absolute;
+  top: 0.38rem;
+  left: 0.38rem;
+  max-width: calc(100% - 0.76rem);
+  padding: 0.18rem 0.3rem;
+  border: 1px solid rgb(47 221 180 / 0.35);
+  border-radius: 999px;
+  background: rgb(3 18 19 / 0.82);
+  color: #48dfb5;
+  font-size: 0.42rem;
+  font-weight: 800;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__status.is-presale {
+  border-color: rgb(235 184 64 / 0.4);
+  color: #f0c452;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.38rem;
+  padding: 0.58rem;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__identity {
+  display: grid;
+  min-width: 0;
+  gap: 0.18rem;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__identity strong,
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__identity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__identity strong {
+  color: #ecfbf5;
+  font-size: 0.64rem;
+  font-weight: 760;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__identity small {
+  color: #79978f;
+  font-size: 0.49rem;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.38rem;
+  padding: 0.38rem 0;
+  border-top: 1px solid rgb(129 185 174 / 0.14);
+  border-bottom: 1px solid rgb(129 185 174 / 0.14);
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__metrics.is-live {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__metrics > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__metrics > span + span {
+  padding-left: 0.38rem;
+  border-left: 1px solid rgb(129 185 174 / 0.14);
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__metrics small {
+  overflow: hidden;
+  color: #77978f;
+  font-size: 0.43rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__metrics strong {
+  overflow: hidden;
+  color: #eafaf4;
+  font-size: 0.67rem;
+  font-weight: 780;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__availability {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.16rem 0.38rem;
+  color: #97b7ae;
+  font-size: 0.48rem;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__availability strong {
+  color: #b9d9cf;
+  font-size: inherit;
+  font-weight: 700;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__availability small {
+  color: #829f97;
+  font-size: inherit;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__deadline,
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+  color: #84a69d;
+  font-size: 0.46rem;
+  line-height: 1.2;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__deadline svg {
+  width: 0.58rem;
+  height: 0.58rem;
+  color: #efc04a;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__state {
+  margin-top: auto;
+  color: #45dcb1;
+  font-weight: 700;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__availability + .collector-mini-holding__deadline + .collector-mini-holding__state,
+body:has(.collectors-page) .collector-directory-card .collector-mini-holding__availability + .collector-mini-holding__state {
+  color: #e8bd4d;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-more-assets {
+  display: flex;
+  min-height: 2.05rem;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed rgb(127 186 174 / 0.28);
+  border-radius: 0.62rem;
+  background: rgb(10 30 33 / 0.56);
+  color: #add0c5;
+  font-size: 0.57rem;
+  font-weight: 720;
+}
+
+body:has(.collectors-page) .collector-directory-card .collector-card-empty {
+  display: grid;
+  min-height: 10rem;
+  place-items: center;
+  margin: 0;
+  padding: 1rem;
+  border: 1px dashed rgb(126 181 170 / 0.2);
+  border-radius: 0.92rem;
+  color: #789890;
+  font-size: 0.68rem;
+  text-align: center;
+}
+
+/* Reset the earlier one-result layout so a sparse directory receives the same
+ * storefront treatment as every other collector. */
+body:has(.collectors-page)
+  .collectors-directory-grid
+  > .collector-directory-card:only-child
+  .collector-card-listings {
+  display: flex;
+  grid-area: auto;
+  align-self: stretch;
+  margin: 0;
+}
+
+body:has(.collectors-page)
+  .collectors-directory-grid
+  > .collector-directory-card:only-child
+  .collector-mini-strip {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.58rem;
+  margin: 0;
+}
+
+body:has(.collectors-page)
+  .collectors-directory-grid
+  > .collector-directory-card:only-child
+  .collector-mini-strip:not(.is-single)
+  .collector-mini-holding {
+  height: auto;
+  grid-template-columns: minmax(4.7rem, 0.58fr) minmax(0, 1fr);
+}
+
+body:has(.collectors-page)
+  .collectors-directory-grid
+  > .collector-directory-card:only-child
+  .collector-mini-strip:not(.is-single)
+  .collector-mini-holding__copy {
+  display: flex;
+}
+
+body:has(.collectors-page)
+  .collectors-directory-grid
+  > .collector-directory-card:only-child
+  .collector-card-footer {
+  width: auto;
+  grid-area: auto;
+  align-self: auto;
+  margin-top: auto;
+}
+
+@media (max-width: 900px) {
+  body:has(.collectors-page) .collectors-directory-grid .collector-directory-card,
+  body:has(.collectors-page) .collectors-directory-grid .collector-directory-card:only-child {
+    grid-template-columns: minmax(14rem, 0.74fr) minmax(0, 1.26fr);
+    gap: 0.85rem;
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-card-activity {
+    display: none;
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-mini-holding {
+    min-height: 9.6rem;
+    grid-template-columns: minmax(4.25rem, 0.52fr) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  body:has(.collectors-page) .collectors-directory-grid .collector-directory-card,
+  body:has(.collectors-page) .collectors-directory-grid .collector-directory-card:only-child {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+
+  body:has(.collectors-page) .collector-directory-card__identity > header {
+    grid-template-columns: 2.8rem minmax(0, 1fr);
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-avatar {
+    width: 2.8rem;
+    height: 2.8rem;
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-public-status {
+    display: none;
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-directory-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem 0;
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-directory-stats > div:nth-child(3) {
+    border-left: 0;
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-card-activity {
+    display: grid;
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-card-listings {
+    display: flex;
+    margin: 0;
+    padding: 0.72rem;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    > .collector-directory-card:only-child
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding {
+    height: auto;
+    grid-template-columns: minmax(4.25rem, 0.52fr) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  body:has(.collectors-page) .collector-directory-card .collector-mini-strip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-mini-holding {
+    min-height: 9.25rem;
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-card-footer {
+    flex-direction: column;
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-card-footer .collector-card-assets-link {
+    width: 100%;
+  }
+}

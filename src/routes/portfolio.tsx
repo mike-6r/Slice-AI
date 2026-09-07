@@ -4,7 +4,6 @@ import {
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
-  BadgeCheck,
   CalendarDays,
   ChartNoAxesCombined,
   CheckCircle2,
@@ -19,7 +18,6 @@ import {
   PieChart,
   RefreshCw,
   ShoppingCart,
-  ShieldCheck,
   Wallet,
   WalletCards,
   X,
@@ -142,8 +140,7 @@ function activePreSaleReservations(
 
 function reservationOwnership(reservation: ActivePreSaleReservation) {
   if (reservation.totalUnits && BigInt(reservation.totalUnits) > 0n) {
-    const scaled =
-      (BigInt(reservation.units) * 10_000n) / BigInt(reservation.totalUnits);
+    const scaled = (BigInt(reservation.units) * 10_000n) / BigInt(reservation.totalUnits);
     return `${scaled / 100n}.${(scaled % 100n).toString().padStart(2, "0")}%`;
   }
   if (reservation.sliceOwnershipPercentageBps !== undefined)
@@ -151,19 +148,14 @@ function reservationOwnership(reservation: ActivePreSaleReservation) {
   return "Unavailable";
 }
 
-function positionsValueMinor(
-  summary: PortfolioSummary,
-  reservations: ActivePreSaleReservation[],
-) {
+function positionsValueMinor(summary: PortfolioSummary, reservations: ActivePreSaleReservation[]) {
   const reservedValue = reservations.reduce(
     (total, reservation) => total + BigInt(reservation.grossMinor),
     0n,
   );
   if (summary.estimatedHoldingsValueMinor !== null)
     return (BigInt(summary.estimatedHoldingsValueMinor) + reservedValue).toString();
-  return summary.holdings.length === 0 && reservations.length
-    ? reservedValue.toString()
-    : null;
+  return summary.holdings.length === 0 && reservations.length ? reservedValue.toString() : null;
 }
 
 function activityQueryRetry(failureCount: number, error: unknown) {
@@ -377,10 +369,7 @@ export function Portfolio() {
             />
             <PortfolioTabs active={tab} />
             {tab === "holdings" ? (
-              <HoldingsKpis
-                query={displaySummaryQuery}
-                preSaleReservations={activeReservations}
-              />
+              <HoldingsKpis query={displaySummaryQuery} preSaleReservations={activeReservations} />
             ) : null}
           </>
         )}
@@ -424,7 +413,6 @@ export function Portfolio() {
               />
               <MarketWatchPanel query={market} />
             </section>
-            <PortfolioTrustStrip />
           </>
         ) : tab === "holdings" ? (
           <HoldingsExperience
@@ -1398,14 +1386,17 @@ function RecentOrdersPanel({
   assets: Asset[];
 }) {
   const holdingByAsset = new Map(holdings.map((holding) => [holding.assetId, holding]));
-  const assetBySlug = new Map(assets.flatMap((asset) => (asset.slug ? [[asset.slug, asset] as const] : [])));
+  const assetBySlug = new Map(
+    assets.flatMap((asset) => (asset.slug ? [[asset.slug, asset] as const] : [])),
+  );
   const items = [
     ...(query.data?.items ?? []).map((order) => ({ kind: "order" as const, order })),
     ...preSaleReservations.map((reservation) => ({ kind: "reservation" as const, reservation })),
   ]
     .sort((left, right) => {
       const leftDate = left.kind === "order" ? left.order.createdAt : left.reservation.createdAt;
-      const rightDate = right.kind === "order" ? right.order.createdAt : right.reservation.createdAt;
+      const rightDate =
+        right.kind === "order" ? right.order.createdAt : right.reservation.createdAt;
       return new Date(rightDate).getTime() - new Date(leftDate).getTime();
     })
     .slice(0, 4);
@@ -1500,7 +1491,11 @@ function RecentPreSaleRow({
   return (
     <tr className="portfolio-recent-order--presale">
       <td>
-        <Link to="/asset/$id" params={{ id: reservation.asset.slug }} className="portfolio-order-asset">
+        <Link
+          to="/asset/$id"
+          params={{ id: reservation.asset.slug }}
+          className="portfolio-order-asset"
+        >
           <span className="portfolio-order-asset__icon" aria-hidden="true">
             {thumbnailUrl ? <img src={thumbnailUrl} alt="" /> : <ShoppingCart />}
           </span>
@@ -1510,11 +1505,15 @@ function RecentPreSaleRow({
           </span>
         </Link>
       </td>
-      <td><span className="is-buy">RESERVE</span></td>
+      <td>
+        <span className="is-buy">RESERVE</span>
+      </td>
       <td>{reservation.units}</td>
       <td>{formatPortfolioMoney(reservation.pricePerUnitMinor)}</td>
       <td>{formatPortfolioMoney(reservation.grossMinor)}</td>
-      <td><span className="portfolio-order-status is-open">Awaiting intake</span></td>
+      <td>
+        <span className="portfolio-order-status is-open">Awaiting intake</span>
+      </td>
     </tr>
   );
 }
@@ -1556,9 +1555,9 @@ function PortfolioHeading({
   const isActivity = tab === "activity";
   const isOverview = tab === "overview";
   return (
-    <header className="portfolio-heading">
+    <header className={`portfolio-heading${isOverview ? " portfolio-heading--overview" : ""}`}>
       <div className="portfolio-heading__copy">
-        <p className="page-kicker">Portfolio</p>
+        <p className="page-kicker">Collection intelligence</p>
         <div className="portfolio-heading__title-row">
           <h1>
             {isHoldings ? "Holdings" : isOrders ? "Orders" : isActivity ? "Activity" : "Portfolio"}
@@ -1578,7 +1577,7 @@ function PortfolioHeading({
               ? "Track and manage your active, filled and cancelled orders."
               : isActivity
                 ? "A timeline of all activity in your account."
-                : "Your balances, collectibles, orders and account activity in one place."}
+                : "The complete view of your cash, collectible positions and market value."}
         </p>
       </div>
       {isOverview ? <PortfolioHeroSparkline query={performance} /> : null}
@@ -1719,11 +1718,7 @@ function PortfolioKpis({
       />
       <PortfolioKpi
         label="Positions value"
-        value={
-          positionValue === null
-            ? "Unavailable"
-            : formatPortfolioMoney(positionValue)
-        }
+        value={positionValue === null ? "Unavailable" : formatPortfolioMoney(positionValue)}
         icon={Landmark}
         detail={`Across ${positionCount} position${positionCount === 1 ? "" : "s"}`}
       />
@@ -1798,11 +1793,7 @@ function HoldingsKpis({
     <section className="portfolio-kpis portfolio-kpis--holdings" aria-label="Holdings summary">
       <PortfolioKpi
         label="Positions value"
-        value={
-          positionValue === null
-            ? "Unavailable"
-            : formatPortfolioMoney(positionValue)
-        }
+        value={positionValue === null ? "Unavailable" : formatPortfolioMoney(positionValue)}
         icon={Landmark}
         detail={`Across ${positionCount} position${positionCount === 1 ? "" : "s"}`}
       />
@@ -1878,18 +1869,16 @@ function PortfolioPerformancePanel({
   onRangeChange: (range: PortfolioPerformanceRange) => void;
 }) {
   const selectedChange = performance.data?.periodChangeMinor ?? null;
-  const positionValue = query.data
-    ? positionsValueMinor(query.data, preSaleReservations)
-    : null;
+  const positionValue = query.data ? positionsValueMinor(query.data, preSaleReservations) : null;
   const hasExternalCashFlow =
     performance.data?.netCashFlowMinor !== undefined && performance.data.netCashFlowMinor !== "0";
   return (
     <PortfolioPanel
-      title="Portfolio performance"
+      title="Value history"
       className="portfolio-panel--hero-performance"
       header={
         <div className="portfolio-performance-header">
-          <span className="portfolio-performance-hint">Account value over time</span>
+          <span className="portfolio-performance-hint">Portfolio performance</span>
           <PerformancePeriods active={range} onChange={onRangeChange} />
         </div>
       }
@@ -1901,7 +1890,7 @@ function PortfolioPerformancePanel({
       ) : (
         <div className="portfolio-performance-hero">
           <div className="portfolio-performance-hero__value">
-            <span>Total value ({query.data.currency})</span>
+            <span>Current account value ({query.data.currency})</span>
             <strong>
               {query.data.totalAccountValueMinor !== undefined &&
               query.data.totalAccountValueMinor !== null
@@ -1931,11 +1920,9 @@ function PortfolioPerformancePanel({
           />
           <dl className="portfolio-performance-periods">
             <div>
-                <dt>Positions value</dt>
-                <dd>
-                {positionValue !== null
-                  ? formatPortfolioMoney(positionValue)
-                  : "Unavailable"}
+              <dt>Positions value</dt>
+              <dd>
+                {positionValue !== null ? formatPortfolioMoney(positionValue) : "Unavailable"}
               </dd>
             </div>
             <div>
@@ -2041,7 +2028,10 @@ function PerformanceChart({
     x: 2.5 + (index / (points.length - 1)) * 95,
     y: 12 + (1 - (Number(point.valueMinor) - domainMin) / domainSpan) * 72,
   }));
-  const line = buildSmoothPerformancePath(chartPoints);
+  // Portfolio snapshots can legitimately jump when cash is added or withdrawn.
+  // A direct line preserves recorded observations without implying a smoothed
+  // market move between them.
+  const line = buildPerformanceHistoryPath(chartPoints);
   const area = `${line} L 97.5,90 L 2.5,90 Z`;
   const dateIndexes = Array.from(
     new Set([0, Math.floor((points.length - 1) / 2), points.length - 1]),
@@ -2049,7 +2039,13 @@ function PerformanceChart({
   const activePoint = activeIndex === null ? null : (chartPoints[activeIndex] ?? null);
   const direction = query.data?.direction ?? "NEUTRAL";
   const chartTone = hasExternalCashFlow ? "neutral" : direction.toLowerCase();
-  const axisValues = [domainMax, domainMin + domainSpan / 2, domainMin];
+  const axisValues = [
+    domainMax,
+    domainMin + domainSpan * 0.75,
+    domainMin + domainSpan * 0.5,
+    domainMin + domainSpan * 0.25,
+    domainMin,
+  ];
   return (
     <div className={`portfolio-performance-chart portfolio-performance-chart--${chartTone}`}>
       <div className="portfolio-performance-chart__plot">
@@ -2091,7 +2087,7 @@ function PerformanceChart({
               <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
             </linearGradient>
           </defs>
-          {[10, 50, 90].map((y) => (
+          {[10, 30, 50, 70, 90].map((y) => (
             <line
               key={y}
               x1="0"
@@ -2271,14 +2267,12 @@ function PerformanceChart({
   );
 }
 
-function buildSmoothPerformancePath(points: Array<{ x: number; y: number }>) {
+function buildPerformanceHistoryPath(points: Array<{ x: number; y: number }>) {
   if (!points.length) return "";
   if (points.length === 1) return `M ${points[0]!.x},${points[0]!.y}`;
   return points.reduce((path, point, index) => {
     if (index === 0) return `M ${point.x},${point.y}`;
-    const previous = points[index - 1]!;
-    const midpoint = (previous.x + point.x) / 2;
-    return `${path} C ${midpoint},${previous.y} ${midpoint},${point.y} ${point.x},${point.y}`;
+    return `${path} L ${point.x},${point.y}`;
   }, "");
 }
 
@@ -2737,17 +2731,19 @@ function HoldingsPanel({
             </thead>
             <tbody>
               {visibleHoldings?.length || preSaleReservations.length ? (
-                (visibleHoldings ?? []).map((holding) => (
-                  <HoldingRow key={holding.assetId} holding={holding} />
-                )).concat(
-                  preSaleReservations.map((reservation) => (
-                    <PreSalePositionRow
-                      key={`pre-sale-${reservation.id}`}
-                      reservation={reservation}
-                      asset={assets.find((candidate) => candidate.slug === reservation.asset.slug)}
-                    />
-                  )),
-                )
+                (visibleHoldings ?? [])
+                  .map((holding) => <HoldingRow key={holding.assetId} holding={holding} />)
+                  .concat(
+                    preSaleReservations.map((reservation) => (
+                      <PreSalePositionRow
+                        key={`pre-sale-${reservation.id}`}
+                        reservation={reservation}
+                        asset={assets.find(
+                          (candidate) => candidate.slug === reservation.asset.slug,
+                        )}
+                      />
+                    )),
+                  )
               ) : (
                 <tr className="portfolio-table__empty-row">
                   <td colSpan={7}>
@@ -2917,7 +2913,9 @@ function PreSalePositionRowCard({
         <div>
           <dt>Ownership reserved</dt>
           <dd>{reservationOwnership(reservation)} ownership reserved</dd>
-          <small>{reservation.units} {reservation.units === "1" ? "Slice" : "Slices"}</small>
+          <small>
+            {reservation.units} {reservation.units === "1" ? "Slice" : "Slices"}
+          </small>
         </div>
         <div>
           <dt>Position value</dt>
@@ -2930,7 +2928,9 @@ function PreSalePositionRowCard({
           <small>{deadline}</small>
         </div>
       </dl>
-      <p className="portfolio-compact-holding__presale-note">Sell unavailable until finalization.</p>
+      <p className="portfolio-compact-holding__presale-note">
+        Sell unavailable until finalization.
+      </p>
     </article>
   );
 }
@@ -2953,7 +2953,9 @@ function PreSalePositionCard({
       <div className="portfolio-holding-card__body">
         <span className="portfolio-position-badge">PRE-SALE</span>
         <h3>{reservation.asset.title}</h3>
-        <p>{reservation.units} {reservation.units === "1" ? "Slice" : "Slices"} reserved</p>
+        <p>
+          {reservation.units} {reservation.units === "1" ? "Slice" : "Slices"} reserved
+        </p>
         <dl>
           <div>
             <dt>Ownership reserved</dt>
@@ -2969,9 +2971,16 @@ function PreSalePositionCard({
           </div>
         </dl>
         <p className="portfolio-holding-card__presale-note">
-          {reservation.deadlineAt ? formatRemainingDeadline(reservation.deadlineAt) : "Deadline unavailable"} · Sell unavailable until finalization.
+          {reservation.deadlineAt
+            ? formatRemainingDeadline(reservation.deadlineAt)
+            : "Deadline unavailable"}{" "}
+          · Sell unavailable until finalization.
         </p>
-        <Link to="/asset/$id" params={{ id: reservation.asset.slug }} className="portfolio-table__action">
+        <Link
+          to="/asset/$id"
+          params={{ id: reservation.asset.slug }}
+          className="portfolio-table__action"
+        >
           View asset <ArrowRight aria-hidden="true" />
         </Link>
       </div>
@@ -2990,14 +2999,21 @@ function PreSalePositionRow({
   return (
     <tr className="portfolio-presale-position-row">
       <td data-label="Asset">
-        <Link to="/asset/$id" params={{ id: reservation.asset.slug }} className="portfolio-asset portfolio-asset--link">
+        <Link
+          to="/asset/$id"
+          params={{ id: reservation.asset.slug }}
+          className="portfolio-asset portfolio-asset--link"
+        >
           <span
             className={`portfolio-asset__icon portfolio-asset__icon--presale${thumbnailUrl ? "" : " is-placeholder"}`}
             aria-hidden="true"
           >
             {thumbnailUrl ? <img src={thumbnailUrl} alt="" /> : <Clock3 />}
           </span>
-          <span className="portfolio-asset__copy"><strong>{reservation.asset.title}</strong><small>PRE-SALE · {reservation.units} reserved</small></span>
+          <span className="portfolio-asset__copy">
+            <strong>{reservation.asset.title}</strong>
+            <small>PRE-SALE · {reservation.units} reserved</small>
+          </span>
         </Link>
       </td>
       <td data-label="Ownership">{reservationOwnership(reservation)} ownership reserved</td>
@@ -3005,7 +3021,15 @@ function PreSalePositionRow({
       <td data-label="Price per Slice">{formatPortfolioMoney(reservation.pricePerUnitMinor)}</td>
       <td data-label="Current value">{formatPortfolioMoney(reservation.grossMinor)}</td>
       <td data-label="P/L (unrealised)">Unavailable</td>
-      <td data-label="Actions"><Link to="/asset/$id" params={{ id: reservation.asset.slug }} className="portfolio-table__action">View <ArrowRight aria-hidden="true" /></Link></td>
+      <td data-label="Actions">
+        <Link
+          to="/asset/$id"
+          params={{ id: reservation.asset.slug }}
+          className="portfolio-table__action"
+        >
+          View <ArrowRight aria-hidden="true" />
+        </Link>
+      </td>
     </tr>
   );
 }
@@ -3884,34 +3908,6 @@ function MarketWatchPanel({ query }: { query: UseQueryResult<Asset[]> }) {
         />
       )}
     </PortfolioPanel>
-  );
-}
-
-function PortfolioTrustStrip() {
-  return (
-    <section className="portfolio-trust-strip" aria-label="Slice commitments">
-      <div>
-        <ShieldCheck aria-hidden="true" />
-        <span>
-          <strong>Secure &amp; insured</strong>
-          <small>Your assets are protected with industry-leading security.</small>
-        </span>
-      </div>
-      <div>
-        <BadgeCheck aria-hidden="true" />
-        <span>
-          <strong>Transparent pricing</strong>
-          <small>Real-time market data and fair pricing you can trust.</small>
-        </span>
-      </div>
-      <div>
-        <Layers3 aria-hidden="true" />
-        <span>
-          <strong>Built for collectors</strong>
-          <small>Tools designed to help your collection grow.</small>
-        </span>
-      </div>
-    </section>
   );
 }
 
