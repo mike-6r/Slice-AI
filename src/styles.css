@@ -93804,6 +93804,9 @@ body:has(.portfolio-page)
   color: #8fa7ad;
   font-size: 0.68rem;
 }
+.wallet-stripe-payment-element__mount {
+  min-height: 2.8rem;
+}
 .wallet-detail {
   width: min(100%, 47rem);
   max-height: min(54rem, calc(100vh - 2rem));

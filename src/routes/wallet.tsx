@@ -1538,7 +1538,13 @@ function CardFundingDialog({
           Card details and any 3D Secure step are handled directly by Stripe. Slice does not see
           or store your card number or CVC.
         </p>
-        <div ref={mountRef} className="wallet-stripe-payment-element" aria-live="polite">
+        <div className="wallet-stripe-payment-element" aria-live="polite">
+          {/*
+           * Stripe owns every node below this mount point. Keeping React's
+           * loading copy beside it (rather than inside it) prevents React
+           * from trying to remove Stripe-inserted nodes on the ready render.
+           */}
+          <div ref={mountRef} className="wallet-stripe-payment-element__mount" />
           {!ready ? <span>Loading Stripe’s secure form…</span> : null}
         </div>
         {error ? <p className="wallet-bank-dialog__error">{error}</p> : null}
