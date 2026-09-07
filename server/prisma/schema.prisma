@@ -431,6 +431,14 @@ enum ConnectPayoutStatus {
   MANUAL_REVIEW
 }
 
+/// Stripe-sourced snapshots make the platform -> connected-account -> payout
+/// movement auditable without treating a Stripe balance as the Slice ledger.
+enum ConnectPayoutBalanceSnapshotStage {
+  BEFORE_TRANSFER
+  AFTER_TRANSFER
+  AFTER_PAYOUT
+}
+
 enum ComplianceCaseType {
   KYC
   KYT
@@ -450,6 +458,14 @@ enum ComplianceCaseStatus {
 enum MoneyMovementType {
   DEPOSIT
   WITHDRAWAL
+}
+
+/// The customer-facing route used to start a money movement. It is immutable
+/// evidence of the selected rail, not a substitute for provider settlement.
+enum MoneyMovementRail {
+  BACS_DIRECT_DEBIT
+  CARD
+  CONNECT_STANDARD_PAYOUT
 }
 
 enum MoneyMovementStatus {
@@ -3179,6 +3195,7 @@ model MoneyMovement {
   externalAccountId                      String?
   cashAccountId                          String
   type                                   MoneyMovementType
+  rail                                   MoneyMovementRail                @default(BACS_DIRECT_DEBIT)
   amountMinor                            BigInt
   /// Customer-entered gross amount. For withdrawals, this is the amount
   /// reserved/debited from the customer wallet.
@@ -3198,6 +3215,9 @@ model MoneyMovement {
   providerAvailableOn                    DateTime?
   providerCurrency                       String?
   providerSourceReferenceHash            String?
+  /// Safe provider-derived label only (for example, “Visa •••• 4242”).
+  /// It never holds a full PAN, bank number, or provider credential.
+  providerInstrumentLabel                String?
   encryptionKeyVersion                   String?
   idempotencyKeyHash                     String
   reservationId                          String?                       @unique
@@ -3264,11 +3284,29 @@ model ConnectPayout {
   movement                     MoneyMovement               @relation(fields: [movementId], references: [id], onDelete: Restrict)
   connectAccount               ExternalConnectAccount      @relation(fields: [connectAccountId], references: [id], onDelete: Restrict)
   providerCosts                ProviderFinancialCost[]
+  balanceSnapshots             ConnectPayoutBalanceSnapshot[]
 
   @@unique([provider, externalTransferIdHash])
   @@unique([provider, externalPayoutIdHash])
   @@index([connectAccountId, status, updatedAt])
   @@index([provider, environment, status, updatedAt])
+}
+
+/// Evidence captured from Stripe at each external payout boundary. Values are
+/// provider liquidity only, not a customer-wallet projection or a company P&L.
+model ConnectPayoutBalanceSnapshot {
+  id                       String                                 @id @default(cuid())
+  connectPayoutId          String
+  stage                    ConnectPayoutBalanceSnapshotStage
+  platformAvailableMinor   BigInt
+  platformPendingMinor     BigInt
+  connectedAvailableMinor  BigInt
+  connectedPendingMinor    BigInt
+  capturedAt               DateTime                               @default(now())
+  connectPayout            ConnectPayout                          @relation(fields: [connectPayoutId], references: [id], onDelete: Restrict)
+
+  @@unique([connectPayoutId, stage])
+  @@index([connectPayoutId, capturedAt])
 }
 
 model MoneyMovementHistory {

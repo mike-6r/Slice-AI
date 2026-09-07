@@ -1490,6 +1490,16 @@ export const mockRepositories: AppRepositories = {
         initialOffering: { scheduleVersion: "INITIAL_OFFERING_5_PERCENT_V1", feeBps: 500 },
       };
     },
+    async getCardFundingOptions() {
+      return {
+        card: {
+          available: false,
+          provider: null,
+          currency: "GBP" as const,
+          reason: "Card funding is unavailable in explicit mock mode.",
+        },
+      };
+    },
     async createConnectOnboarding() {
       throw new Error("Connect payout setup is unavailable in explicit mock mode.");
     },
@@ -1518,6 +1528,9 @@ export const mockRepositories: AppRepositories = {
     async listMovements() {
       return { items: [], nextCursor: null };
     },
+    async getMovement() {
+      throw new Error("Wallet movements are unavailable in explicit mock mode.");
+    },
     async createDeposit(amountMinor) {
       return {
         id: `mock-deposit-${Date.now()}`,
@@ -1529,6 +1542,9 @@ export const mockRepositories: AppRepositories = {
         updatedAt: now(),
         replayed: false,
       };
+    },
+    async createCardDeposit() {
+      throw new Error("Card funding is unavailable in explicit mock mode.");
     },
     async createWithdrawal({ amountMinor }) {
       return {

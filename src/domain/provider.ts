@@ -116,7 +116,23 @@ export interface FeePolicy {
   initialOffering: { scheduleVersion: string; feeBps: number };
 }
 
+export interface CardFundingOptions {
+  available: boolean;
+  provider: "STRIPE_SANDBOX" | "STRIPE_LIVE" | null;
+  currency: "GBP";
+  reason: string | null;
+}
+
+export interface CardFundingSession {
+  movement: WalletMovementView;
+  cardFunding: {
+    clientSecret: string;
+    publishableKey: string;
+  };
+}
+
 export type WalletMovementType = "DEPOSIT" | "WITHDRAWAL";
+export type WalletMovementRail = "BACS_DIRECT_DEBIT" | "CARD" | "CONNECT_STANDARD_PAYOUT";
 export type WalletMovementStatus =
   | "CREATED"
   | "PENDING_PROVIDER"
@@ -132,6 +148,7 @@ export type WalletMovementStatus =
 export interface WalletMovementView {
   id: string;
   type: WalletMovementType;
+  rail?: WalletMovementRail;
   amountMinor: string;
   sliceFeeMinor?: string;
   providerAmountMinor?: string;
@@ -142,6 +159,33 @@ export interface WalletMovementView {
   replayed: boolean;
   sourceLabel?: string | null;
   reference?: string | null;
+  provider?: {
+    name: string;
+    reference: string | null;
+    status: string;
+  };
+  fees?: {
+    sliceFeeMinor: string;
+    providerFeeMinor: string | null;
+    providerFeeStatus: "KNOWN" | "PENDING";
+    netPayoutMinor: string;
+  };
+  availability?: {
+    state: string;
+    label: string;
+    availableOn: ISODateTime | null;
+  };
+  failure?: {
+    title: string;
+    detail: string;
+    moneyDisposition: string;
+    nextStep: string;
+  } | null;
+  timeline?: Array<{
+    status: WalletMovementStatus;
+    occurredAt: ISODateTime;
+    label: string;
+  }>;
 }
 
 export interface WalletMovementPage {

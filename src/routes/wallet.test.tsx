@@ -125,7 +125,7 @@ describe("Document 016 wallet UI", () => {
     expect(html).toContain("•••• 1234");
     expect(html).toContain("Movement history");
     expect(html).toContain("Wallet insights");
-    expect(html).toContain("Settlement timeline");
+    expect(html).toContain("Movement timeline");
     expect(html).toContain("Available to trade");
     expect(html).toContain("Total wallet balance");
     expect(html).not.toContain("bank-private");
@@ -152,7 +152,7 @@ describe("Document 016 wallet UI", () => {
       movements: { items: [], nextCursor: null },
     });
     expect(html).toContain("£0.00");
-    expect(html).toContain("No bank connected");
+    expect(html).toContain("No UK bank method connected");
     expect(html).toContain("Set up a UK bank");
     expect(html).toContain("No movements yet");
     expect(html).toContain("Wallet insights");

@@ -30,6 +30,10 @@ import {
   operationWorkspaceTabs,
   type OperationWorkspaceTab,
 } from "./AdminAssetOperationsDetail.presentation";
+import {
+  GuidancePanel,
+  guidanceActorFromAuthority,
+} from "./OperationalGuidance";
 import "@/styles/admin-operations.css";
 
 const tabs = operationWorkspaceTabs;
@@ -1038,48 +1042,49 @@ function OperationsRail({
   return (
     <aside className="admin-operations-rail" aria-label="Asset operation controls">
       {operations ? (
-        <Rail title="Next Action" tone={action?.actor === "NONE" ? "ready" : "attention"}>
-          <strong>{action?.label ?? "No action projected"}</strong>
-          <p>
-            {action?.actor === "NONE"
-              ? "This asset has no pending economic action."
-              : `Next actor: ${sentence(action?.actor ?? "STAFF")}.`}
-          </p>
-          {action && action.actor !== "NONE" ? (
-            <button
-              type="button"
-              className="admin-ops-button primary"
-              onClick={() => {
-                if (action.target === "INTAKE" && item.intake) {
-                  window.location.assign(
-                    `/admin?section=intake&intake=${encodeURIComponent(item.intake.id)}`,
-                  );
-                  return;
-                }
-                onOpen(targetTab(action.target));
-              }}
-            >
-              Review action <ArrowRight aria-hidden="true" />
-            </button>
-          ) : null}
-        </Rail>
-      ) : null}
-      {operations ? (
-        <Rail title={preSaleReady ? "Pre-Sale blockers" : "Blockers"}>
-          {blocked.length ? (
-            <ul className="admin-operations-rail__list">
-              {blocked.map((blocker) => (
-                <li key={blocker}>{sentence(blocker)}</li>
-              ))}
-            </ul>
-          ) : (
-            <p>
-              {preSaleReady
-                ? "No Pre-Sale blocker. Final-market work remains separate."
-                : "No active operational blocker."}
-            </p>
-          )}
-        </Rail>
+        <GuidancePanel
+          compact
+          currentState={sentence(operations.operations.stage)}
+          nextAction={{
+            title: action?.label ?? "No action projected",
+            why:
+              action?.actor === "NONE"
+                ? "This asset has no pending economic action."
+                : blocked[0]
+                  ? sentence(blocked[0])
+                  : "The current lifecycle projection is waiting for this step.",
+            actor: guidanceActorFromAuthority(action?.actor ?? "NONE"),
+            blocker: blocked[0] ? sentence(blocked[0]) : null,
+            afterThis:
+              action?.actor === "NONE"
+                ? "Continue monitoring the authoritative market lifecycle."
+                : "The next server-authorized lifecycle step can be evaluated.",
+            action:
+              action && action.actor !== "NONE"
+                ? {
+                    label: action.target === "INTAKE" ? "Open Physical Intake" : "Open action",
+                    onClick: () => {
+                      if (action.target === "INTAKE" && item.intake) {
+                        window.location.assign(
+                          `/admin?section=intake&intake=${encodeURIComponent(item.intake.id)}`,
+                        );
+                        return;
+                      }
+                      onOpen(targetTab(action.target));
+                    },
+                  }
+                : undefined,
+          }}
+          blockers={blocked.map((blocker, index) => ({
+            label: sentence(blocker),
+            reason:
+              index === 0
+                ? preSaleReady
+                  ? "Final-market work remains separate from the active Pre-Sale."
+                  : "This is the first server-reported condition preventing progression."
+                : "This remains downstream until the primary blocker is resolved.",
+          }))}
+        />
       ) : null}
       {operations ? (
         <Rail title="Available Commands">

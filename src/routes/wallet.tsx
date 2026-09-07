@@ -13,6 +13,7 @@ import {
   BadgeCheck,
   BanknoteArrowDown,
   CalendarClock,
+  CreditCard,
   CircleAlert,
   Clock3,
   Landmark,
@@ -24,7 +25,8 @@ import {
   WalletCards,
   type LucideIcon,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { loadStripe, type Stripe, type StripeElements, type StripePaymentElement } from "@stripe/stripe-js";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { ApiError } from "@/api/http-client";
@@ -35,6 +37,8 @@ import type {
   ComplianceSession,
   ComplianceSummary,
   ConnectPayoutSetup,
+  CardFundingOptions,
+  CardFundingSession,
   FeePolicy,
   PortfolioSummary,
   WalletInsights,
@@ -67,6 +71,8 @@ type WalletMovementRequest = {
   amount: string;
 };
 
+type DepositRail = "BACS_DIRECT_DEBIT" | "CARD";
+
 export function Wallet() {
   useCurrency();
   const services = useAppServices();
@@ -74,11 +80,14 @@ export function Wallet() {
   const { isAuthenticated } = useSession();
   const [amount, setAmount] = useState("");
   const [action, setAction] = useState<WalletMovementType>("DEPOSIT");
+  const [depositRail, setDepositRail] = useState<DepositRail>("BACS_DIRECT_DEBIT");
   const [movementFilter, setMovementFilter] = useState<WalletMovementFilter>("ALL");
   const [capabilityDialog, setCapabilityDialog] = useState<AccountCapability | null>(null);
   const [withdrawalReviewAmount, setWithdrawalReviewAmount] = useState<string | null>(null);
   const [recentAuthAmount, setRecentAuthAmount] = useState<string | null>(null);
   const [recentAuthPassword, setRecentAuthPassword] = useState("");
+  const [cardFundingSession, setCardFundingSession] = useState<CardFundingSession | null>(null);
+  const [timelineMovement, setTimelineMovement] = useState<WalletMovementView | null>(null);
   const portfolio = useQuery({
     queryKey: queryKeys.portfolio.summary,
     queryFn: services.portfolio.portfolio,
@@ -107,6 +116,11 @@ export function Wallet() {
   const feePolicy = useQuery({
     queryKey: queryKeys.providers.feePolicy,
     queryFn: services.providers.feePolicy,
+    enabled: isAuthenticated,
+  });
+  const cardFundingOptions = useQuery({
+    queryKey: ["providers", "card-funding-options"],
+    queryFn: services.providers.cardFundingOptions,
     enabled: isAuthenticated,
   });
   const withdrawalOverview = useQuery({
@@ -186,6 +200,28 @@ export function Wallet() {
       }
     },
   });
+  const cardFunding = useMutation({
+    mutationFn: async ({
+      amount: requestedAmount,
+      savePaymentMethod,
+    }: {
+      amount: string;
+      savePaymentMethod: boolean;
+    }) => {
+      const amountMinor = parseWalletGbp(requestedAmount);
+      if (!amountMinor || BigInt(amountMinor) <= 0n) {
+        throw new ApiError(
+          "VALIDATION_ERROR",
+          "Enter a positive GBP amount with no more than two decimal places.",
+        );
+      }
+      return services.providers.createCardDeposit({ amountMinor, savePaymentMethod });
+    },
+    onSuccess: (session) => {
+      setCardFundingSession(session);
+      refreshWallet();
+    },
+  });
   const recentAuth = useMutation({
     mutationFn: (password: string) => services.repositories.account.confirmRecentAuth(password),
     onSuccess: () => {
@@ -209,10 +245,16 @@ export function Wallet() {
         <WalletHeading />
         <WalletKpis query={portfolio} withdrawal={withdrawalOverview} />
         <section className="wallet-row wallet-row--primary" aria-label="Wallet access and actions">
-          <ConnectedBankPanel query={banks} refreshWallet={refreshWallet} />
+          <ConnectedBankPanel
+            query={banks}
+            connectPayout={connectPayout}
+            refreshWallet={refreshWallet}
+          />
           <MoveMoneyPanel
             action={action}
             setAction={setAction}
+            depositRail={depositRail}
+            setDepositRail={setDepositRail}
             amount={amount}
             setAmount={setAmount}
             compliance={compliance}
@@ -223,9 +265,14 @@ export function Wallet() {
                 item.capability === (action === "DEPOSIT" ? "DEPOSIT_FUNDS" : "WITHDRAW_FUNDS"),
             )}
             feePolicy={feePolicy}
+            cardFundingOptions={cardFundingOptions.data?.card}
+            cardFundingBusy={cardFunding.isPending}
             withdrawalPreflight={withdrawalPreflight}
             onCapabilityRequired={setCapabilityDialog}
             onReviewWithdrawal={setWithdrawalReviewAmount}
+            onStartCardFunding={(savePaymentMethod) =>
+              cardFunding.mutate({ amount, savePaymentMethod })
+            }
           />
           <AccountStatusPanel
             query={compliance}
@@ -240,13 +287,19 @@ export function Wallet() {
           className="wallet-row wallet-row--history"
           aria-label="Wallet history and insights"
         >
-          <MovementsPanel query={movements} filter={movementFilter} setFilter={setMovementFilter} />
+          <MovementsPanel
+            query={movements}
+            filter={movementFilter}
+            setFilter={setMovementFilter}
+            onTimelineSelect={setTimelineMovement}
+          />
           <div className="wallet-side-stack">
             <SettlementTimelinePanel
               portfolio={portfolio}
               compliance={compliance}
               banks={banks}
               movements={movements}
+              selectedMovement={timelineMovement}
             />
             <WalletInsightsPanel />
           </div>
@@ -280,6 +333,20 @@ export function Wallet() {
               setRecentAuthPassword("");
             }}
             onConfirm={() => recentAuth.mutate(recentAuthPassword)}
+          />
+        ) : null}
+        {cardFundingSession ? (
+          <CardFundingDialog
+            session={cardFundingSession}
+            onClose={() => setCardFundingSession(null)}
+            onConfirmed={() => {
+              setCardFundingSession(null);
+              setAmount("");
+              refreshWallet();
+              toast.success(
+                "Card payment submitted. Your Wallet updates after Stripe confirms the payment.",
+              );
+            }}
           />
         ) : null}
       </div>
@@ -488,14 +555,20 @@ function WalletKpiSkeletons() {
 
 function ConnectedBankPanel({
   query,
+  connectPayout,
   refreshWallet,
 }: {
   query: UseQueryResult<BankConnection[]>;
+  connectPayout: UseQueryResult<ConnectPayoutSetup>;
   refreshWallet: () => void;
 }) {
   const connectedBanks = query.data?.filter((bank) => bank.status === "CONNECTED") ?? [];
   return (
-    <WalletPanel title="Connected bank" icon={<Landmark />} className="wallet-panel--bank">
+    <WalletPanel
+      title="Payment methods & payouts"
+      icon={<WalletCards />}
+      className="wallet-panel--bank"
+    >
       <div className="wallet-panel__body wallet-bank-panel-body">
         {query.isLoading ? <RowsSkeleton rows={2} /> : null}
         {query.isError ? (
@@ -517,6 +590,25 @@ function ConnectedBankPanel({
         ) : null}
         {!query.isLoading && !query.isError && !connectedBanks.length ? <BankEmpty /> : null}
         <BankConnectionControl hasConnected={connectedBanks.length > 0} />
+        <div className="wallet-payout-method-summary">
+          <div>
+            <span aria-hidden="true">
+              <ArrowUpFromLine />
+            </span>
+            <p>
+              <strong>Verified payout account</strong>
+              <small>
+                Standard GBP bank payout only. Faster delivery is never shown unless Stripe
+                explicitly returns it as eligible.
+              </small>
+            </p>
+            <StatusPill status={connectPayout.data?.status ?? "NOT_STARTED"} />
+          </div>
+          <p>
+            Payout account identity and bank details are collected securely by Stripe, not by
+            Slice.
+          </p>
+        </div>
         <div className="wallet-bank-reassurance" aria-label="Bank connection safeguards">
           <span>
             <ShieldCheck />
@@ -543,8 +635,8 @@ function BankEmpty() {
         <Landmark />
       </span>
       <div>
-        <strong>No bank connected</strong>
-        <p>Set up a UK bank mandate securely with Stripe Bacs Direct Debit before adding funds.</p>
+        <strong>No UK bank method connected</strong>
+        <p>Set up a Bacs Direct Debit mandate securely with Stripe to fund from your bank.</p>
       </div>
     </div>
   );
@@ -945,6 +1037,8 @@ function BankDisconnectDialog({
 function MoveMoneyPanel({
   action,
   setAction,
+  depositRail,
+  setDepositRail,
   amount,
   setAmount,
   compliance,
@@ -952,12 +1046,17 @@ function MoveMoneyPanel({
   movement,
   capability,
   feePolicy,
+  cardFundingOptions,
+  cardFundingBusy,
   withdrawalPreflight,
   onCapabilityRequired,
   onReviewWithdrawal,
+  onStartCardFunding,
 }: {
   action: WalletMovementType;
   setAction: (value: WalletMovementType) => void;
+  depositRail: DepositRail;
+  setDepositRail: (value: DepositRail) => void;
   amount: string;
   setAmount: (value: string) => void;
   compliance: UseQueryResult<ComplianceSummary>;
@@ -965,22 +1064,39 @@ function MoveMoneyPanel({
   movement: ReturnType<typeof useMutation<WalletMovementView, Error, WalletMovementRequest>>;
   capability: AccountCapability | undefined;
   feePolicy: UseQueryResult<FeePolicy>;
+  cardFundingOptions: CardFundingOptions | undefined;
+  cardFundingBusy: boolean;
   withdrawalPreflight: UseQueryResult<WithdrawalPreflight>;
   onCapabilityRequired: (decision: AccountCapability) => void;
   onReviewWithdrawal: (amount: string) => void;
+  onStartCardFunding: (savePaymentMethod: boolean) => void;
 }) {
+  const [savePaymentMethod, setSavePaymentMethod] = useState(false);
   const providerReady = compliance.data?.status === "APPROVED";
   const bankAvailable = Boolean(banks.data?.some((bank) => bank.status === "CONNECTED"));
-  const capabilityBlocked = Boolean(capability && !capability.allowed);
+  const isCardDeposit = action === "DEPOSIT" && depositRail === "CARD";
+  const cardAvailable = cardFundingOptions?.available === true;
+  const capabilityBlocked = Boolean(capability && !capability.allowed && !isCardDeposit);
   const domainBlocked =
-    !capabilityBlocked && (!providerReady || (action === "DEPOSIT" && !bankAvailable));
+    !capabilityBlocked &&
+    (!providerReady ||
+      (action === "DEPOSIT" && !isCardDeposit && !bankAvailable) ||
+      (isCardDeposit && !cardAvailable));
   const disabledReason =
     capability && !capability.allowed
-      ? capabilityInlineReason(capability)
+      ? isCardDeposit
+        ? !providerReady
+          ? "Complete verification to continue."
+          : !cardAvailable
+            ? (cardFundingOptions?.reason ?? "Card funding is currently unavailable.")
+            : null
+        : capabilityInlineReason(capability)
       : !providerReady
         ? "Complete verification to continue."
-        : action === "DEPOSIT" && !bankAvailable
+        : action === "DEPOSIT" && !isCardDeposit && !bankAvailable
           ? "Set up a UK bank mandate before requesting a deposit."
+          : isCardDeposit && !cardAvailable
+            ? (cardFundingOptions?.reason ?? "Card funding is currently unavailable.")
           : null;
   const requestedAmountMinor = parseWalletGbp(amount);
   const withdrawalBlocked =
@@ -1026,11 +1142,46 @@ function MoveMoneyPanel({
             </button>
           ))}
         </div>
+        {action === "DEPOSIT" ? (
+          <div className="wallet-funding-rails" role="radiogroup" aria-label="Funding method">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={depositRail === "BACS_DIRECT_DEBIT"}
+              className={depositRail === "BACS_DIRECT_DEBIT" ? "is-active" : ""}
+              onClick={() => setDepositRail("BACS_DIRECT_DEBIT")}
+            >
+              <Landmark aria-hidden="true" />
+              <span>
+                <strong>UK bank</strong>
+                <small>Free · Bacs Direct Debit</small>
+              </span>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={depositRail === "CARD"}
+              className={depositRail === "CARD" ? "is-active" : ""}
+              onClick={() => setDepositRail("CARD")}
+              disabled={cardFundingOptions?.available === false}
+            >
+              <CreditCard aria-hidden="true" />
+              <span>
+                <strong>Debit or credit card</strong>
+                <small>
+                  {cardFundingOptions?.available
+                    ? "Secure checkout · Stripe"
+                    : "Unavailable in this environment"}
+                </small>
+              </span>
+            </button>
+          </div>
+        ) : null}
         <form
           className="wallet-move-form"
           onSubmit={(event) => {
             event.preventDefault();
-            if (capability && !capability.allowed) {
+            if (capability && !capability.allowed && !isCardDeposit) {
               onCapabilityRequired(capability);
               return;
             }
@@ -1042,6 +1193,10 @@ function MoveMoneyPanel({
                 return;
               }
               onReviewWithdrawal(amount);
+              return;
+            }
+            if (isCardDeposit) {
+              onStartCardFunding(savePaymentMethod);
               return;
             }
             movement.mutate({ action: "DEPOSIT", amount });
@@ -1060,11 +1215,11 @@ function MoveMoneyPanel({
             <dl className="wallet-move-terms">
               <div>
                 <dt>Est. arrival</dt>
-                <dd>1–2 business days</dd>
+                <dd>{isCardDeposit ? "After Stripe confirms" : "1–2 business days"}</dd>
               </div>
               <div>
                 <dt>Fee</dt>
-                <dd>FREE</dd>
+                <dd>{isCardDeposit ? "Shown before you confirm" : "FREE"}</dd>
               </div>
               <div>
                 <dt>Min. deposit</dt>
@@ -1072,7 +1227,7 @@ function MoveMoneyPanel({
               </div>
               <div>
                 <dt>Max. deposit</dt>
-                <dd>£25,000.00</dd>
+                <dd>{isCardDeposit ? "Set by your card issuer" : "£25,000.00"}</dd>
               </div>
             </dl>
           ) : null}
@@ -1081,6 +1236,21 @@ function MoveMoneyPanel({
               Withdrawals use your verified payout account. Slice does not collect bank details in
               this form, and eligible cash remains reserved until the provider confirms the payout.
             </p>
+          ) : isCardDeposit ? (
+            <>
+              <p>
+                Your card details and any 3D Secure check are handled by Stripe. Slice receives
+                only the provider payment outcome, never your card number or security code.
+              </p>
+              <label className="wallet-card-save">
+                <input
+                  type="checkbox"
+                  checked={savePaymentMethod}
+                  onChange={(event) => setSavePaymentMethod(event.target.checked)}
+                />
+                <span>Save this card with Stripe for a future on-session payment.</span>
+              </label>
+            </>
           ) : (
             <p>
               Bacs deposits can remain held while the bank debit clears. Held cash is visible in
@@ -1106,12 +1276,22 @@ function MoveMoneyPanel({
                 : ""}
             </p>
           ) : null}
-          <button type="submit" disabled={domainBlocked || withdrawalBlocked || movement.isPending}>
-            {movement.isPending
+          <button
+            type="submit"
+            disabled={
+              domainBlocked ||
+              withdrawalBlocked ||
+              movement.isPending ||
+              cardFundingBusy
+            }
+          >
+            {movement.isPending || cardFundingBusy
               ? "Submitting…"
               : action === "DEPOSIT"
                 ? amount
-                  ? `Deposit ${formatWalletMoney(parseWalletGbp(amount) ?? "0")}`
+                  ? isCardDeposit
+                    ? `Continue to secure card payment`
+                    : `Deposit ${formatWalletMoney(parseWalletGbp(amount) ?? "0")}`
                   : "Deposit"
                 : "Request withdrawal"}
             <ArrowRight aria-hidden="true" />
@@ -1123,10 +1303,13 @@ function MoveMoneyPanel({
           {disabledReason ??
             withdrawalBlockReason ??
             (action === "DEPOSIT"
-              ? "Deposits are protected by Stripe and our bank partners."
+              ? isCardDeposit
+                ? "Your card payment remains pending until Stripe sends a verified confirmation."
+                : "Deposits are protected by Stripe and our bank partners."
               : "Your request will appear in wallet history once it is accepted.")}
         </p>
         {movement.error ? <InlineError error={movement.error} /> : null}
+        {cardFundingBusy ? <p className="wallet-move-note">Preparing Stripe’s secure payment form…</p> : null}
         {movement.data ? (
           <p className="wallet-move-success">
             {movement.data.type === "DEPOSIT" ? "Deposit" : "Withdrawal"} request created —{" "}
@@ -1222,6 +1405,159 @@ function WithdrawalReviewDialog({
             disabled={!canConfirm || busy}
           >
             {busy ? "Submitting…" : "Request withdrawal"}
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function CardFundingDialog({
+  session,
+  onClose,
+  onConfirmed,
+}: {
+  session: CardFundingSession;
+  onClose: () => void;
+  onConfirmed: () => void;
+}) {
+  const mountRef = useRef<HTMLDivElement | null>(null);
+  const stripeRef = useRef<Stripe | null>(null);
+  const elementsRef = useRef<StripeElements | null>(null);
+  const paymentElementRef = useRef<StripePaymentElement | null>(null);
+  const [ready, setReady] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setReady(false);
+    setError(null);
+    void (async () => {
+      const stripe = await loadStripe(session.cardFunding.publishableKey);
+      if (!active) return;
+      if (!stripe || !mountRef.current) {
+        setError("Stripe’s secure card form could not be loaded. Please try again.");
+        return;
+      }
+      const elements = stripe.elements({
+        clientSecret: session.cardFunding.clientSecret,
+        appearance: {
+          theme: "night",
+          variables: {
+            colorPrimary: "#27d9b0",
+            colorBackground: "#0a151a",
+            colorText: "#e8f4f1",
+            colorDanger: "#ff7f89",
+            borderRadius: "6px",
+          },
+        },
+      });
+      const paymentElement = elements.create("payment", { layout: "tabs" });
+      paymentElement.mount(mountRef.current);
+      stripeRef.current = stripe;
+      elementsRef.current = elements;
+      paymentElementRef.current = paymentElement;
+      setReady(true);
+    })();
+    return () => {
+      active = false;
+      paymentElementRef.current?.destroy();
+      paymentElementRef.current = null;
+      elementsRef.current = null;
+      stripeRef.current = null;
+    };
+  }, [session.cardFunding.clientSecret, session.cardFunding.publishableKey]);
+
+  const confirm = async () => {
+    const stripe = stripeRef.current;
+    const elements = elementsRef.current;
+    if (!stripe || !elements) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: new URL("/wallet?cardFunding=return", window.location.origin).toString(),
+        },
+        redirect: "if_required",
+      });
+      if (result.error) {
+        setError(
+          "Stripe could not confirm this card payment. Check the card details or try another card.",
+        );
+        return;
+      }
+      if (
+        result.paymentIntent?.status === "succeeded" ||
+        result.paymentIntent?.status === "processing"
+      ) {
+        onConfirmed();
+        return;
+      }
+      setError("Complete any required bank authentication to finish this card payment.");
+    } catch {
+      setError("Stripe could not confirm this card payment. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="wallet-bank-dialog-backdrop" role="presentation">
+      <section
+        className="wallet-bank-dialog wallet-card-funding-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="card-funding-title"
+      >
+        <header>
+          <div>
+            <p className="page-kicker">Secure card payment</p>
+            <h2 id="card-funding-title">Fund your Wallet with Stripe</h2>
+          </div>
+          <button
+            type="button"
+            className="wallet-bank-dialog__close"
+            onClick={onClose}
+            disabled={submitting}
+            aria-label="Close secure card payment"
+          >
+            ×
+          </button>
+        </header>
+        <div className="wallet-card-funding-summary">
+          <span>Amount</span>
+          <strong>{formatWalletMoney(session.movement.amountMinor)}</strong>
+          <small>
+            {session.movement.reference ?? `WLT-${session.movement.id.slice(0, 8).toUpperCase()}`}
+          </small>
+        </div>
+        <p className="wallet-bank-dialog__intro">
+          Card details and any 3D Secure step are handled directly by Stripe. Slice does not see
+          or store your card number or CVC.
+        </p>
+        <div ref={mountRef} className="wallet-stripe-payment-element" aria-live="polite">
+          {!ready ? <span>Loading Stripe’s secure form…</span> : null}
+        </div>
+        {error ? <p className="wallet-bank-dialog__error">{error}</p> : null}
+        <footer>
+          <button
+            type="button"
+            className="wallet-bank-dialog__secondary"
+            onClick={onClose}
+            disabled={submitting}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="wallet-bank-dialog__danger"
+            onClick={() => void confirm()}
+            disabled={!ready || submitting}
+          >
+            {submitting ? "Confirming…" : `Pay ${formatWalletMoney(session.movement.amountMinor)}`}
           </button>
         </footer>
       </section>
@@ -1554,10 +1890,12 @@ function MovementsPanel({
   query,
   filter,
   setFilter,
+  onTimelineSelect,
 }: {
   query: UseQueryResult<WalletMovementPage>;
   filter: WalletMovementFilter;
   setFilter: (value: WalletMovementFilter) => void;
+  onTimelineSelect: (item: WalletMovementView) => void;
 }) {
   const items = filterWalletMovements(query.data?.items ?? [], filter);
   const [selected, setSelected] = useState<WalletMovementView | null>(null);
@@ -1613,7 +1951,14 @@ function MovementsPanel({
               </thead>
               <tbody>
                 {items.map((item) => (
-                  <MovementRow key={item.id} item={item} onSelect={setSelected} />
+                  <MovementRow
+                    key={item.id}
+                    item={item}
+                    onSelect={(selectedItem) => {
+                      setSelected(selectedItem);
+                      onTimelineSelect(selectedItem);
+                    }}
+                  />
                 ))}
               </tbody>
             </table>
@@ -1753,6 +2098,12 @@ function WalletInsightsPanel() {
 }
 
 function MovementDetail({ item, onClose }: { item: WalletMovementView; onClose: () => void }) {
+  const services = useAppServices();
+  const detail = useQuery({
+    queryKey: ["providers", "movement", item.id],
+    queryFn: () => services.providers.movement(item.id),
+  });
+  const movement = detail.data ?? item;
   return (
     <div className="wallet-detail-backdrop" role="presentation" onClick={onClose}>
       <section
@@ -1765,7 +2116,9 @@ function MovementDetail({ item, onClose }: { item: WalletMovementView; onClose: 
         <div className="wallet-detail__head">
           <div>
             <p className="page-kicker">Movement detail</p>
-            <h3 id="movement-detail-title">{item.type === "DEPOSIT" ? "Deposit" : "Withdrawal"}</h3>
+            <h3 id="movement-detail-title">
+              {movement.type === "DEPOSIT" ? "Deposit" : "Withdrawal"}
+            </h3>
           </div>
           <button type="button" aria-label="Close movement detail" onClick={onClose}>
             ×
@@ -1775,36 +2128,129 @@ function MovementDetail({ item, onClose }: { item: WalletMovementView; onClose: 
           <div>
             <dt>Amount</dt>
             <dd>
-              {item.type === "DEPOSIT" ? "+" : "−"}
-              {formatWalletMoney(item.amountMinor)}
+              {movement.type === "DEPOSIT" ? "+" : "−"}
+              {formatWalletMoney(movement.amountMinor)}
             </dd>
           </div>
           <div>
             <dt>Status</dt>
             <dd>
-              <StatusPill status={item.status} />
+              <StatusPill status={movement.status} />
             </dd>
           </div>
           <div>
             <dt>Reference</dt>
-            <dd>{item.reference ?? `WLT-${item.id.slice(0, 8).toUpperCase()}`}</dd>
+            <dd>{movement.reference ?? `WLT-${movement.id.slice(0, 8).toUpperCase()}`}</dd>
           </div>
           <div>
             <dt>Requested</dt>
-            <dd>{formatDate(item.createdAt)}</dd>
+            <dd>{formatDate(movement.createdAt)}</dd>
           </div>
           <div>
             <dt>Source / destination</dt>
-            <dd>{item.sourceLabel ?? "GBP wallet"}</dd>
+            <dd>{movement.sourceLabel ?? "GBP wallet"}</dd>
           </div>
           <div>
             <dt>Currency</dt>
             <dd>GBP</dd>
           </div>
         </dl>
-        <p className="wallet-detail__note">
-          Provider updates are verified before Slice changes wallet balances.
-        </p>
+        <div className="wallet-detail__sections">
+          <section>
+            <p className="wallet-detail__section-label">Funding and settlement</p>
+            <dl className="wallet-detail__facts">
+              <div>
+                <dt>Method</dt>
+                <dd>{movementRailLabel(movement.rail, movement.type)}</dd>
+              </div>
+              <div>
+                <dt>Availability</dt>
+                <dd>{movement.availability?.label ?? "Waiting for provider confirmation"}</dd>
+              </div>
+              {movement.availability?.availableOn ? (
+                <div>
+                  <dt>Provider availability</dt>
+                  <dd>{formatDate(movement.availability.availableOn)}</dd>
+                </div>
+              ) : null}
+              <div>
+                <dt>Provider</dt>
+                <dd>
+                  {movement.provider
+                    ? `${movement.provider.name} · ${movement.provider.status}`
+                    : "Provider status pending"}
+                </dd>
+              </div>
+            </dl>
+          </section>
+          <section>
+            <p className="wallet-detail__section-label">Fees and payout</p>
+            <dl className="wallet-detail__facts">
+              <div>
+                <dt>Slice fee</dt>
+                <dd>{formatWalletMoney(movement.fees?.sliceFeeMinor ?? movement.sliceFeeMinor ?? "0")}</dd>
+              </div>
+              <div>
+                <dt>Provider fee</dt>
+                <dd>
+                  {movement.fees?.providerFeeStatus === "KNOWN" && movement.fees.providerFeeMinor
+                    ? formatWalletMoney(movement.fees.providerFeeMinor)
+                    : "Pending provider evidence"}
+                </dd>
+              </div>
+              <div>
+                <dt>{movement.type === "WITHDRAWAL" ? "Net payout" : "Provider net"}</dt>
+                <dd>{formatWalletMoney(movement.fees?.netPayoutMinor ?? movement.amountMinor)}</dd>
+              </div>
+              <div>
+                <dt>Provider reference</dt>
+                <dd>{movement.provider?.reference ?? "Available after provider creates it"}</dd>
+              </div>
+            </dl>
+          </section>
+          {movement.failure ? (
+            <section className="wallet-detail__outcome is-warning">
+              <p className="wallet-detail__section-label">What happened</p>
+              <strong>{movement.failure.title}</strong>
+              <p>{movement.failure.detail}</p>
+              <dl>
+                <div>
+                  <dt>Money status</dt>
+                  <dd>{movement.failure.moneyDisposition}</dd>
+                </div>
+                <div>
+                  <dt>Next step</dt>
+                  <dd>{movement.failure.nextStep}</dd>
+                </div>
+              </dl>
+            </section>
+          ) : null}
+          {movement.timeline?.length ? (
+            <section className="wallet-detail__lifecycle">
+              <p className="wallet-detail__section-label">Verified movement updates</p>
+              <ol>
+                {movement.timeline.map((event) => (
+                  <li key={`${event.occurredAt}-${event.status}`}>
+                    <span>
+                      <strong>{event.label}</strong>
+                      <small>{formatDate(event.occurredAt)}</small>
+                    </span>
+                    <StatusPill status={event.status} />
+                  </li>
+                ))}
+              </ol>
+            </section>
+          ) : null}
+        </div>
+        {detail.isError ? (
+          <p className="wallet-detail__note">
+            The latest provider detail could not be loaded. Your ledger history remains available.
+          </p>
+        ) : (
+          <p className="wallet-detail__note">
+            Provider updates are verified before Slice changes wallet balances.
+          </p>
+        )}
       </section>
     </div>
   );
@@ -1815,55 +2261,37 @@ function SettlementTimelinePanel({
   compliance,
   banks,
   movements,
+  selectedMovement,
 }: {
   portfolio: UseQueryResult<PortfolioSummary>;
   compliance: UseQueryResult<ComplianceSummary>;
   banks: UseQueryResult<BankConnection[]>;
   movements: UseQueryResult<WalletMovementPage>;
+  selectedMovement: WalletMovementView | null;
 }) {
-  const latestDeposit = movements.data?.items.find((item) => item.type === "DEPOSIT");
-  const cashAvailable =
-    portfolio.data?.cash.availableMinor !== undefined &&
-    BigInt(portfolio.data.cash.availableMinor) > 0n;
-  const steps = [
-    {
-      label: "Bank linked",
-      state: banks.data?.some((bank) => bank.status === "CONNECTED") ? "complete" : "next",
-    },
-    {
-      label: "Identity verified",
-      state:
-        compliance.data?.status === "APPROVED"
-          ? "complete"
-          : compliance.data?.status === "PENDING"
-            ? "active"
-            : "next",
-    },
-    {
-      label: "Deposit pending",
-      state:
-        latestDeposit?.status === "SETTLED"
-          ? "complete"
-          : latestDeposit &&
-              ["CREATED", "PENDING_PROVIDER", "PROCESSING", "MANUAL_REVIEW", "HELD"].includes(
-                latestDeposit.status,
-              )
-            ? "active"
-            : "next",
-    },
-    { label: "Funds available", state: cashAvailable ? "complete" : "next" },
-    {
-      label: "Withdraw enabled",
-      state: cashAvailable && compliance.data?.status === "APPROVED" ? "complete" : "next",
-    },
-  ] as const;
+  void portfolio;
+  void compliance;
+  void banks;
+  const relevant =
+    selectedMovement ??
+    movements.data?.items.find((item) =>
+      ["PENDING_PROVIDER", "PROCESSING", "HELD", "MANUAL_REVIEW"].includes(item.status),
+    ) ??
+    movements.data?.items[0];
+  const steps = settlementStepsFor(relevant);
   return (
     <WalletPanel
-      title="Settlement timeline"
+      title={relevant ? "Movement timeline" : "Settlement timeline"}
       icon={<CalendarClock />}
       className="wallet-panel--timeline"
     >
       <div className="wallet-timeline" aria-label="Wallet settlement timeline">
+        {relevant ? (
+          <p className="wallet-timeline__context">
+            {movementRailLabel(relevant.rail, relevant.type)} ·{" "}
+            {relevant.reference ?? `WLT-${relevant.id.slice(0, 8).toUpperCase()}`}
+          </p>
+        ) : null}
         {steps.map((step, index) => (
           <div key={step.label} className={`wallet-timeline__step is-${step.state}`}>
             <span>{index + 1}</span>
@@ -2196,6 +2624,69 @@ function friendlyStatus(status: string) {
     .toLowerCase()
     .replaceAll("_", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function movementRailLabel(
+  rail: WalletMovementView["rail"],
+  type: WalletMovementType,
+) {
+  if (rail === "CARD") return "Stripe card payment";
+  if (rail === "BACS_DIRECT_DEBIT") return "UK bank · Bacs Direct Debit";
+  if (rail === "CONNECT_STANDARD_PAYOUT") return "Stripe Connect · standard payout";
+  return type === "WITHDRAWAL" ? "Verified payout account" : "Funding movement";
+}
+
+function settlementStepsFor(item: WalletMovementView | undefined) {
+  if (!item) {
+    return [
+      { label: "Choose a funding method", state: "next" },
+      { label: "Request a movement", state: "next" },
+      { label: "Provider confirmation", state: "next" },
+      { label: "Wallet availability", state: "next" },
+    ] as const;
+  }
+  const completed = item.status === "SETTLED";
+  const processing = ["PENDING_PROVIDER", "PROCESSING", "HELD", "MANUAL_REVIEW"].includes(
+    item.status,
+  );
+  const terminalIssue = ["FAILED", "CANCELLED", "RETURNED", "REVERSED"].includes(item.status);
+  const stateFor = (position: number) =>
+    terminalIssue
+      ? position === 0
+        ? "complete"
+        : position === 1
+          ? "active"
+          : "next"
+      : completed
+        ? "complete"
+        : processing && position === 1
+          ? "active"
+          : processing && position === 0
+            ? "complete"
+            : "next";
+  if (item.type === "WITHDRAWAL") {
+    return [
+      { label: "Withdrawal requested", state: stateFor(0) },
+      { label: "Wallet cash reserved", state: stateFor(1) },
+      { label: "Provider payout processing", state: completed ? "complete" : processing ? "active" : "next" },
+      { label: "Payout confirmed", state: completed ? "complete" : "next" },
+    ] as const;
+  }
+  return [
+    {
+      label: item.rail === "CARD" ? "Secure card payment created" : "Bank deposit requested",
+      state: stateFor(0),
+    },
+    { label: "Provider payment confirmation", state: completed ? "complete" : processing ? "active" : "next" },
+    {
+      label: item.rail === "BACS_DIRECT_DEBIT" ? "Funds clearing" : "Wallet credit recorded",
+      state: item.status === "HELD" || item.status === "SETTLED" ? "complete" : "next",
+    },
+    {
+      label: "Available to trade or withdraw",
+      state: completed ? "complete" : "next",
+    },
+  ] as const;
 }
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-GB", {

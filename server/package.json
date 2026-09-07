@@ -23,6 +23,7 @@
     "qa:finance": "ts-node src/scripts/manual-finance-qa.ts",
     "qa:community": "ts-node src/scripts/manual-community-governance-distribution-qa.ts",
     "qa:providers": "ts-node src/scripts/manual-provider-qa.ts",
+    "qa:stripe-withdrawal-trace": "ts-node src/scripts/sandbox-stripe-withdrawal-trace.ts",
     "qa:load": "ts-node src/scripts/local-load-check.ts",
     "staging:demo:setup": "ts-node src/scripts/setup-staging-demo.ts",
     "staging:demo:preflight": "ts-node src/scripts/preflight-staging-demo.ts",

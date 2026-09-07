@@ -78,6 +78,16 @@ type Requirement = {
   satisfied: boolean;
 };
 
+type CapabilityEvaluationOptions = {
+  /**
+   * A Stripe-hosted card payment is a verified funding path but is not a Bacs
+   * mandate. Keep the ordinary Wallet summary bank-gated while permitting the
+   * dedicated card endpoint to evaluate the same identity/compliance policy
+   * without inventing a bank connection.
+   */
+  requireBacsBankForDeposit?: boolean;
+};
+
 export type CapabilityDecision = {
   allowed: boolean;
   capability: AccountCapability;
@@ -111,6 +121,7 @@ export class AccountCapabilityService {
   async evaluate(
     userId: string,
     capability: AccountCapability,
+    options: CapabilityEvaluationOptions = {},
   ): Promise<CapabilityDecision> {
     const user = await this.db.user.findUnique({
       where: { id: userId },
@@ -349,6 +360,7 @@ export class AccountCapabilityService {
 
     if (
       capability === 'DEPOSIT_FUNDS' &&
+      options.requireBacsBankForDeposit !== false &&
       this.config.providerMode !== 'local' &&
       user.externalFinancialAccounts.length === 0
     ) {
@@ -408,6 +420,20 @@ export class AccountCapabilityService {
       code: decision.reason,
       message: customerMessage(decision.reason!),
       capability,
+      status: decision.status,
+      requirements: decision.requirements,
+    });
+  }
+
+  async requireCardFunding(actor: Actor): Promise<void> {
+    const decision = await this.evaluate(actor.userId, 'DEPOSIT_FUNDS', {
+      requireBacsBankForDeposit: false,
+    });
+    if (decision.allowed) return;
+    throw new ForbiddenException({
+      code: decision.reason,
+      message: customerMessage(decision.reason!),
+      capability: decision.capability,
       status: decision.status,
       requirements: decision.requirements,
     });

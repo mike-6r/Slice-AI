@@ -13,6 +13,7 @@ import { StripeClientFactory } from './stripe-provider.client';
 import { StripeConnectPayoutService } from './stripe-connect-payout.service';
 import { CollectorMembershipService } from './collector-membership.service';
 import { ProviderFinancialCostService } from './provider-financial-cost.service';
+import { StripeCardFundingService } from './stripe-card-funding.service';
 
 type Provider = ActiveProviderCode;
 
@@ -34,6 +35,7 @@ export class ProviderWebhookService {
     private readonly connectPayouts: StripeConnectPayoutService,
     private readonly memberships: CollectorMembershipService,
     private readonly providerCosts: ProviderFinancialCostService,
+    private readonly cardFunding: StripeCardFundingService,
   ) {}
 
   async receive(input: {
@@ -200,7 +202,7 @@ export class ProviderWebhookService {
     const metadata = (payload.metadata && typeof payload.metadata === 'object' ? payload.metadata : {}) as Record<string, unknown>;
     const movementId = this.text(metadata.slice_movement_id) ?? (await this.db.moneyMovement.findUnique({ where: { provider_providerReferenceHash: { provider, providerReferenceHash: this.crypto.hash(paymentIntentId) } }, select: { id: true } }))?.id;
     if (!movementId) return;
-    const current = await this.db.moneyMovement.findUnique({ where: { id: movementId }, select: { status: true, provider: true } });
+    const current = await this.db.moneyMovement.findUnique({ where: { id: movementId }, select: { status: true, provider: true, rail: true } });
     if (!current || current.provider !== provider) return;
     const returnLike =
       isBacsReturnEvent ||
@@ -226,6 +228,9 @@ export class ProviderWebhookService {
       await this.movements.processingFromProvider({ movementId, requestId });
     } else if (type === 'payment_intent.succeeded') {
       await this.movements.completeFromProvider({ movementId, providerReference: paymentIntentId, providerEventId: eventId, requestId });
+      if (current.rail === 'CARD') {
+        await this.cardFunding.syncInstrumentLabel(movementId, paymentIntentId);
+      }
       await this.providerCosts.observePaymentIntent({ movementId, paymentIntentId, requestId });
     } else if (type === 'payment_intent.payment_failed') {
       const error = payload.last_payment_error && typeof payload.last_payment_error === 'object' ? (payload.last_payment_error as Record<string, unknown>).code : undefined;

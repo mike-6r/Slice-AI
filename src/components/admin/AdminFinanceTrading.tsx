@@ -19,6 +19,7 @@ import type {
   AdminFinanceRecord,
   AdminFinanceRecordsResponse,
 } from "@/data/repositories";
+import { GuidancePanel } from "./OperationalGuidance";
 import "@/styles/admin-finance.css";
 
 type FinanceTab =
@@ -213,6 +214,42 @@ export function AdminFinanceTrading({
     1,
   );
   const loading = dashboardLoading || recordsLoading;
+  const reconciliationMismatches =
+    dashboard?.reconciliationSummary.find((entry) => entry.status === "MISMATCH")?.count ?? 0;
+  const payoutLiquidityWarning = Boolean(dashboard?.payoutLiquidity?.warning);
+  const pendingDeposits = Number(dashboard?.kpis.pendingDepositsMinor ?? 0) > 0;
+  const financeGuidance = reconciliationMismatches
+    ? {
+        title: "Review reconciliation mismatches",
+        why: `${reconciliationMismatches} backend-reported reconciliation record${reconciliationMismatches === 1 ? " requires" : "s require"} Finance review.`,
+        actor: "FINANCE" as const,
+        blocker: "A reconciliation mismatch is still open.",
+        afterThis: "The authoritative reconciliation state can be updated after investigation.",
+        action: { label: "Open reconciliation", onClick: () => selectTab("reconciliation") },
+      }
+    : payoutLiquidityWarning
+      ? {
+          title: "Review payout liquidity",
+          why: "Stripe platform available balance is below the current withdrawal-eligible customer liabilities.",
+          actor: "FINANCE" as const,
+          blocker: "Payout liquidity is insufficient for the current eligible liability projection.",
+          afterThis: "Withdrawal preflight remains fail-closed until the provider balance covers the liability.",
+          action: { label: "Open movements", onClick: () => selectTab("movements") },
+        }
+      : pendingDeposits
+        ? {
+            title: "Waiting for deposit clearing",
+            why: "Customer deposits are pending the provider or bank clearing process.",
+            actor: "EXTERNAL_PROVIDER" as const,
+            blocker: "Provider clearing has not completed.",
+            afterThis: "The ledger will show the settled provider outcome when it is received.",
+          }
+        : {
+            title: "No finance action required",
+            why: "No current reconciliation or payout-liquidity exception is reported by the finance projection.",
+            actor: "NO_ACTION_REQUIRED" as const,
+            afterThis: "Continue monitoring immutable ledger and provider projections.",
+          };
 
   const table = useMemo(() => {
     const rows = records?.items ?? [];
@@ -291,6 +328,8 @@ export function AdminFinanceTrading({
           <p>Monitor wallets, orders, executions, and financial activity across the platform.</p>
         </div>
       </header>
+
+      <GuidancePanel compact currentState="Financial operations" nextAction={financeGuidance} />
 
       <section className="admin-finance-authority-section">
         <div className="admin-finance-authority-heading">

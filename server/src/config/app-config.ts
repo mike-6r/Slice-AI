@@ -74,6 +74,10 @@ const configSchema = z.object({
   // The active GBP customer-funding rail is deliberately narrow. A future
   // USD/ACH rail must use a separate, explicitly approved product mode.
   STRIPE_BANK_FUNDING_RAIL: z.enum(['bacs_debit']).default('bacs_debit'),
+  // Card funding is separately approved because it has a materially different
+  // authentication and dispute profile from Bacs Direct Debit. It defaults
+  // off in every environment, including Stripe test mode.
+  STRIPE_CARD_FUNDING_ENABLED: z.enum(['true', 'false']).default('false'),
   PROVIDER_ENCRYPTION_KEY: z.string().min(32).optional(),
   STRIPE_SECRET_KEY: z.string().min(16).optional(),
   STRIPE_PUBLISHABLE_KEY: z.string().min(1).optional(),
@@ -395,6 +399,7 @@ export type AppConfig = {
   providersProductionEnabled?: boolean;
   stripeLiveEnabled: boolean;
   stripeBankFundingRail: 'bacs_debit';
+  stripeCardFundingEnabled?: boolean;
   providerEncryptionKey?: string;
   stripeSecretKey?: string;
   stripePublishableKey?: string;
@@ -834,6 +839,7 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     stripeIdentityEnabled,
     stripeLiveEnabled,
     stripeBankFundingRail: parsed.STRIPE_BANK_FUNDING_RAIL,
+    stripeCardFundingEnabled: parsed.STRIPE_CARD_FUNDING_ENABLED === 'true',
     providerEncryptionKey: parsed.PROVIDER_ENCRYPTION_KEY,
     stripeSecretKey: parsed.STRIPE_SECRET_KEY,
     stripePublishableKey: parsed.STRIPE_PUBLISHABLE_KEY,

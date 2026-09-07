@@ -28,6 +28,11 @@ import {
   formatCollectibleDetailState,
   type CollectibleDetailTab,
 } from "./AdminCollectibleDetail.presentation";
+import {
+  GuidancePanel,
+  guidanceActorFromAuthority,
+  guidanceStepState,
+} from "./OperationalGuidance";
 
 type HistoryFilter =
   "all" | "identity" | "physical" | "valuation" | "ownership" | "market" | "restrictions";
@@ -50,6 +55,11 @@ export function AdminCollectibleDetail({
   const detail = useQuery({
     queryKey: ["admin", "collectible-dossier", assetId],
     queryFn: () => services.repositories.admin.getCollectibleDetail(assetId, selected),
+    staleTime: 20_000,
+  });
+  const operations = useQuery({
+    queryKey: ["admin", "collectible-guidance", assetId],
+    queryFn: () => services.repositories.lifecycle.getOperationDetail(assetId),
     staleTime: 20_000,
   });
   if (detail.isLoading)
@@ -75,6 +85,7 @@ export function AdminCollectibleDetail({
       </button>
       <DossierHeader item={item} />
       <SnapshotStrip item={item} />
+      {operations.data ? <CollectibleOperationalGuidance item={item} operations={operations.data} /> : null}
       <nav className="dossier-tabs" aria-label="Collectible dossier sections">
         {collectibleDetailTabs.map((value) => (
           <button
@@ -94,6 +105,68 @@ export function AdminCollectibleDetail({
       {selected === "market" ? <Market item={item} /> : null}
       {selected === "history" ? <History item={item} /> : null}
     </main>
+  );
+}
+
+function CollectibleOperationalGuidance({
+  item,
+  operations,
+}: {
+  item: Detail;
+  operations: import("@/data/repositories").AssetOperationDetailProjection;
+}) {
+  const action = operations.operations.nextAction;
+  const blocker = operations.operations.blockers[0] ?? null;
+  const currentIndex = operations.economicWorkflow.findIndex((step) =>
+    ["BLOCKED", "IN_PROGRESS", "NOT_STARTED"].includes(step.state),
+  );
+  const following = operations.economicWorkflow[currentIndex + 1];
+  const intakeHref = item.dossier.provenance
+    ? `/admin?section=intake&intake=${encodeURIComponent(item.dossier.provenance.submissionId)}`
+    : null;
+  const targetHref =
+    action.target === "INTAKE" && intakeHref
+      ? intakeHref
+      : `/admin?section=assetOperations&asset=${encodeURIComponent(item.id)}`;
+  return (
+    <GuidancePanel
+      className="collectible-dossier__guidance"
+      currentState={sentence(operations.operations.stage)}
+      nextAction={{
+        title: action.label,
+        why:
+          action.actor === "NONE"
+            ? "The canonical record has no active operational task."
+            : blocker
+              ? sentence(blocker)
+              : "This is the next server-authoritative lifecycle action for the canonical record.",
+        actor: guidanceActorFromAuthority(action.actor),
+        blocker: blocker ? sentence(blocker) : null,
+        afterThis: following
+          ? `${following.label} can be evaluated from the authoritative lifecycle.`
+          : "The canonical record remains available for audit and monitoring.",
+        action:
+          action.actor === "NONE"
+            ? undefined
+            : {
+                label: action.target === "INTAKE" ? "Open Physical Intake" : "Open Asset Operations",
+                href: targetHref,
+              },
+      }}
+      progress={operations.economicWorkflow.map((step) => ({
+        id: step.key,
+        label: step.label,
+        state: guidanceStepState(step.state),
+        detail: step.detail,
+      }))}
+      blockers={operations.operations.blockers.map((value, index) => ({
+        label: sentence(value),
+        reason:
+          index === 0
+            ? "This is the primary server-reported condition preventing progress."
+            : "This remains downstream until the primary condition is resolved.",
+      }))}
+    />
   );
 }
 

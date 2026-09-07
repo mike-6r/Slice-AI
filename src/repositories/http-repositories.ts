@@ -1141,6 +1141,7 @@ const mapMovement = (raw: unknown): WalletMovementView => {
   return {
     id: stringField(value.id, "movement.id"),
     type: value.type,
+    ...(isMovementRail(value.rail) ? { rail: value.rail } : {}),
     amountMinor: stringField(value.amountMinor, "movement.amountMinor"),
     ...(value.sliceFeeMinor === undefined
       ? {}
@@ -1164,6 +1165,141 @@ const mapMovement = (raw: unknown): WalletMovementView => {
     ...(value.reference === undefined
       ? {}
       : { reference: nullableString(value.reference, "movement.reference") }),
+    ...(value.provider === undefined
+      ? {}
+      : {
+          provider: (() => {
+            const provider = objectField(value.provider, "movement.provider");
+            return {
+              name: stringField(provider.name, "movement.provider.name"),
+              reference: nullableString(provider.reference, "movement.provider.reference"),
+              status: stringField(provider.status, "movement.provider.status"),
+            };
+          })(),
+        }),
+    ...(value.fees === undefined
+      ? {}
+      : {
+          fees: (() => {
+            const fees = objectField(value.fees, "movement.fees");
+            if (fees.providerFeeStatus !== "KNOWN" && fees.providerFeeStatus !== "PENDING")
+              throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid movement fee status.");
+            return {
+              sliceFeeMinor: stringField(fees.sliceFeeMinor, "movement.fees.sliceFeeMinor"),
+              providerFeeMinor: nullableString(
+                fees.providerFeeMinor,
+                "movement.fees.providerFeeMinor",
+              ),
+              providerFeeStatus: fees.providerFeeStatus,
+              netPayoutMinor: stringField(fees.netPayoutMinor, "movement.fees.netPayoutMinor"),
+            };
+          })(),
+        }),
+    ...(value.availability === undefined
+      ? {}
+      : {
+          availability: (() => {
+            const availability = objectField(value.availability, "movement.availability");
+            return {
+              state: stringField(availability.state, "movement.availability.state"),
+              label: stringField(availability.label, "movement.availability.label"),
+              availableOn: nullableString(
+                availability.availableOn,
+                "movement.availability.availableOn",
+              ) as ISODateTime | null,
+            };
+          })(),
+        }),
+    ...(value.failure === undefined
+      ? {}
+      : {
+          failure:
+            value.failure === null
+              ? null
+              : (() => {
+                  const failure = objectField(value.failure, "movement.failure");
+                  return {
+                    title: stringField(failure.title, "movement.failure.title"),
+                    detail: stringField(failure.detail, "movement.failure.detail"),
+                    moneyDisposition: stringField(
+                      failure.moneyDisposition,
+                      "movement.failure.moneyDisposition",
+                    ),
+                    nextStep: stringField(failure.nextStep, "movement.failure.nextStep"),
+                  };
+                })(),
+        }),
+    ...(value.timeline === undefined
+      ? {}
+      : {
+          timeline: Array.isArray(value.timeline)
+            ? value.timeline.map((entry) => {
+                const timeline = objectField(entry, "movement.timeline");
+                if (
+                  ![
+                    "CREATED",
+                    "PENDING_PROVIDER",
+                    "PROCESSING",
+                    "SETTLED",
+                    "FAILED",
+                    "CANCELLED",
+                    "RETURNED",
+                    "MANUAL_REVIEW",
+                    "HELD",
+                    "REVERSED",
+                  ].includes(String(timeline.status))
+                )
+                  throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid movement timeline.");
+                return {
+                  status: timeline.status as WalletMovementView["status"],
+                  occurredAt: stringField(
+                    timeline.occurredAt,
+                    "movement.timeline.occurredAt",
+                  ) as ISODateTime,
+                  label: stringField(timeline.label, "movement.timeline.label"),
+                };
+              })
+            : (() => {
+                throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid movement timeline.");
+              })(),
+        }),
+  };
+};
+
+const isMovementRail = (value: unknown): value is NonNullable<WalletMovementView["rail"]> =>
+  value === "BACS_DIRECT_DEBIT" || value === "CARD" || value === "CONNECT_STANDARD_PAYOUT";
+
+const mapCardFundingOptions = (raw: unknown) => {
+  const value = objectField(raw, "card funding options");
+  const card = objectField(value.card, "card funding options.card");
+  if (
+    typeof card.available !== "boolean" ||
+    card.currency !== "GBP" ||
+    ![null, "STRIPE_SANDBOX", "STRIPE_LIVE"].includes(card.provider as null)
+  )
+    throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid card funding options from service.");
+  return {
+    card: {
+      available: card.available,
+      provider: card.provider as "STRIPE_SANDBOX" | "STRIPE_LIVE" | null,
+      currency: "GBP" as const,
+      reason: nullableString(card.reason, "card funding options.card.reason"),
+    },
+  };
+};
+
+const mapCardFundingSession = (raw: unknown) => {
+  const value = objectField(raw, "card funding session");
+  const cardFunding = objectField(value.cardFunding, "card funding session.cardFunding");
+  return {
+    movement: mapMovement(value.movement),
+    cardFunding: {
+      clientSecret: stringField(cardFunding.clientSecret, "card funding session.clientSecret"),
+      publishableKey: stringField(
+        cardFunding.publishableKey,
+        "card funding session.publishableKey",
+      ),
+    },
   };
 };
 const mapMovementPage = (raw: unknown): WalletMovementPage => {
@@ -7325,6 +7461,9 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       async getFeePolicy() {
         return mapFeePolicy(await client.get<unknown>("/fees"));
       },
+      async getCardFundingOptions() {
+        return mapCardFundingOptions(await client.get<unknown>("/wallet/funding-options"));
+      },
       async createConnectOnboarding() {
         return mapConnectPayoutSetup(
           await client.request<unknown>("/wallet/payouts/connect/onboarding", {
@@ -7344,6 +7483,11 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       async listMovements(input) {
         return mapMovementPage(await client.get<unknown>("/wallet/movements", input));
       },
+      async getMovement(id) {
+        return mapMovement(
+          await client.get<unknown>(`/wallet/movements/${encodeURIComponent(id)}`),
+        );
+      },
       async getWithdrawalPreflight(input) {
         return mapWithdrawalPreflight(
           await client.get<unknown>("/wallet/withdrawal-preflight", {
@@ -7356,6 +7500,15 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           await client.request<unknown>("/wallet/deposits", {
             method: "POST",
             body: { amountMinor },
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
+        );
+      },
+      async createCardDeposit(input) {
+        return mapCardFundingSession(
+          await client.request<unknown>("/wallet/card-deposits", {
+            method: "POST",
+            body: input,
             headers: { "Idempotency-Key": idempotencyKey() },
           }),
         );

@@ -30,8 +30,13 @@ import {
   StripeConnectPayoutService,
 } from './stripe-connect-payout.service';
 import { WithdrawalPreflightService } from './withdrawal-preflight.service';
+import { StripeCardFundingService } from './stripe-card-funding.service';
 
 type MovementType = 'DEPOSIT' | 'WITHDRAWAL';
+type MovementRail =
+  | 'BACS_DIRECT_DEBIT'
+  | 'CARD'
+  | 'CONNECT_STANDARD_PAYOUT';
 
 /**
  * Destination screening belongs to the local destination-based provider
@@ -137,6 +142,7 @@ export class WalletMovementService {
     @Optional() private readonly capabilities?: AccountCapabilityService,
     @Optional() private readonly bankLinks?: BankConnectionService,
     @Optional() private readonly connectPayouts?: StripeConnectPayoutService,
+    @Optional() private readonly cardFunding?: StripeCardFundingService,
     @Optional()
     private readonly withdrawalPreflight?: WithdrawalPreflightService,
   ) {
@@ -158,7 +164,41 @@ export class WalletMovementService {
       amountMinor,
       requestId,
       key,
+      'BACS_DIRECT_DEBIT',
     );
+  }
+
+  async createCardDeposit(
+    actor: Actor,
+    amountMinor: string,
+    requestId: string,
+    key: string,
+    savePaymentMethod: boolean,
+  ) {
+    const options = this.cardFunding?.options();
+    if (!options?.available) {
+      throw new ConflictException({
+        code: 'CARD_FUNDING_UNAVAILABLE',
+        message: options?.reason ?? 'Card funding is currently unavailable.',
+      });
+    }
+    await this.capabilities?.requireCardFunding(actor);
+    const result = await this.create(
+      actor,
+      'DEPOSIT',
+      amountMinor,
+      requestId,
+      key,
+      'CARD',
+      savePaymentMethod,
+    );
+    if (!('cardFunding' in result)) {
+      throw new ConflictException({
+        code: 'CARD_FUNDING_UNAVAILABLE',
+        message: 'The secure card payment could not be prepared.',
+      });
+    }
+    return result;
   }
 
   async createWithdrawal(
@@ -233,7 +273,13 @@ export class WalletMovementService {
         message: 'Withdrawal requires compliance review.',
       });
     }
-    return this.create(actor, 'WITHDRAWAL', amountMinor, requestId, key);
+    return (await this.create(
+      actor,
+      'WITHDRAWAL',
+      amountMinor,
+      requestId,
+      key,
+    )).movement;
   }
 
   private async createWithCapability(
@@ -242,9 +288,11 @@ export class WalletMovementService {
     amountMinor: string,
     requestId: string,
     key: string,
+    rail: MovementRail,
   ) {
     await this.capabilities?.require(actor, 'DEPOSIT_FUNDS');
-    return this.create(actor, type, amountMinor, requestId, key);
+    return (await this.create(actor, type, amountMinor, requestId, key, rail))
+      .movement;
   }
 
   private async create(
@@ -253,6 +301,10 @@ export class WalletMovementService {
     amountText: string,
     requestId: string,
     key: string,
+    rail: MovementRail = type === 'WITHDRAWAL'
+      ? 'CONNECT_STANDARD_PAYOUT'
+      : 'BACS_DIRECT_DEBIT',
+    savePaymentMethod = false,
   ) {
     const amountMinor = this.amount(amountText);
     const sliceFeeMinor =
@@ -272,7 +324,7 @@ export class WalletMovementService {
         },
       },
     });
-    if (existing) return this.safe(existing, true);
+    if (existing) return { movement: this.safe(existing, true) };
     if (type === 'WITHDRAWAL' && this.config.providerMode !== 'local') {
       if (!this.withdrawalPreflight)
         throw new ConflictException({
@@ -320,7 +372,7 @@ export class WalletMovementService {
         return { movement: existingAfterLock, reused: true };
       if (type === 'WITHDRAWAL')
         await this.enforceWithdrawalLimits(db, actor.userId, amountMinor);
-      if (type === 'DEPOSIT')
+      if (type === 'DEPOSIT' && rail === 'BACS_DIRECT_DEBIT')
         await this.enforceDepositLimits(db, actor.userId, amountMinor);
       if (type === 'DEPOSIT') {
         // New accounts do not need a ledger row until they use cash. Lock the
@@ -329,7 +381,9 @@ export class WalletMovementService {
         await db.$queryRaw`SELECT id FROM "User" WHERE id = ${actor.userId} FOR UPDATE`;
       }
       const bacsRiskHold =
-        type === 'DEPOSIT' && this.ledger.bacsRiskHoldEnabled();
+        type === 'DEPOSIT' &&
+        rail === 'BACS_DIRECT_DEBIT' &&
+        this.ledger.bacsRiskHoldEnabled();
       const cashAccounts = await db.financialAccount.findMany({
         where: {
           ownerType: 'USER',
@@ -390,6 +444,7 @@ export class WalletMovementService {
           userId: actor.userId,
           cashAccountId: cash.id,
           type,
+          rail,
           amountMinor,
           sliceFeeMinor,
           providerAmountMinor,
@@ -410,7 +465,9 @@ export class WalletMovementService {
       return { movement: created, reused: false };
     });
     const movement = movementResult.movement;
-    if (movementResult.reused) return this.safe(movement, true);
+    if (movementResult.reused) {
+      return { movement: this.safe(movement, true) };
+    }
 
     let providerLiquidityReservationId: string | null = null;
     let providerLiquidityConsumed = false;
@@ -496,7 +553,17 @@ export class WalletMovementService {
         createdAt: new Date(),
       });
     });
-    if (type === 'DEPOSIT' && this.config.providerMode !== 'local') {
+    let cardFunding:
+      | {
+          clientSecret: string;
+          publishableKey: string;
+        }
+      | undefined;
+    if (
+      type === 'DEPOSIT' &&
+      rail === 'BACS_DIRECT_DEBIT' &&
+      this.config.providerMode !== 'local'
+    ) {
       if (!this.bankLinks)
         throw new ConflictException({
           code: 'STRIPE_PROVIDER_UNAVAILABLE',
@@ -541,10 +608,72 @@ export class WalletMovementService {
       } catch (error) {
         await this.failFromProvider({
           movementId: movement.id,
-          reasonCode:
-            error instanceof Error
-              ? error.message.slice(0, 64)
-              : 'STRIPE_PROVIDER_ERROR',
+          reasonCode: 'STRIPE_BACS_DEPOSIT_START_FAILED',
+          requestId,
+        });
+        throw error;
+      }
+    }
+    if (
+      type === 'DEPOSIT' &&
+      rail === 'CARD' &&
+      this.config.providerMode !== 'local'
+    ) {
+      if (!this.cardFunding) {
+        await this.failFromProvider({
+          movementId: movement.id,
+          reasonCode: 'STRIPE_CARD_FUNDING_UNAVAILABLE',
+          requestId,
+        });
+        throw new ConflictException({
+          code: 'STRIPE_CARD_FUNDING_UNAVAILABLE',
+          message: 'Card funding is not configured.',
+        });
+      }
+      try {
+        const external = await this.cardFunding.createPaymentIntent({
+          userId: actor.userId,
+          movementId: movement.id,
+          amountMinor: amountText,
+          savePaymentMethod,
+        });
+        const providerHash = this.crypto.hash(external.providerReference);
+        await this.db.$transaction(async (db) => {
+          const current = await db.moneyMovement.findUniqueOrThrow({
+            where: { id: movement.id },
+          });
+          await db.moneyMovement.update({
+            where: { id: movement.id },
+            data: {
+              status: external.status,
+              providerReferenceCiphertext: this.crypto.encrypt(
+                external.providerReference,
+                `movement:${movement.id}`,
+              ),
+              providerReferenceHash: providerHash,
+              encryptionKeyVersion: this.crypto.keyVersion,
+              failureCode: null,
+              version: { increment: 1 },
+            },
+          });
+          await db.moneyMovementHistory.create({
+            data: {
+              id: randomUUID(),
+              movementId: movement.id,
+              fromStatus: current.status,
+              toStatus: external.status,
+              reasonCode: 'STRIPE_CARD_PAYMENT_INTENT_CREATED',
+            },
+          });
+        });
+        cardFunding = {
+          clientSecret: external.clientSecret,
+          publishableKey: external.publishableKey,
+        };
+      } catch (error) {
+        await this.failFromProvider({
+          movementId: movement.id,
+          reasonCode: 'STRIPE_CARD_FUNDING_START_FAILED',
           requestId,
         });
         throw error;
@@ -641,12 +770,13 @@ export class WalletMovementService {
         throw error;
       }
     }
-    return this.safe(
+    const safe = this.safe(
       await this.db.moneyMovement.findUniqueOrThrow({
         where: { id: movement.id },
       }),
       false,
     );
+    return { movement: safe, ...(cardFunding ? { cardFunding } : {}) };
   }
 
   async processingFromProvider(input: {
@@ -1442,6 +1572,20 @@ export class WalletMovementService {
             accountType: true,
           },
         },
+        history: {
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          select: {
+            toStatus: true,
+            reasonCode: true,
+            createdAt: true,
+          },
+        },
+        providerCosts: {
+          select: {
+            amountMinor: true,
+            status: true,
+          },
+        },
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
@@ -1450,6 +1594,182 @@ export class WalletMovementService {
     return {
       items: page.map((item) => this.safe(item, false)),
       nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
+    };
+  }
+
+  async detail(userId: string, movementId: string) {
+    const movement = await this.db.moneyMovement.findFirst({
+      where: { id: movementId, userId },
+      include: {
+        externalAccount: {
+          select: {
+            institutionName: true,
+            accountName: true,
+            accountMask: true,
+            accountType: true,
+          },
+        },
+        history: {
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          select: {
+            toStatus: true,
+            reasonCode: true,
+            createdAt: true,
+          },
+        },
+        providerCosts: {
+          select: {
+            amountMinor: true,
+            status: true,
+          },
+        },
+      },
+    });
+    if (!movement) {
+      throw new NotFoundException({
+        code: 'MOVEMENT_NOT_FOUND',
+        message: 'Money movement was not found.',
+      });
+    }
+    return this.safe(movement, false);
+  }
+
+  /**
+   * Staff-only reconciliation trace. It deliberately excludes client secrets,
+   * payment-method details, bank details, webhook payloads, and encryption
+   * material. The returned provider IDs are sufficient to open the matching
+   * Stripe records from a protected operations surface.
+   */
+  async staffTrace(movementId: string) {
+    const movement = await this.db.moneyMovement.findUnique({
+      where: { id: movementId },
+      include: {
+        history: {
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          select: { toStatus: true, reasonCode: true, createdAt: true },
+        },
+        providerCosts: {
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          select: {
+            sourceObjectType: true,
+            sourceObjectId: true,
+            balanceTransactionId: true,
+            amountMinor: true,
+            status: true,
+            postedJournalTransactionId: true,
+          },
+        },
+        connectPayout: {
+          select: {
+            id: true,
+            status: true,
+            failureCode: true,
+            externalTransferIdCiphertext: true,
+            externalPayoutIdCiphertext: true,
+            connectAccount: {
+              select: {
+                id: true,
+                externalAccountIdCiphertext: true,
+              },
+            },
+            balanceSnapshots: {
+              orderBy: [{ capturedAt: 'asc' }, { id: 'asc' }],
+              select: {
+                stage: true,
+                platformAvailableMinor: true,
+                platformPendingMinor: true,
+                connectedAvailableMinor: true,
+                connectedPendingMinor: true,
+                capturedAt: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!movement) {
+      throw new NotFoundException({
+        code: 'MOVEMENT_NOT_FOUND',
+        message: 'Money movement was not found.',
+      });
+    }
+    return {
+      movement: {
+        id: movement.id,
+        userId: movement.userId,
+        type: movement.type,
+        rail: movement.rail,
+        status: movement.status,
+        amountMinor: movement.amountMinor.toString(),
+        sliceFeeMinor: movement.sliceFeeMinor.toString(),
+        providerAmountMinor: (
+          movement.providerAmountMinor ?? movement.amountMinor
+        ).toString(),
+        provider: movement.provider,
+        environment: this.config.providerMode,
+        ledgerTransactionId: movement.ledgerTransactionId,
+        reservationId: movement.reservationId,
+        createdAt: movement.createdAt.toISOString(),
+        updatedAt: movement.updatedAt.toISOString(),
+        settledAt: movement.settledAt?.toISOString() ?? null,
+      },
+      provider: {
+        paymentIntentId: this.decryptMovementReference(movement),
+        balanceTransactionId: this.decryptMovementBalanceTransaction(movement),
+        sourceObjectIds: movement.providerCosts.map((cost) => ({
+          type: cost.sourceObjectType,
+          id: cost.sourceObjectId,
+        })),
+        connectTransferId: movement.connectPayout
+          ? this.decryptConnectReference(
+              movement.connectPayout.externalTransferIdCiphertext,
+              `connect-transfer:${movement.connectPayout.id}`,
+            )
+          : null,
+        connectPayoutId: movement.connectPayout
+          ? this.decryptConnectReference(
+              movement.connectPayout.externalPayoutIdCiphertext,
+              `connect-payout:${movement.connectPayout.id}`,
+            )
+          : null,
+        connectedAccountId: movement.connectPayout
+          ? this.decryptConnectReference(
+              movement.connectPayout.connectAccount.externalAccountIdCiphertext,
+              `connect-account:${movement.connectPayout.connectAccount.id}`,
+            )
+          : null,
+      },
+      providerCosts: movement.providerCosts.map((cost) => ({
+        status: cost.status,
+        amountMinor: cost.amountMinor?.toString() ?? null,
+        balanceTransactionId: cost.balanceTransactionId,
+        postedJournalTransactionId: cost.postedJournalTransactionId,
+      })),
+      lifecycle: movement.history.map((event) => ({
+        status: event.toStatus,
+        reasonCode: event.reasonCode,
+        occurredAt: event.createdAt.toISOString(),
+      })),
+      payout: movement.connectPayout
+        ? {
+            status: movement.connectPayout.status,
+            failureCode: movement.connectPayout.failureCode,
+            balanceSnapshots: movement.connectPayout.balanceSnapshots.map(
+              (snapshot) => ({
+                stage: snapshot.stage,
+                platform: {
+                  availableMinor: snapshot.platformAvailableMinor.toString(),
+                  pendingMinor: snapshot.platformPendingMinor.toString(),
+                },
+                connected: {
+                  availableMinor: snapshot.connectedAvailableMinor.toString(),
+                  pendingMinor: snapshot.connectedPendingMinor.toString(),
+                },
+                capturedAt: snapshot.capturedAt.toISOString(),
+              }),
+            ),
+          }
+        : null,
     };
   }
 
@@ -1664,6 +1984,7 @@ export class WalletMovementService {
     item: {
       id: string;
       type: string;
+      rail?: string;
       amountMinor: bigint;
       sliceFeeMinor?: bigint;
       providerAmountMinor?: bigint | null;
@@ -1671,6 +1992,12 @@ export class WalletMovementService {
       status: string;
       createdAt: Date;
       updatedAt: Date;
+      providerReferenceCiphertext?: string | null;
+      providerBalanceTransactionIdCiphertext?: string | null;
+      providerFeeMinor?: bigint | null;
+      providerNetMinor?: bigint | null;
+      providerAvailableOn?: Date | null;
+      providerInstrumentLabel?: string | null;
       externalAccount?: {
         institutionName: string | null;
         accountName: string | null;
@@ -1678,12 +2005,50 @@ export class WalletMovementService {
         accountType: string;
       } | null;
       failureCode?: string | null;
+      history?: Array<{
+        toStatus: string;
+        reasonCode: string;
+        createdAt: Date;
+      }>;
+      providerCosts?: Array<{
+        amountMinor: bigint | null;
+        status: string;
+      }>;
     },
     replayed: boolean,
   ) {
+    const knownProviderCost =
+      item.providerFeeMinor ??
+      item.providerCosts
+        ?.filter((cost) =>
+          ['OBSERVED', 'POSTED', 'RECONCILED'].includes(cost.status),
+        )
+        .reduce((total, cost) => total + (cost.amountMinor ?? 0n), 0n);
+    const providerFeeKnown =
+      item.providerFeeMinor !== undefined && item.providerFeeMinor !== null
+        ? true
+        : Boolean(
+            item.providerCosts?.some((cost) =>
+              ['OBSERVED', 'POSTED', 'RECONCILED'].includes(cost.status),
+            ),
+          );
+    const sourceLabel = item.externalAccount
+      ? `${item.externalAccount.institutionName ?? item.externalAccount.accountName ?? (item.externalAccount.accountType === 'bacs_debit' ? 'UK bank account' : 'Connected account')}${item.externalAccount.accountMask ? ` · •••• ${item.externalAccount.accountMask}` : ''}`
+      : item.providerInstrumentLabel ??
+        (item.rail === 'CARD'
+          ? 'Card payment'
+          : item.type === 'WITHDRAWAL'
+            ? 'GBP wallet → verified payout account'
+            : 'GBP wallet');
+    const failure = customerFailure(
+      item.type,
+      item.status,
+      item.failureCode ?? null,
+    );
     return {
       id: item.id,
       type: item.type,
+      rail: item.rail ?? 'BACS_DIRECT_DEBIT',
       amountMinor: item.amountMinor.toString(),
       sliceFeeMinor: (item.sliceFeeMinor ?? 0n).toString(),
       providerAmountMinor: (
@@ -1694,12 +2059,248 @@ export class WalletMovementService {
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
       replayed,
-      sourceLabel: item.externalAccount
-        ? `${item.externalAccount.institutionName ?? item.externalAccount.accountName ?? (item.externalAccount.accountType === 'bacs_debit' ? 'UK bank account' : 'Connected account')}${item.externalAccount.accountMask ? ` · •••• ${item.externalAccount.accountMask}` : ''}`
-        : item.type === 'WITHDRAWAL'
-          ? 'GBP wallet → payout destination'
-          : 'GBP wallet',
+      sourceLabel,
       reference: `WLT-${item.id.slice(0, 8).toUpperCase()}`,
+      provider: {
+        name:
+          item.rail === 'BACS_DIRECT_DEBIT' || item.rail === 'CARD'
+            ? 'Stripe'
+            : item.rail === 'CONNECT_STANDARD_PAYOUT'
+              ? 'Stripe Connect'
+              : 'Provider',
+        reference: this.safeProviderReference(item),
+        status: providerStatusLabel(item.status),
+      },
+      fees: {
+        sliceFeeMinor: (item.sliceFeeMinor ?? 0n).toString(),
+        providerFeeMinor: providerFeeKnown
+          ? (knownProviderCost ?? 0n).toString()
+          : null,
+        providerFeeStatus: providerFeeKnown ? 'KNOWN' : 'PENDING',
+        netPayoutMinor: (
+          item.type === 'WITHDRAWAL'
+            ? item.providerAmountMinor ?? item.amountMinor
+            : item.providerNetMinor ?? item.amountMinor
+        ).toString(),
+      },
+      availability: movementAvailability(
+        item.type,
+        item.status,
+        item.providerAvailableOn ?? null,
+      ),
+      failure,
+      timeline: (item.history ?? []).map((event) => ({
+        status: event.toStatus,
+        occurredAt: event.createdAt.toISOString(),
+        label: customerTimelineLabel(
+          item.type,
+          item.rail ?? 'BACS_DIRECT_DEBIT',
+          event.toStatus,
+          event.reasonCode,
+        ),
+      })),
     };
   }
+
+  private safeProviderReference(item: {
+    id: string;
+    providerReferenceCiphertext?: string | null;
+  }) {
+    const reference = this.decryptMovementReference(item);
+    return reference
+      ? `STR-${reference.slice(-6).toUpperCase()}`
+      : null;
+  }
+
+  private decryptMovementReference(item: {
+    id: string;
+    providerReferenceCiphertext?: string | null;
+  }) {
+    return this.decryptConnectReference(
+      item.providerReferenceCiphertext,
+      `movement:${item.id}`,
+    );
+  }
+
+  private decryptMovementBalanceTransaction(item: {
+    id: string;
+    providerBalanceTransactionIdCiphertext?: string | null;
+  }) {
+    return this.decryptConnectReference(
+      item.providerBalanceTransactionIdCiphertext,
+      `movement-balance-transaction:${item.id}`,
+    );
+  }
+
+  private decryptConnectReference(
+    ciphertext: string | null | undefined,
+    context: string,
+  ) {
+    if (!ciphertext) return null;
+    try {
+      return this.crypto.decrypt(ciphertext, context);
+    } catch {
+      return null;
+    }
+  }
+}
+
+function providerStatusLabel(status: string) {
+  if (status === 'SETTLED') return 'Confirmed';
+  if (status === 'HELD') return 'Clearing';
+  if (status === 'MANUAL_REVIEW') return 'Under review';
+  if (status === 'FAILED' || status === 'CANCELLED') return 'Not completed';
+  if (status === 'RETURNED' || status === 'REVERSED') return 'Returned';
+  return 'Awaiting confirmation';
+}
+
+function movementAvailability(
+  type: string,
+  status: string,
+  availableOn: Date | null,
+) {
+  if (type === 'WITHDRAWAL') {
+    if (status === 'SETTLED') {
+      return {
+        state: 'PAID_OUT',
+        label: 'Payout confirmed by provider',
+        availableOn: null,
+      };
+    }
+    if (status === 'FAILED' || status === 'CANCELLED') {
+      return {
+        state: 'NOT_WITHDRAWN',
+        label: 'No cash was withdrawn from your Slice wallet',
+        availableOn: null,
+      };
+    }
+    if (status === 'MANUAL_REVIEW') {
+      return {
+        state: 'RESERVED',
+        label: 'Cash remains reserved while the payout is reviewed',
+        availableOn: null,
+      };
+    }
+    return {
+      state: 'RESERVED',
+      label: 'Cash remains reserved until the payout is confirmed',
+      availableOn: null,
+    };
+  }
+  if (status === 'SETTLED') {
+    return {
+      state: 'AVAILABLE',
+      label: 'Available in your Slice wallet',
+      availableOn: availableOn?.toISOString() ?? null,
+    };
+  }
+  if (status === 'HELD') {
+    return {
+      state: 'CLEARING',
+      label: 'Visible in your wallet, but not yet available to trade or withdraw',
+      availableOn: availableOn?.toISOString() ?? null,
+    };
+  }
+  if (status === 'FAILED' || status === 'CANCELLED') {
+    return {
+      state: 'NOT_ADDED',
+      label: 'No cash was added to your Slice wallet',
+      availableOn: null,
+    };
+  }
+  return {
+    state: 'PENDING',
+    label: 'Waiting for verified provider confirmation',
+    availableOn: availableOn?.toISOString() ?? null,
+  };
+}
+
+function customerFailure(type: string, status: string, failureCode: string | null) {
+  if (!['FAILED', 'CANCELLED', 'MANUAL_REVIEW', 'RETURNED', 'REVERSED'].includes(status)) {
+    return null;
+  }
+  if (status === 'MANUAL_REVIEW') {
+    return {
+      title: 'Movement under review',
+      detail:
+        type === 'WITHDRAWAL'
+          ? 'We are confirming the provider payout state before changing your wallet balance.'
+          : 'We are reviewing this funding movement before making it available.',
+      moneyDisposition:
+        type === 'WITHDRAWAL'
+          ? 'Your cash remains reserved while we confirm the outcome.'
+          : 'This deposit is not available to trade or withdraw.',
+      nextStep: 'We will update your Wallet when the review is complete.',
+    };
+  }
+  if (status === 'RETURNED' || status === 'REVERSED') {
+    return {
+      title: 'Provider movement returned',
+      detail: 'The provider reported that this movement was returned or reversed.',
+      moneyDisposition:
+        type === 'WITHDRAWAL'
+          ? 'The withdrawal was not completed. Check your Wallet balance before trying again.'
+          : 'The returned funds are not available in your Slice wallet.',
+      nextStep: 'Contact support if you need help with this reference.',
+    };
+  }
+  const cardFailure =
+    failureCode?.includes('CARD') ||
+    failureCode?.includes('PAYMENT') ||
+    failureCode === 'card_declined' ||
+    failureCode === 'authentication_required';
+  return {
+    title:
+      type === 'WITHDRAWAL'
+        ? 'Withdrawal not completed'
+        : cardFailure
+          ? 'Card payment not completed'
+          : 'Deposit not completed',
+    detail:
+      type === 'WITHDRAWAL'
+        ? 'The payout provider could not complete this withdrawal.'
+        : cardFailure
+          ? 'Your card payment could not be confirmed by the provider.'
+          : 'Your bank deposit could not be confirmed by the provider.',
+    moneyDisposition:
+      type === 'WITHDRAWAL'
+        ? 'No cash was withdrawn from your Slice wallet.'
+        : 'No cash was added to your Slice wallet.',
+    nextStep:
+      type === 'WITHDRAWAL'
+        ? 'Check your payout setup and try again when your cash is available.'
+        : cardFailure
+          ? 'Try another card or check with your card issuer.'
+          : 'Check your bank mandate and try again.',
+  };
+}
+
+function customerTimelineLabel(
+  type: string,
+  rail: string,
+  status: string,
+  reasonCode: string,
+) {
+  if (status === 'PENDING_PROVIDER') {
+    return type === 'WITHDRAWAL'
+      ? 'Withdrawal requested and wallet cash reserved'
+      : rail === 'CARD'
+        ? 'Secure card payment created'
+        : 'Bank deposit requested';
+  }
+  if (status === 'PROCESSING') return 'Provider is processing this movement';
+  if (status === 'HELD') return 'Provider payment confirmed; funds are clearing';
+  if (status === 'SETTLED') {
+    return type === 'WITHDRAWAL'
+      ? 'Provider confirmed the payout'
+      : 'Provider confirmation recorded in your Slice wallet';
+  }
+  if (status === 'FAILED') return 'Provider could not complete this movement';
+  if (status === 'CANCELLED') return 'Provider payment was cancelled';
+  if (status === 'MANUAL_REVIEW') return 'Provider state requires review';
+  if (status === 'RETURNED') return 'Provider returned this movement';
+  if (status === 'REVERSED') return 'Provider reversed this movement';
+  return reasonCode === 'INTENT_CREATED'
+    ? 'Movement request created'
+    : 'Movement status updated';
 }

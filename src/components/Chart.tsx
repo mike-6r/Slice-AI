@@ -207,6 +207,13 @@ export function PriceChart({
   const activeTooltipTop = activeCoordinates
     ? Math.max(38, Math.min(62, (activeCoordinates[1] / height) * 100))
     : 50;
+  const activeTooltipAnchor = activeCoordinates
+    ? activeCoordinates[0] / width < 0.3
+      ? "start"
+      : activeCoordinates[0] / width > 0.7
+        ? "end"
+        : "center"
+    : "center";
   const handlePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     if (!rect.width) return;
@@ -319,6 +326,7 @@ export function PriceChart({
             top: `${activeTooltipTop}%`,
           }}
           data-placement="contained"
+          data-anchor={activeTooltipAnchor}
           role="status"
           aria-live="polite"
         >

@@ -30,6 +30,7 @@ import { logout } from "@/auth/actions";
 import { useSession } from "@/auth/use-session";
 import type { SubmissionReviewDetail } from "@/domain";
 import { AdminReviewMedia } from "@/components/admin/AdminReviewMedia";
+import { ActionOwnerBadge } from "@/components/admin/OperationalGuidance";
 import { Wordmark } from "@/components/layout/MainNavigation";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import type { AdminSection } from "./-admin-route-state";
@@ -1138,6 +1139,11 @@ function ReviewNextAction({
   const evidenceRemaining = evidence
     ? Math.max(0, evidence.required - evidence.acceptedRequired)
     : 0;
+  const nextActor = waitingForCollector
+    ? "COLLECTOR"
+    : selfReviewBlocked
+      ? "REVIEWER"
+      : "REVIEWER";
 
   let eyebrow = "NEXT ACTION";
   let title = "Review required checks";
@@ -1231,6 +1237,19 @@ function ReviewNextAction({
         <span className="admin-review-next-action-eyebrow">{eyebrow}</span>
         <h2>{title}</h2>
         <p>{copy}</p>
+        <div className="admin-review-next-action-owner">
+          <ActionOwnerBadge actor={nextActor} />
+          <span>
+            <small>{waitingForCollector ? "Admin action" : "After this"}</small>
+            <strong>
+              {waitingForCollector
+                ? "None required until the collector updates the submission."
+                : ready
+                  ? "An authorized reviewer can record the decision."
+                  : "The next required review check can be completed."}
+            </strong>
+          </span>
+        </div>
         {!selfReviewBlocked && !waitingForCollector ? (
           <small>
             Required checks: {required.complete} / {required.total} complete

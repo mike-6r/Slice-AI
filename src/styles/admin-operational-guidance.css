@@ -1,0 +1,94 @@
+.admin-guidance-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--color-primary, #6ee7c8) 28%, transparent);
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--color-primary, #6ee7c8) 7%, transparent), transparent 45%),
+    rgba(10, 20, 23, .72);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .035);
+}
+
+.admin-guidance-panel--compact { gap: 10px; padding: 12px; }
+.admin-guidance-primary { display: grid; gap: 8px; }
+.admin-guidance-primary__heading,
+.admin-guidance-primary__meta,
+.admin-guidance-progress header,
+.admin-guidance-blockers header,
+.admin-guidance-commands header,
+.admin-guidance-commands article,
+.admin-guidance-owner,
+.admin-guidance-progress li > div,
+.admin-guidance-blockers li { display: flex; align-items: center; }
+.admin-guidance-primary__heading { justify-content: space-between; gap: 12px; }
+.admin-guidance-primary__heading > div,
+.admin-guidance-primary__meta > div,
+.admin-guidance-owner > span,
+.admin-guidance-progress li > div > span,
+.admin-guidance-blockers li > span,
+.admin-guidance-commands article > div { display: grid; gap: 2px; min-width: 0; }
+.admin-guidance-primary__heading span,
+.admin-guidance-progress header > span,
+.admin-guidance-blockers header > span,
+.admin-guidance-commands header > span,
+.admin-guidance-primary__meta small,
+.admin-guidance-owner small { color: #7d9b98; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.admin-guidance-primary h2 { margin: 2px 0 0; color: #f1fbf8; font-size: clamp(17px, 1.45vw, 22px); line-height: 1.16; }
+.admin-guidance-primary__heading em { flex: 0 0 auto; padding: 4px 7px; border: 1px solid rgba(126, 228, 200, .25); border-radius: 999px; color: #a7e9d7; font-size: 10px; font-style: normal; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.admin-guidance-primary > p,
+.admin-guidance-blockers > p { margin: 0; color: #afc1be; font-size: 13px; line-height: 1.45; }
+.admin-guidance-primary__meta { flex-wrap: wrap; align-items: stretch; gap: 8px; }
+.admin-guidance-primary__meta > div:not(.admin-guidance-owner) { min-width: 132px; padding: 7px 9px; border-left: 1px solid rgba(158, 202, 194, .18); }
+.admin-guidance-primary__meta strong { color: #e4f0ed; font-size: 12px; line-height: 1.3; }
+.admin-guidance-owner { gap: 7px; min-width: 132px; padding: 7px 9px; border: 1px solid rgba(158, 202, 194, .16); border-radius: 9px; background: rgba(2, 10, 12, .27); }
+.admin-guidance-owner svg { width: 15px; color: #7de2c3; }
+.admin-guidance-owner--waiting svg { color: #d5aa62; }
+.admin-guidance-owner strong { color: #e4f0ed; font-size: 12px; }
+.admin-guidance-action-wrap { display: grid; gap: 5px; }
+.admin-guidance-action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: fit-content; min-height: 32px; padding: 7px 10px; border: 1px solid rgba(125, 226, 195, .55); border-radius: 8px; background: rgba(58, 173, 145, .13); color: #b7f5e2; font-size: 12px; font-weight: 800; text-decoration: none; cursor: pointer; }
+.admin-guidance-action:hover:not(:disabled) { background: rgba(58, 173, 145, .22); }
+.admin-guidance-action:disabled { cursor: not-allowed; opacity: .5; }
+.admin-guidance-action svg { width: 14px; }
+.admin-guidance-action-reason { color: #d2a364; font-size: 11px; line-height: 1.35; }
+.admin-guidance-progress,
+.admin-guidance-blockers,
+.admin-guidance-commands { padding-top: 11px; border-top: 1px solid rgba(158, 202, 194, .14); }
+.admin-guidance-progress header,
+.admin-guidance-blockers header,
+.admin-guidance-commands header { justify-content: space-between; gap: 10px; }
+.admin-guidance-progress header small,
+.admin-guidance-blockers header small,
+.admin-guidance-commands header small { color: #77918e; font-size: 11px; }
+.admin-guidance-progress ol { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 7px; margin: 9px 0 0; padding: 0; list-style: none; }
+.admin-guidance-progress li { position: relative; min-width: 0; }
+.admin-guidance-progress li > div { min-height: 52px; gap: 7px; padding: 7px; border: 1px solid rgba(158, 202, 194, .12); border-radius: 8px; background: rgba(4, 14, 16, .24); }
+.admin-guidance-progress li svg { flex: 0 0 auto; width: 15px; color: #789490; }
+.admin-guidance-progress li[data-state="complete"] svg { color: #78dfba; }
+.admin-guidance-progress li[data-state="current"] { border-color: rgba(125, 226, 195, .4); }
+.admin-guidance-progress li[data-state="blocked"] svg { color: #e18b73; }
+.admin-guidance-progress li[data-state="waiting"] svg { color: #d5aa62; }
+.admin-guidance-progress strong,
+.admin-guidance-blockers strong,
+.admin-guidance-commands strong { color: #e4f0ed; font-size: 12px; line-height: 1.25; }
+.admin-guidance-progress small,
+.admin-guidance-blockers li small,
+.admin-guidance-commands article small { color: #879e9a; font-size: 11px; line-height: 1.3; }
+.admin-guidance-blockers > strong { display: block; margin-top: 7px; color: #f0bb73; }
+.admin-guidance-blockers ul { display: grid; gap: 5px; margin: 9px 0 0; padding: 0; list-style: none; }
+.admin-guidance-blockers li { gap: 7px; padding: 6px 0; }
+.admin-guidance-blockers li svg { flex: 0 0 auto; width: 13px; color: #718b87; }
+.admin-guidance-commands > div { display: grid; gap: 6px; margin-top: 9px; }
+.admin-guidance-commands article { justify-content: space-between; gap: 10px; padding: 7px 0; border-top: 1px solid rgba(158, 202, 194, .09); }
+.admin-guidance-commands article:first-child { border-top: 0; }
+.admin-guidance-command-status { color: #88bcb0; font-size: 11px; font-weight: 800; }
+.admin-guidance-commands article[data-available="false"] .admin-guidance-command-status { color: #d3a05d; }
+.admin-guidance-summary { display: grid; gap: 8px; }
+.admin-review-next-action-owner { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 9px; }
+.admin-review-next-action-owner > span:not(.admin-guidance-owner) { display: grid; gap: 2px; }
+.admin-review-next-action-owner > span:not(.admin-guidance-owner) small { color: #809a96; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.admin-review-next-action-owner > span:not(.admin-guidance-owner) strong { color: #d6e5e1; font-size: 12px; }
+@media (max-width: 720px) {
+  .admin-guidance-primary__meta > div:not(.admin-guidance-owner), .admin-guidance-owner { flex: 1 1 130px; }
+  .admin-guidance-primary__meta > div:not(.admin-guidance-owner) { border-left: 0; border-top: 1px solid rgba(158, 202, 194, .14); }
+}

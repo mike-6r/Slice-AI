@@ -533,6 +533,14 @@ export class StripeConnectPayoutService {
           currency: 'GBP',
         },
       });
+    // This is provider evidence only. Capturing it before the transfer makes a
+    // sandbox or staff trace explain exactly what changed without ever using a
+    // Stripe balance as the customer-wallet authority.
+    await this.captureBalances(
+      payout.id,
+      externalAccountId,
+      'BEFORE_TRANSFER',
+    );
     let transferId: string;
     let transferCreated = false;
     try {
@@ -602,6 +610,9 @@ export class StripeConnectPayoutService {
           'The external payout could not be started. Your Slice balance was not consumed.',
       });
     }
+    // Also refresh this snapshot on a retry where the transfer already
+    // existed before this invocation; the missing snapshot is never inferred.
+    await this.captureBalances(payout.id, externalAccountId, 'AFTER_TRANSFER');
     try {
       const externalPayout = await stripe.payouts.create(
         {
@@ -631,6 +642,7 @@ export class StripeConnectPayoutService {
           lastSyncedAt: new Date(),
         },
       });
+      await this.captureBalances(payout.id, externalAccountId, 'AFTER_PAYOUT');
       return { providerReference: externalPayout.id, status };
     } catch (error) {
       void error;
@@ -683,6 +695,16 @@ export class StripeConnectPayoutService {
           externalPayoutIdHash: this.crypto.hash(payoutId),
         },
       },
+      include: {
+        connectAccount: {
+          select: {
+            id: true,
+            userId: true,
+            environment: true,
+            externalAccountIdCiphertext: true,
+          },
+        },
+      },
     });
     if (!mapping) return null;
     if (type === 'payout.paid') {
@@ -690,6 +712,7 @@ export class StripeConnectPayoutService {
         where: { id: mapping.id },
         data: { status: 'PAID', lastSyncedAt: new Date() },
       });
+      await this.captureBalancesForMapping(mapping);
       return {
         movementId: mapping.movementId,
         action: 'COMPLETE',
@@ -705,6 +728,7 @@ export class StripeConnectPayoutService {
           lastSyncedAt: new Date(),
         },
       });
+      await this.captureBalancesForMapping(mapping);
       return {
         movementId: mapping.movementId,
         action: 'HOLD',
@@ -718,7 +742,64 @@ export class StripeConnectPayoutService {
       where: { id: mapping.id },
       data: { status: 'PROCESSING', lastSyncedAt: new Date() },
     });
+    await this.captureBalancesForMapping(mapping);
     return { movementId: mapping.movementId, action: 'PROCESSING' };
+  }
+
+  private async captureBalancesForMapping(mapping: {
+    id: string;
+    connectAccount: ConnectAccountRow;
+  }) {
+    try {
+      const stripe = this.stripeFactory.get();
+      const externalAccountId = await this.resolveExternalAccountId(
+        stripe,
+        mapping.connectAccount,
+      );
+      await this.captureBalances(mapping.id, externalAccountId, 'AFTER_PAYOUT');
+    } catch {
+      // A provider-observability read must never mutate, release, or conceal
+      // a payout. The durable movement and Stripe IDs remain available for a
+      // subsequent protected trace/reconciliation read.
+    }
+  }
+
+  private async captureBalances(
+    connectPayoutId: string,
+    externalAccountId: string,
+    stage: 'BEFORE_TRANSFER' | 'AFTER_TRANSFER' | 'AFTER_PAYOUT',
+  ) {
+    try {
+      const stripe = this.stripeFactory.get();
+      const [platform, connected] = await Promise.all([
+        stripe.balance.retrieve(),
+        stripe.balance.retrieve({}, { stripeAccount: externalAccountId }),
+      ]);
+      const capturedAt = new Date();
+      await this.db.connectPayoutBalanceSnapshot.upsert({
+        where: { connectPayoutId_stage: { connectPayoutId, stage } },
+        create: {
+          id: randomUUID(),
+          connectPayoutId,
+          stage,
+          platformAvailableMinor: balanceMinor(platform.available),
+          platformPendingMinor: balanceMinor(platform.pending),
+          connectedAvailableMinor: balanceMinor(connected.available),
+          connectedPendingMinor: balanceMinor(connected.pending),
+          capturedAt,
+        },
+        update: {
+          platformAvailableMinor: balanceMinor(platform.available),
+          platformPendingMinor: balanceMinor(platform.pending),
+          connectedAvailableMinor: balanceMinor(connected.available),
+          connectedPendingMinor: balanceMinor(connected.pending),
+          capturedAt,
+        },
+      });
+    } catch {
+      // Keep a payout operational when an optional second provider read times
+      // out. We intentionally persist no placeholder or zero-valued snapshot.
+    }
   }
 
   private async retrieveAccount(stripe: Stripe, externalAccountId: string) {
@@ -976,4 +1057,14 @@ function mapPayoutStatus(status: string) {
   if (status === 'failed') return 'FAILED' as const;
   if (status === 'canceled') return 'CANCELED' as const;
   return 'PROCESSING' as const;
+}
+
+function balanceMinor(entries: Array<{ amount: number; currency: string }>) {
+  return entries
+    .filter((entry) => entry.currency.toLowerCase() === 'gbp')
+    .reduce(
+      (total, entry) =>
+        Number.isSafeInteger(entry.amount) ? total + BigInt(entry.amount) : total,
+      0n,
+    );
 }

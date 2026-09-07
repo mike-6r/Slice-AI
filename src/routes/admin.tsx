@@ -68,6 +68,11 @@ import { AdminTrustSupport } from "@/components/admin/AdminTrustSupport";
 import { AdminPlatformOperations } from "@/components/admin/AdminPlatformOperations";
 import { AdminReviewMedia } from "@/components/admin/AdminReviewMedia";
 import { AdminIntakeLocations } from "@/components/admin/AdminIntakeLocations";
+import {
+  GuidancePanel,
+  guidanceActorFromAuthority,
+  type GuidanceStepState,
+} from "@/components/admin/OperationalGuidance";
 import "@/styles/admin-workspace-shell.css";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
@@ -2784,6 +2789,50 @@ function PhysicalIntakeDetailPage({
             severity: "HIGH" as const,
           }
         : null);
+  const guidanceAction = () => {
+    if (row.allowedActions.includes("ASSIGN_DESTINATION")) {
+      setDestinationDraft({
+        vaultId: row.vault?.id ?? "",
+        deliveryMethod: row.deliveryMethod ?? "SHIPMENT",
+        reason: "Assigned by the physical intake operator.",
+      });
+      setDialog("destination");
+      return;
+    }
+    if (row.allowedActions.includes("CONFIRM_DELIVERY")) {
+      onConfirmDelivery();
+      return;
+    }
+    if (row.allowedActions.includes("CONFIRM_RECEIPT")) {
+      setDialog("receipt");
+      return;
+    }
+    if (row.allowedActions.includes("START_VERIFICATION")) {
+      onStartVerification();
+      return;
+    }
+    if (row.allowedActions.includes("COMPLETE_VERIFICATION")) {
+      setDialog("verification");
+      return;
+    }
+    if (row.allowedActions.includes("RESOLVE_EXCEPTION")) {
+      const exceptionId = detail?.intake?.exceptions[0]?.id;
+      if (exceptionId) {
+        setResolveExceptionId(exceptionId);
+        setResolutionNote("");
+        setDialog("resolve");
+      } else {
+        setDialog("exception");
+      }
+    }
+  };
+  const guidanceStepFor = (step: (typeof steps)[number][0]): GuidanceStepState => {
+    const state = intakeStepState(row, step);
+    if (state === "complete") return "COMPLETE";
+    if (state === "current") return "CURRENT";
+    if (state === "blocked") return "BLOCKED";
+    return "NOT_STARTED";
+  };
   const exceptions = detail?.intake?.exceptions ?? [];
   const contributors = Array.from(
     new Set(detail?.history.map((event) => event.actor).filter(Boolean) as string[]),
@@ -2845,61 +2894,66 @@ function PhysicalIntakeDetailPage({
         </div>
       </article>
 
-      <section
-        className="physical-intake-detail-stepper-panel"
-        aria-label="Physical intake lifecycle"
-      >
-        <ol className="physical-intake-stepper">
-          {steps.map(([step, label], index) => {
-            const state = intakeStepState(row, step);
-            return (
-              <li className={`is-${state}`} key={step}>
-                <span>{index + 1}</span>
-                <strong>{label}</strong>
-                <small>
-                  {state === "complete"
-                    ? "Complete"
-                    : state === "current"
-                      ? row.stageLabel
-                      : state === "blocked"
-                        ? (intakeStepReason(row, step) ?? "Blocked")
-                        : "Not started"}
-                </small>
-              </li>
-            );
-          })}
-        </ol>
-      </section>
-
-      {primaryBlocker ? (
-        <section className="physical-intake-blocker-banner" aria-label="Primary blocker">
-          <AlertTriangle aria-hidden="true" />
-          <div>
-            <p>Primary blocker</p>
-            <strong>{primaryBlocker.label}</strong>
-            <span>
-              {!row.vault && row.stage === "AWAITING_DESTINATION"
-                ? "A receiving destination must be confirmed before shipping or drop-off instructions can be issued."
-                : row.stageReason}
-            </span>
-          </div>
-          <button
-            type="button"
-            className="admin-primary-button"
-            disabled={destinationSaving}
-            onClick={() => {
-              setDestinationDraft({
-                vaultId: row.vault?.id ?? "",
-                deliveryMethod: row.deliveryMethod ?? "SHIPMENT",
-                reason: "Assigned by the physical intake operator.",
-              });
-              setDialog("destination");
-            }}
-          >
-            Assign Destination
-          </button>
-        </section>
-      ) : null}
+      <GuidancePanel
+        className="physical-intake-guidance"
+        currentState={row.stageLabel}
+        nextAction={{
+          title: row.nextAction,
+          why: actionDescription,
+          actor: guidanceActorFromAuthority(row.nextActor),
+          blocker: primaryBlocker?.label ?? null,
+          afterThis:
+            row.nextActor === "COLLECTOR"
+              ? "Slice can confirm delivery and receipt once the package arrives."
+              : row.stage === "DELIVERED_AWAITING_RECEIPT"
+                ? "Verification can begin after Slice confirms physical receipt."
+                : row.stage === "RECEIVED" || row.stage === "VERIFICATION"
+                  ? "Custody can progress once verification is complete."
+                  : "The next authoritative intake step can be evaluated.",
+          action:
+            row.needsStaffAction
+              ? {
+                  label:
+                    row.allowedActions.includes("ASSIGN_DESTINATION")
+                      ? "Assign destination"
+                      : row.nextAction,
+                  onClick: guidanceAction,
+                  disabled: destinationSaving || deliveryPending || verificationStarting,
+                  unavailableReason: "The current intake command is already being processed.",
+                }
+              : undefined,
+        }}
+        progress={steps.map(([step, label]) => ({
+          id: step,
+          label,
+          state: guidanceStepFor(step),
+          detail:
+            guidanceStepFor(step) === "CURRENT"
+              ? row.stageLabel
+              : guidanceStepFor(step) === "BLOCKED"
+                ? (intakeStepReason(row, step) ?? "Blocked")
+                : undefined,
+        }))}
+        blockers={
+          primaryBlocker
+            ? [
+                {
+                  label: primaryBlocker.label,
+                  reason:
+                    !row.vault && row.stage === "AWAITING_DESTINATION"
+                      ? "A receiving destination must be confirmed before shipping or drop-off instructions can be issued."
+                      : actionDescription,
+                  severity: primaryBlocker.severity,
+                },
+                ...row.issues.slice(1).map((issue) => ({
+                  label: issue.label,
+                  reason: "This remains downstream until the primary blocker is resolved.",
+                  severity: issue.severity,
+                })),
+              ]
+            : []
+        }
+      />
 
       <IntakeOperationalCards
         row={row}
@@ -7882,6 +7936,47 @@ function ConsolidatedUserDetailExperience({
   );
   const renderActionCenter = () => (
     <section className="admin-account-action-center" aria-label="Account action center">
+      <GuidancePanel
+        compact
+        currentState={stateText(user.accountStatus)}
+        nextAction={
+          user.recommendedAction
+            ? {
+                title: user.recommendedAction.title,
+                why: user.recommendedAction.explanation,
+                actor: "ADMIN",
+                blocker: user.actionCenter[0]?.title ?? "Account controls require review.",
+                afterThis: "The owning account-control workflow can apply the next protected change.",
+                action: {
+                  label: "Open account control",
+                  onClick: () => setTab(user.recommendedAction!.tab),
+                },
+              }
+            : {
+                title: "No account action required",
+                why: "No backend-derived account control requires staff intervention.",
+                actor: "NO_ACTION_REQUIRED",
+                afterThis: "Continue monitoring account, finance, and compliance authority separately.",
+              }
+        }
+        blockers={user.actionCenter.map((item, index) => ({
+          label: item.title,
+          reason:
+            index === 0
+              ? item.explanation
+              : "This remains visible after the primary account action is addressed.",
+          severity:
+            item.severity === "RESTRICTED" || item.severity === "BLOCKING" ? "HIGH" : "MEDIUM",
+        }))}
+        commands={user.availableCommands
+          .filter((command) => !command.allowed && command.reason)
+          .slice(0, 3)
+          .map((command) => ({
+            label: commandLabelsForGuidance(command.id),
+            available: false,
+            unavailableReason: command.reason,
+          }))}
+      />
       <div className="admin-account-action-center-heading">
         <div className="admin-account-action-center-status">
           {user.actionCenter.length ? (
@@ -11538,6 +11633,21 @@ function formatAccountMinor(value: string) {
   const negative = value.startsWith("-");
   const digits = value.replace(/^-/, "").padStart(3, "0");
   return `${negative ? "-" : ""}£${digits.slice(0, -2)}.${digits.slice(-2)}`;
+}
+
+function commandLabelsForGuidance(command: string) {
+  const labels: Record<string, string> = {
+    ACCOUNT_RECOVERY: "Recover account access",
+    MANAGE_COMPLIANCE: "Manage compliance state",
+    MANAGE_FINANCIAL_HOLDS: "Manage financial holds",
+    MANAGE_RESTRICTIONS: "Manage restrictions",
+    PROVIDER_RECOVERY: "Recover provider connection",
+    RESET_TWO_FACTOR: "Reset two-factor authentication",
+    RESTORE_ACCOUNT: "Restore account",
+    REVOKE_SESSIONS: "Revoke sessions",
+    SUSPEND_ACCOUNT: "Suspend account",
+  };
+  return labels[command] ?? sentence(command);
 }
 
 function accountFilterSearch(filters: Record<string, string>) {

@@ -145,13 +145,17 @@ export class ProviderService {
     this.repositories.providers.setDefaultBankConnection(id);
   connectPayoutSetup = () => this.repositories.providers.getConnectPayoutSetup();
   feePolicy = () => this.repositories.providers.getFeePolicy();
+  cardFundingOptions = () => this.repositories.providers.getCardFundingOptions();
   createConnectOnboarding = () => this.repositories.providers.createConnectOnboarding();
   refreshConnectOnboarding = () => this.repositories.providers.refreshConnectOnboarding();
   movements = (input?: { cursor?: string; limit?: number }) =>
     this.repositories.providers.listMovements(input);
+  movement = (id: string) => this.repositories.providers.getMovement(id);
   withdrawalPreflight = (input?: { amountMinor?: string }) =>
     this.repositories.providers.getWithdrawalPreflight(input);
   createDeposit = (amountMinor: string) => this.repositories.providers.createDeposit(amountMinor);
+  createCardDeposit = (input: { amountMinor: string; savePaymentMethod: boolean }) =>
+    this.repositories.providers.createCardDeposit(input);
   createWithdrawal = (input: {
     amountMinor: string;
     destinationReference?: string;

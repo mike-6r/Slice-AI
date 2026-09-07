@@ -12,8 +12,10 @@ import { StripeConnectPayoutService } from '../application/stripe-connect-payout
 import { PermissionGuard } from '../../identity/access/permission.guard';
 import { RequirePermission } from '../../identity/access/permission.decorator';
 import { WithdrawalPreflightService } from '../application/withdrawal-preflight.service';
+import { StripeCardFundingService } from '../application/stripe-card-funding.service';
 
 const amount = z.object({ amountMinor: z.string().regex(/^\d+$/).max(32), destinationReference: z.string().min(1).max(256).optional(), destinationChain: z.string().min(1).max(32).optional() }).strict();
+const cardFunding = z.object({ amountMinor: z.string().regex(/^\d+$/).max(32), savePaymentMethod: z.boolean().default(false) }).strict();
 const page = z.object({ cursor: z.string().min(1).optional(), limit: z.coerce.number().int().min(1).max(100).default(20) }).strict();
 const hold = z.object({ userId: z.string().min(1), scope: z.enum(['FUNDING', 'WITHDRAWAL', 'TRADING_ELIGIBILITY', 'EXTERNAL_MOVEMENT', 'ACCOUNT']), reasonCode: z.string().min(1).max(64) }).strict();
 const bankConnectionComplete = z.object({ checkoutSessionId: z.string().min(1).max(256) }).strict();
@@ -21,7 +23,7 @@ const bankDisconnect = z.object({ confirmed: z.literal(true), mfaCode: z.string(
 const bankRiskQuery = z.object({ limit: z.coerce.number().int().min(1).max(100).default(50) }).strict();
 @Controller()
 export class ProvidersController {
-  constructor(private readonly compliance: ComplianceService, private readonly movements: WalletMovementService, private readonly webhooks: ProviderWebhookService, private readonly reconciliation: ProviderReconciliationService, private readonly holds: ComplianceHoldService, private readonly bankLinks: BankConnectionService, private readonly connectPayouts: StripeConnectPayoutService, private readonly limiter: ControlRateLimitService, private readonly withdrawalPreflight: WithdrawalPreflightService) {}
+  constructor(private readonly compliance: ComplianceService, private readonly movements: WalletMovementService, private readonly webhooks: ProviderWebhookService, private readonly reconciliation: ProviderReconciliationService, private readonly holds: ComplianceHoldService, private readonly bankLinks: BankConnectionService, private readonly connectPayouts: StripeConnectPayoutService, private readonly cardFunding: StripeCardFundingService, private readonly limiter: ControlRateLimitService, private readonly withdrawalPreflight: WithdrawalPreflightService) {}
   @Post('compliance/verification-sessions') @UseGuards(AccessTokenGuard)
   async start(@Req() req: AuthenticatedRequest) { await this.limit(req); return this.compliance.start(req.actor!, req.requestId ?? 'unknown'); }
   @Get('me/compliance') @UseGuards(AccessTokenGuard)
@@ -30,10 +32,21 @@ export class ProvidersController {
   identityDetails(@Req() req: AuthenticatedRequest) { return this.compliance.identityDetails(req.actor!.userId); }
   @Post('wallet/deposits') @UseGuards(AccessTokenGuard)
   async deposit(@Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { return this.write(req, key, () => this.movements.createDeposit(req.actor!, this.parse(amount, body).amountMinor, req.requestId ?? 'unknown', key!)); }
+  @Get('wallet/funding-options') @UseGuards(AccessTokenGuard)
+  fundingOptions() { return { card: this.cardFunding.options() }; }
+  @Post('wallet/card-deposits') @UseGuards(AccessTokenGuard)
+  async cardDeposit(@Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) {
+    const input = this.parse(cardFunding, body);
+    return this.write(req, key, () => this.movements.createCardDeposit(req.actor!, input.amountMinor, req.requestId ?? 'unknown', key!, input.savePaymentMethod ?? false));
+  }
   @Post('wallet/withdrawals') @UseGuards(AccessTokenGuard)
   async withdrawal(@Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { const input = this.parse(amount, body); return this.write(req, key, () => this.movements.createWithdrawal(req.actor!, input.amountMinor, req.requestId ?? 'unknown', key!, input.destinationReference, input.destinationChain)); }
   @Get('wallet/movements') @UseGuards(AccessTokenGuard)
   list(@Query() query: unknown, @Req() req: AuthenticatedRequest) { const input = this.parse(page, query); return this.movements.list(req.actor!.userId, input.cursor, input.limit); }
+  @Get('wallet/movements/:movementId') @UseGuards(AccessTokenGuard)
+  detail(@Param('movementId') movementId: string, @Req() req: AuthenticatedRequest) {
+    return this.movements.detail(req.actor!.userId, movementId);
+  }
   @Get('wallet/withdrawal-preflight') @UseGuards(AccessTokenGuard)
   withdrawalPreflightProjection(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
     const input = this.parse(z.object({ amountMinor: z.string().regex(/^\d+$/).max(32).default('0') }).strict(), query);
@@ -72,6 +85,10 @@ export class ProvidersController {
   async reconcile(@Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { const provider = this.parse(z.object({ provider: z.enum(['LOCAL_TEST', 'STRIPE_SANDBOX', 'STRIPE_LIVE']) }).strict(), body).provider; return this.write(req, key, () => this.reconciliation.run(req.actor!, provider, req.requestId ?? 'unknown')); }
   @Get('admin/providers/liquidity') @UseGuards(AccessTokenGuard, PermissionGuard) @RequirePermission('finance.read')
   providerLiquidity() { return this.withdrawalPreflight.adminProjection(); }
+  @Get('admin/providers/movements/:movementId/trace') @UseGuards(AccessTokenGuard, PermissionGuard) @RequirePermission('finance.read')
+  providerMovementTrace(@Param('movementId') movementId: string) {
+    return this.movements.staffTrace(movementId);
+  }
   @Post('admin/compliance/holds') @UseGuards(AccessTokenGuard, PermissionGuard) @RequirePermission('compliance.manage')
   async createHold(@Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { const input = this.parse(hold, body); return this.write(req, key, () => this.holds.create(req.actor!, { ...input, requestId: req.requestId ?? 'unknown' })); }
   @Post('admin/compliance/holds/:holdId/release') @UseGuards(AccessTokenGuard, PermissionGuard) @RequirePermission('compliance.manage')

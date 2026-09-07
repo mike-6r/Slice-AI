@@ -32,6 +32,8 @@ import type {
   ComplianceSession,
   ComplianceSummary,
   BankConnection,
+  CardFundingOptions,
+  CardFundingSession,
   BankConnectionCheckoutSession,
   ConnectPayoutSetup,
   WithdrawalPreflight,
@@ -3339,11 +3341,17 @@ export interface ProviderRepository {
   setDefaultBankConnection(id: string): Promise<{ selected: boolean }>;
   getConnectPayoutSetup(): Promise<ConnectPayoutSetup>;
   getFeePolicy(): Promise<FeePolicy>;
+  getCardFundingOptions(): Promise<{ card: CardFundingOptions }>;
   createConnectOnboarding(): Promise<ConnectPayoutSetup>;
   refreshConnectOnboarding(): Promise<ConnectPayoutSetup>;
   getWithdrawalPreflight(input?: { amountMinor?: string }): Promise<WithdrawalPreflight>;
   listMovements(input?: { cursor?: string; limit?: number }): Promise<WalletMovementPage>;
+  getMovement(id: string): Promise<WalletMovementView>;
   createDeposit(amountMinor: string): Promise<WalletMovementView>;
+  createCardDeposit(input: {
+    amountMinor: string;
+    savePaymentMethod: boolean;
+  }): Promise<CardFundingSession>;
   createWithdrawal(input: {
     amountMinor: string;
     destinationReference?: string;
