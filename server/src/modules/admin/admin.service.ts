@@ -9993,6 +9993,7 @@ export class AdminService {
       },
       platformRevenue,
       payoutLiquidity,
+      financialSeparation: platformRevenue.financialSeparation,
       financialNotificationOperations: {
         mandatoryEmail: financialEmailNotificationStatus,
         failedMandatoryEmail:

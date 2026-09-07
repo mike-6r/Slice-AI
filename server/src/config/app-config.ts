@@ -65,7 +65,9 @@ const configSchema = z.object({
     .default('slice_refresh'),
   COOKIE_SECURE: z.enum(['true', 'false']).optional(),
   COOKIE_DOMAIN: z.string().min(1).optional(),
-  PROVIDER_MODE: z.enum(['local', 'stripe_sandbox', 'stripe_live']).default('local'),
+  PROVIDER_MODE: z
+    .enum(['local', 'stripe_sandbox', 'stripe_live'])
+    .default('local'),
   STRIPE_LIVE_ENABLED: z.enum(['true', 'false']).default('false'),
   // Identity verification is an explicit product/provider opt-in. This lets
   // beta deployments use Stripe Identity sandbox without enabling it on every
@@ -78,6 +80,15 @@ const configSchema = z.object({
   // authentication and dispute profile from Bacs Direct Debit. It defaults
   // off in every environment, including Stripe test mode.
   STRIPE_CARD_FUNDING_ENABLED: z.enum(['true', 'false']).default('false'),
+  // Company-revenue sweeping is disabled until Finance sets an explicit GBP
+  // minor-unit reserve. There is deliberately no percentage fallback.
+  FINANCE_OPERATIONAL_RESERVE_MINOR: z.preprocess(
+    (value) =>
+      typeof value === 'string' && value.trim().length === 0
+        ? undefined
+        : value,
+    z.coerce.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+  ),
   PROVIDER_ENCRYPTION_KEY: z.string().min(32).optional(),
   STRIPE_SECRET_KEY: z.string().min(16).optional(),
   STRIPE_PUBLISHABLE_KEY: z.string().min(1).optional(),
@@ -132,7 +143,9 @@ const configSchema = z.object({
   PHONE_VERIFICATION_ENABLED: z.enum(['true', 'false']).default('false'),
   // `provider` is accepted only as a backwards-compatible alias for `twilio_verify`.
   // Programmable Messaging is deliberately not a supported OTP transport.
-  PHONE_DELIVERY_MODE: z.enum(['local_test', 'twilio_verify', 'provider']).optional(),
+  PHONE_DELIVERY_MODE: z
+    .enum(['local_test', 'twilio_verify', 'provider'])
+    .optional(),
   TWILIO_ACCOUNT_SID: z.string().trim().min(1).optional(),
   TWILIO_API_KEY: z.string().trim().min(1).optional(),
   TWILIO_API_SECRET: z.string().trim().min(1).optional(),
@@ -247,12 +260,42 @@ const configSchema = z.object({
   // Deposit velocity controls are intentionally unset until Risk/Product sets
   // explicit GBP policy. When configured, each limit is enforced inside the
   // per-user transaction lock; missing values do not invent a business limit.
-  BACS_DEPOSIT_MAX_MINOR: z.coerce.number().int().min(100).max(50_000_000).optional(),
-  BACS_DEPOSIT_DAILY_LIMIT_MINOR: z.coerce.number().int().min(100).max(100_000_000).optional(),
-  BACS_DEPOSIT_ROLLING_7D_LIMIT_MINOR: z.coerce.number().int().min(100).max(500_000_000).optional(),
-  BACS_DEPOSIT_DAILY_COUNT_LIMIT: z.coerce.number().int().min(1).max(100).optional(),
-  BACS_DEPOSIT_RAPID_WINDOW_SECONDS: z.coerce.number().int().min(1).max(86_400).optional(),
-  BACS_DEPOSIT_RAPID_COUNT_LIMIT: z.coerce.number().int().min(1).max(100).optional(),
+  BACS_DEPOSIT_MAX_MINOR: z.coerce
+    .number()
+    .int()
+    .min(100)
+    .max(50_000_000)
+    .optional(),
+  BACS_DEPOSIT_DAILY_LIMIT_MINOR: z.coerce
+    .number()
+    .int()
+    .min(100)
+    .max(100_000_000)
+    .optional(),
+  BACS_DEPOSIT_ROLLING_7D_LIMIT_MINOR: z.coerce
+    .number()
+    .int()
+    .min(100)
+    .max(500_000_000)
+    .optional(),
+  BACS_DEPOSIT_DAILY_COUNT_LIMIT: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .optional(),
+  BACS_DEPOSIT_RAPID_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(86_400)
+    .optional(),
+  BACS_DEPOSIT_RAPID_COUNT_LIMIT: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .optional(),
   OUTBOX_WORKER_ENABLED: z.enum(['true', 'false']).default('false'),
   OUTBOX_WORKER_ID: z.string().min(1).max(128).optional(),
   OUTBOX_POLL_INTERVAL_MS: z.coerce
@@ -354,7 +397,11 @@ const configSchema = z.object({
   // Explicitly opt-in local diskless upload transport for staging only. Real
   // production remains fail-closed until object storage is approved.
   LOCAL_SUBMISSION_STORAGE_ENABLED: z.enum(['true', 'false']).optional(),
-  LOCAL_SUBMISSION_STORAGE_ROOT: z.string().trim().min(1).default('.local-submission-storage'),
+  LOCAL_SUBMISSION_STORAGE_ROOT: z
+    .string()
+    .trim()
+    .min(1)
+    .default('.local-submission-storage'),
   OBJECT_STORAGE_PROVIDER: z.enum(['LOCAL', 'S3_COMPATIBLE']).default('LOCAL'),
   OBJECT_STORAGE_BUCKET: z.string().trim().min(1).optional(),
   OBJECT_STORAGE_REGION: z.string().trim().min(1).default('auto'),
@@ -364,7 +411,12 @@ const configSchema = z.object({
   OBJECT_STORAGE_FORCE_PATH_STYLE: z.enum(['true', 'false']).default('false'),
   OBJECT_STORAGE_PRIVATE_PREFIX: z.string().trim().min(1).default('private'),
   OBJECT_STORAGE_PUBLIC_PREFIX: z.string().trim().min(1).default('public'),
-  OBJECT_STORAGE_SIGNED_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(900),
+  OBJECT_STORAGE_SIGNED_URL_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(60)
+    .max(86_400)
+    .default(900),
   OBJECT_STORAGE_LAST_PROBE_AT: z.string().datetime().optional(),
 });
 
@@ -400,6 +452,7 @@ export type AppConfig = {
   stripeLiveEnabled: boolean;
   stripeBankFundingRail: 'bacs_debit';
   stripeCardFundingEnabled?: boolean;
+  financeOperationalReserveMinor?: number;
   providerEncryptionKey?: string;
   stripeSecretKey?: string;
   stripePublishableKey?: string;
@@ -755,7 +808,8 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
   if (
     stripeIdentityEnabled &&
     parsed.PROVIDER_MODE === 'stripe_sandbox' &&
-    (!parsed.STRIPE_SECRET_KEY || !parsed.STRIPE_SECRET_KEY.startsWith('sk_test_'))
+    (!parsed.STRIPE_SECRET_KEY ||
+      !parsed.STRIPE_SECRET_KEY.startsWith('sk_test_'))
   ) {
     throw new Error('Stripe Identity sandbox requires a test-mode secret key.');
   }
@@ -764,10 +818,12 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
       'Stripe live mode is fail-closed until STRIPE_LIVE_ENABLED=true.',
     );
   }
-  if (parsed.PROVIDER_MODE === 'stripe_live' &&
+  if (
+    parsed.PROVIDER_MODE === 'stripe_live' &&
     (!parsed.PROVIDER_ENCRYPTION_KEY ||
       !parsed.STRIPE_SECRET_KEY ||
-      !parsed.STRIPE_WEBHOOK_SECRET)) {
+      !parsed.STRIPE_WEBHOOK_SECRET)
+  ) {
     throw new Error(
       'PROVIDER_ENCRYPTION_KEY, STRIPE_SECRET_KEY, and STRIPE_WEBHOOK_SECRET are required for Stripe live mode.',
     );
@@ -840,6 +896,7 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     stripeLiveEnabled,
     stripeBankFundingRail: parsed.STRIPE_BANK_FUNDING_RAIL,
     stripeCardFundingEnabled: parsed.STRIPE_CARD_FUNDING_ENABLED === 'true',
+    financeOperationalReserveMinor: parsed.FINANCE_OPERATIONAL_RESERVE_MINOR,
     providerEncryptionKey: parsed.PROVIDER_ENCRYPTION_KEY,
     stripeSecretKey: parsed.STRIPE_SECRET_KEY,
     stripePublishableKey: parsed.STRIPE_PUBLISHABLE_KEY,
@@ -979,10 +1036,18 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     objectStorageEndpoint: parsed.OBJECT_STORAGE_ENDPOINT?.replace(/\/$/, ''),
     objectStorageAccessKeyId: parsed.OBJECT_STORAGE_ACCESS_KEY_ID,
     objectStorageSecretAccessKey: parsed.OBJECT_STORAGE_SECRET_ACCESS_KEY,
-    objectStorageForcePathStyle: parsed.OBJECT_STORAGE_FORCE_PATH_STYLE === 'true',
-    objectStoragePrivatePrefix: parsed.OBJECT_STORAGE_PRIVATE_PREFIX.replace(/\/$/, ''),
-    objectStoragePublicPrefix: parsed.OBJECT_STORAGE_PUBLIC_PREFIX.replace(/\/$/, ''),
-    objectStorageSignedUrlTtlSeconds: parsed.OBJECT_STORAGE_SIGNED_URL_TTL_SECONDS,
+    objectStorageForcePathStyle:
+      parsed.OBJECT_STORAGE_FORCE_PATH_STYLE === 'true',
+    objectStoragePrivatePrefix: parsed.OBJECT_STORAGE_PRIVATE_PREFIX.replace(
+      /\/$/,
+      '',
+    ),
+    objectStoragePublicPrefix: parsed.OBJECT_STORAGE_PUBLIC_PREFIX.replace(
+      /\/$/,
+      '',
+    ),
+    objectStorageSignedUrlTtlSeconds:
+      parsed.OBJECT_STORAGE_SIGNED_URL_TTL_SECONDS,
     objectStorageLastProbeAt: parsed.OBJECT_STORAGE_LAST_PROBE_AT
       ? new Date(parsed.OBJECT_STORAGE_LAST_PROBE_AT)
       : undefined,

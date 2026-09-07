@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { AccessControlModule } from '../identity/access/access-control.module';
 import { AuthModule } from '../identity/auth/auth.module';
 import { FinancialLedgerService } from './application/financial-ledger.service';
@@ -12,9 +12,17 @@ import { SubmissionStorageModule } from '../submissions/submission-storage.modul
 import { PlatformRevenueSettlementService } from './application/platform-revenue-settlement.service';
 import { OutboxModule } from '../outbox/outbox.module';
 import { FinancialAdjustmentService } from './application/financial-adjustment.service';
+import { ProvidersModule } from '../providers/providers.module';
+import { FinancialSeparationService } from './application/financial-separation.service';
 
 @Module({
-  imports: [AuthModule, AccessControlModule, SubmissionStorageModule, OutboxModule],
+  imports: [
+    AuthModule,
+    AccessControlModule,
+    SubmissionStorageModule,
+    OutboxModule,
+    forwardRef(() => ProvidersModule),
+  ],
   controllers: [FinanceController],
   providers: [
     FinancialLedgerService,
@@ -25,6 +33,7 @@ import { FinancialAdjustmentService } from './application/financial-adjustment.s
     PortfolioSnapshotWorker,
     PlatformRevenueSettlementService,
     FinancialAdjustmentService,
+    FinancialSeparationService,
   ],
   exports: [
     FinancialLedgerService,
@@ -34,6 +43,7 @@ import { FinancialAdjustmentService } from './application/financial-adjustment.s
     PortfolioSnapshotService,
     PlatformRevenueSettlementService,
     FinancialAdjustmentService,
+    FinancialSeparationService,
   ],
 })
 export class FinanceModule {}

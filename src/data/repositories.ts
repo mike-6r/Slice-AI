@@ -1004,6 +1004,78 @@ export type AdminFinanceDashboard = {
     checkedAt: string;
     warning: boolean;
   };
+  financialSeparation?: {
+    calculatedAt: string;
+    customerLiabilities: {
+      totalLiabilityMinor: string;
+      availableLiabilityMinor: string;
+      reservedMinor: string;
+      withdrawalEligibleMinor: string;
+      settlingMinor: string;
+      collectorProceedsMinor: string;
+      bacsRiskHeldMinor: string;
+      pendingDepositsMinor: string;
+      pendingWithdrawalsMinor: string;
+      withdrawalReservationMinor: string;
+      unresolvedReturnExposureMinor: string;
+    };
+    stripePlatformLiquidity: {
+      providerMode: string;
+      liquiditySource: "STRIPE_PLATFORM_PAYMENTS_BALANCE" | "NOT_APPLICABLE";
+      providerAvailableMinor: string | null;
+      providerPendingMinor: string | null;
+      availableAfterReservationsMinor: string | null;
+      activeReservationMinor: string;
+      payoutLiquidityStatus: "AVAILABLE" | "INSUFFICIENT" | "UNAVAILABLE" | "NOT_APPLICABLE";
+      payoutLiquidityCoverageBps: number | null;
+      nextAvailabilityAt: string | null;
+      checkedAt: string;
+      pendingPayoutObligationMinor: string;
+      requiredOperationalReserveMinor: string | null;
+      requiredPlatformRetentionMinor: string | null;
+      liquiditySurplusOrDeficitMinor: string | null;
+      liquidityShortfallMinor: string | null;
+      operationalStatus: "HEALTHY" | "CAUTION" | "DEFICIT" | "UNKNOWN";
+      connectedAvailableEvidenceMinor: string;
+      connectedPendingEvidenceMinor: string;
+      connectedBalanceEvidenceAt: string | null;
+    };
+    sliceCompanyRevenue: {
+      feeRevenueByCategory: Array<{ category: string; amountMinor: string }>;
+      grossFeeRevenueMinor: string;
+      providerExpensesMinor: string;
+      knownProviderCostsMinor: string;
+      pendingProviderCostCount: number;
+      recognisedNetRevenueMinor: string;
+      alreadySweptMinor: string;
+      committedSweepMinor: string;
+      unsweptRecognisedRevenueMinor: string;
+      operationalReserveConfigured: boolean;
+      operationalReserveMinor: string | null;
+      protectedLiquidityMinor: string | null;
+      availableAboveProtectionMinor: string | null;
+      safeToSweepMinor: string;
+      safeToSweepStatus: "READY" | "BLOCKED";
+      blockedReasons: string[];
+      externalExecutionStatus: "NOT_CONFIGURED";
+    };
+    providerTraces: Array<{
+      id: string;
+      type: string;
+      rail: string;
+      status: string;
+      grossMinor: string;
+      sliceFeeMinor: string;
+      providerAmountMinor: string | null;
+      providerFeeMinor: string | null;
+      providerNetMinor: string | null;
+      providerReferenceRecorded: boolean;
+      providerBalanceTransactionRecorded: boolean;
+      providerAvailableOn: string | null;
+      connectPayoutStatus: string | null;
+      updatedAt: string;
+    }>;
+  };
   overview: {
     totalVolumeMinor: string;
     buyVolumeMinor: string;

@@ -21,7 +21,10 @@ import { FinancialReconciliationService } from '../application/financial-reconci
 import { ControlRateLimitService } from '../../identity/access/control-rate-limit.service';
 import { PermissionGuard } from '../../identity/access/permission.guard';
 import { RequirePermission } from '../../identity/access/permission.decorator';
-import { PortfolioSnapshotService, type PortfolioPerformanceRange } from '../application/portfolio-snapshot.service';
+import {
+  PortfolioSnapshotService,
+  type PortfolioPerformanceRange,
+} from '../application/portfolio-snapshot.service';
 import { currentFeePolicy } from '../domain/fee-policy';
 import { PlatformRevenueSettlementService } from '../application/platform-revenue-settlement.service';
 import { FinancialAdjustmentService } from '../application/financial-adjustment.service';
@@ -38,23 +41,42 @@ const reversalBody = z
     reasonCode: z.string().min(1).max(64),
   })
   .strict();
-const performanceQuery = z.object({ range: z.enum(['1D', '1W', '1M', '3M', '1Y', 'ALL']).default('1M') }).strict();
-const holdingsPageQuery = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(50).default(10),
-  q: z.string().trim().max(120).optional(),
-  category: z.string().trim().max(120).optional(),
-  sort: z.enum(['VALUE_DESC', 'OWNERSHIP_DESC', 'TITLE_ASC']).default('TITLE_ASC'),
-}).strict();
-const revenueSettlementRequestBody = z.object({ requestedAmountMinor: z.string().regex(/^\d+$/).optional() }).strict();
-const revenueSettlementApprovalBody = z.object({ settlementId: z.string().min(1) }).strict();
-const financialAdjustmentBody = z.object({
-  userId: z.string().min(1),
-  deficitId: z.string().min(1),
-  amountMinor: z.string().regex(/^\d+$/),
-  reason: z.string().trim().min(12).max(1_000),
-}).strict();
-const financialAdjustmentRejectionBody = z.object({ reason: z.string().trim().min(12).max(1_000) }).strict();
+const performanceQuery = z
+  .object({
+    range: z.enum(['1D', '1W', '1M', '3M', '1Y', 'ALL']).default('1M'),
+  })
+  .strict();
+const holdingsPageQuery = z
+  .object({
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(50).default(10),
+    q: z.string().trim().max(120).optional(),
+    category: z.string().trim().max(120).optional(),
+    sort: z
+      .enum(['VALUE_DESC', 'OWNERSHIP_DESC', 'TITLE_ASC'])
+      .default('TITLE_ASC'),
+  })
+  .strict();
+const revenueSettlementRequestBody = z
+  .object({
+    requestedAmountMinor: z.string().regex(/^\d+$/).optional(),
+    reason: z.string().trim().min(12).max(1_000),
+  })
+  .strict();
+const revenueSettlementApprovalBody = z
+  .object({ settlementId: z.string().min(1) })
+  .strict();
+const financialAdjustmentBody = z
+  .object({
+    userId: z.string().min(1),
+    deficitId: z.string().min(1),
+    amountMinor: z.string().regex(/^\d+$/),
+    reason: z.string().trim().min(12).max(1_000),
+  })
+  .strict();
+const financialAdjustmentRejectionBody = z
+  .object({ reason: z.string().trim().min(12).max(1_000) })
+  .strict();
 
 @Controller()
 export class FinanceController {
@@ -96,7 +118,15 @@ export class FinanceController {
     @Req() req: AuthenticatedRequest,
   ) {
     const input = this.parse(revenueSettlementRequestBody, body);
-    return this.write(req, key, () => this.revenueSettlements.request(req.actor!, input.requestedAmountMinor, req.requestId ?? 'unknown', key!));
+    return this.write(req, key, () =>
+      this.revenueSettlements.request(
+        req.actor!,
+        input.requestedAmountMinor,
+        input.reason,
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
   }
 
   @Post('admin/finance/revenue-settlements/:id/approve')
@@ -108,7 +138,14 @@ export class FinanceController {
     @Req() req: AuthenticatedRequest,
   ) {
     this.parse(revenueSettlementApprovalBody, { settlementId: id });
-    return this.write(req, key, () => this.revenueSettlements.approve(req.actor!, id, req.requestId ?? 'unknown', key!));
+    return this.write(req, key, () =>
+      this.revenueSettlements.approve(
+        req.actor!,
+        id,
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
   }
 
   @Get('admin/finance/adjustments')
@@ -130,7 +167,14 @@ export class FinanceController {
     @Req() req: AuthenticatedRequest,
   ) {
     const input = this.parse(financialAdjustmentBody, body);
-    return this.write(req, key, () => this.financialAdjustments.create(req.actor!, input, req.requestId ?? 'unknown', key!));
+    return this.write(req, key, () =>
+      this.financialAdjustments.create(
+        req.actor!,
+        input,
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
   }
 
   @Post('admin/finance/adjustments/:id/submit')
@@ -141,7 +185,14 @@ export class FinanceController {
     @Headers('idempotency-key') key: string | undefined,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.write(req, key, () => this.financialAdjustments.submit(req.actor!, id, req.requestId ?? 'unknown', key!));
+    return this.write(req, key, () =>
+      this.financialAdjustments.submit(
+        req.actor!,
+        id,
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
   }
 
   @Post('admin/finance/adjustments/:id/approve')
@@ -152,7 +203,14 @@ export class FinanceController {
     @Headers('idempotency-key') key: string | undefined,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.write(req, key, () => this.financialAdjustments.approve(req.actor!, id, req.requestId ?? 'unknown', key!));
+    return this.write(req, key, () =>
+      this.financialAdjustments.approve(
+        req.actor!,
+        id,
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
   }
 
   @Post('admin/finance/adjustments/:id/reject')
@@ -165,7 +223,15 @@ export class FinanceController {
     @Req() req: AuthenticatedRequest,
   ) {
     const input = this.parse(financialAdjustmentRejectionBody, body);
-    return this.write(req, key, () => this.financialAdjustments.reject(req.actor!, id, input.reason, req.requestId ?? 'unknown', key!));
+    return this.write(req, key, () =>
+      this.financialAdjustments.reject(
+        req.actor!,
+        id,
+        input.reason,
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
   }
 
   @Get('me/wallet/transactions')
@@ -187,9 +253,19 @@ export class FinanceController {
   @Get('me/wallet/insights')
   @UseGuards(AccessTokenGuard)
   insights(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
-    const parsed = z.object({ period: z.enum(['30d', 'month']).default('30d') }).strict().safeParse(query);
-    if (!parsed.success) throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'Request validation failed.' });
-    return this.ledger.walletInsightsForUser(req.actor!.userId, parsed.data.period);
+    const parsed = z
+      .object({ period: z.enum(['30d', 'month']).default('30d') })
+      .strict()
+      .safeParse(query);
+    if (!parsed.success)
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: 'Request validation failed.',
+      });
+    return this.ledger.walletInsightsForUser(
+      req.actor!.userId,
+      parsed.data.period,
+    );
   }
 
   @Get('me/portfolio')
@@ -220,8 +296,15 @@ export class FinanceController {
   @UseGuards(AccessTokenGuard)
   performance(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
     const parsed = performanceQuery.safeParse(query);
-    if (!parsed.success) throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'Request validation failed.' });
-    return this.snapshots.performanceForUser(req.actor!.userId, parsed.data.range as PortfolioPerformanceRange);
+    if (!parsed.success)
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: 'Request validation failed.',
+      });
+    return this.snapshots.performanceForUser(
+      req.actor!.userId,
+      parsed.data.range as PortfolioPerformanceRange,
+    );
   }
 
   @Get('me/portfolio/lots')

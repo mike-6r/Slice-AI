@@ -136,6 +136,19 @@ const liquidityTone = (status: unknown) => {
   }
 };
 
+const operationalLiquidityTone = (status: unknown) => {
+  switch (status) {
+    case "HEALTHY":
+      return "green";
+    case "CAUTION":
+      return "gold";
+    case "DEFICIT":
+      return "red";
+    default:
+      return "blue";
+  }
+};
+
 const providerMoney = (minor: unknown, status: unknown) =>
   status === "UNAVAILABLE" ? "Unavailable" : money(minor);
 
@@ -218,6 +231,10 @@ export function AdminFinanceTrading({
     dashboard?.reconciliationSummary.find((entry) => entry.status === "MISMATCH")?.count ?? 0;
   const payoutLiquidityWarning = Boolean(dashboard?.payoutLiquidity?.warning);
   const pendingDeposits = Number(dashboard?.kpis.pendingDepositsMinor ?? 0) > 0;
+  const financialSeparation = dashboard?.financialSeparation;
+  const separatedStripe = financialSeparation?.stripePlatformLiquidity;
+  const separatedRevenue = financialSeparation?.sliceCompanyRevenue;
+  const liquidityOperationalStatus = separatedStripe?.operationalStatus;
   const financeGuidance = reconciliationMismatches
     ? {
         title: "Review reconciliation mismatches",
@@ -227,29 +244,53 @@ export function AdminFinanceTrading({
         afterThis: "The authoritative reconciliation state can be updated after investigation.",
         action: { label: "Open reconciliation", onClick: () => selectTab("reconciliation") },
       }
-    : payoutLiquidityWarning
+    : liquidityOperationalStatus === "DEFICIT"
       ? {
-          title: "Review payout liquidity",
-          why: "Stripe platform available balance is below the current withdrawal-eligible customer liabilities.",
+          title: "Provider liquidity deficit",
+          why: `${money(separatedStripe?.liquidityShortfallMinor)} short against the protected customer-liability and reserve projection.`,
           actor: "FINANCE" as const,
-          blocker: "Payout liquidity is insufficient for the current eligible liability projection.",
-          afterThis: "Withdrawal preflight remains fail-closed until the provider balance covers the liability.",
+          blocker:
+            "Withdrawal preflight remains fail-closed while Stripe available liquidity is below the protected requirement.",
+          afterThis: separatedStripe?.providerPendingMinor
+            ? `${money(separatedStripe.providerPendingMinor)} is still pending at Stripe.${separatedStripe.nextAvailabilityAt ? ` Next provider availability: ${date(separatedStripe.nextAvailabilityAt)}.` : ""}`
+            : "Investigate the provider balance and open payout obligations before releasing any new external payout.",
           action: { label: "Open movements", onClick: () => selectTab("movements") },
         }
-      : pendingDeposits
+      : separatedRevenue?.safeToSweepStatus === "READY"
         ? {
-            title: "Waiting for deposit clearing",
-            why: "Customer deposits are pending the provider or bank clearing process.",
-            actor: "EXTERNAL_PROVIDER" as const,
-            blocker: "Provider clearing has not completed.",
-            afterThis: "The ledger will show the settled provider outcome when it is received.",
+            title: "Company revenue available to sweep",
+            why: `${money(separatedRevenue.safeToSweepMinor)} is within the server-derived company sweep cap.`,
+            actor: "FINANCE" as const,
+            blocker:
+              "A reason, idempotency key, and second finance approver are still required. No external Stripe payment is sent by approval.",
+            afterThis:
+              "Use the protected company-revenue sweep command only after reviewing the separation snapshot.",
           }
-        : {
-            title: "No finance action required",
-            why: "No current reconciliation or payout-liquidity exception is reported by the finance projection.",
-            actor: "NO_ACTION_REQUIRED" as const,
-            afterThis: "Continue monitoring immutable ledger and provider projections.",
-          };
+        : payoutLiquidityWarning
+          ? {
+              title: "Review payout liquidity",
+              why: "Stripe platform available balance is below the current withdrawal-eligible customer liabilities.",
+              actor: "FINANCE" as const,
+              blocker:
+                "Payout liquidity is insufficient for the current eligible liability projection.",
+              afterThis:
+                "Withdrawal preflight remains fail-closed until the provider balance covers the liability.",
+              action: { label: "Open movements", onClick: () => selectTab("movements") },
+            }
+          : pendingDeposits
+            ? {
+                title: "Waiting for deposit clearing",
+                why: "Customer deposits are pending the provider or bank clearing process.",
+                actor: "EXTERNAL_PROVIDER" as const,
+                blocker: "Provider clearing has not completed.",
+                afterThis: "The ledger will show the settled provider outcome when it is received.",
+              }
+            : {
+                title: "No finance action required",
+                why: "No current reconciliation or payout-liquidity exception is reported by the finance projection.",
+                actor: "NO_ACTION_REQUIRED" as const,
+                afterThis: "Continue monitoring immutable ledger and provider projections.",
+              };
 
   const table = useMemo(() => {
     const rows = records?.items ?? [];
@@ -331,53 +372,227 @@ export function AdminFinanceTrading({
 
       <GuidancePanel compact currentState="Financial operations" nextAction={financeGuidance} />
 
-      <section className="admin-finance-authority-section">
-        <div className="admin-finance-authority-heading">
-          <div>
-            <h3>Customer liabilities</h3>
-            <p>
-              Slice internal ledger authority. Separate from provider liquidity and company revenue.
-            </p>
+      <div className="admin-finance-separation-grid">
+        <section className="admin-finance-authority-section">
+          <div className="admin-finance-authority-heading">
+            <div>
+              <h3>Customer liabilities</h3>
+              <p>
+                Slice internal ledger authority. Separate from provider liquidity and company
+                revenue.
+              </p>
+            </div>
+            <span>GBP</span>
           </div>
-          <span>GBP</span>
-        </div>
-        <div className="admin-finance-kpis">
-          <FinanceKpi
-            icon={<WalletCards />}
-            label="Total customer cash"
-            value={money(dashboard.kpis.totalCustomerCashMinor)}
-            detail="All customer GBP liabilities"
-          />
-          <FinanceKpi
-            icon={<Landmark />}
-            label="Available customer cash"
-            value={money(dashboard.kpis.availableCustomerCashMinor)}
-            detail="Eligible ledger balance"
-            tone="cyan"
-          />
-          <FinanceKpi
-            icon={<Landmark />}
-            label="Reserved funds"
-            value={money(dashboard.kpis.reservedFundsMinor)}
-            detail="Orders and withdrawals"
-            tone="blue"
-          />
-          <FinanceKpi
-            icon={<ArrowDownToLine />}
-            label="Pending deposits"
-            value={money(dashboard.kpis.pendingDepositsMinor)}
-            detail="Pending money movements"
-            tone="purple"
-          />
-          <FinanceKpi
-            icon={<ArrowUpRight />}
-            label="Pending withdrawals"
-            value={money(dashboard.kpis.pendingWithdrawalsMinor)}
-            detail="Pending money movements"
-            tone="gold"
-          />
-        </div>
-      </section>
+          <div className="admin-finance-kpis">
+            <FinanceKpi
+              icon={<WalletCards />}
+              label="Total customer cash"
+              value={money(dashboard.kpis.totalCustomerCashMinor)}
+              detail="All customer GBP liabilities"
+            />
+            <FinanceKpi
+              icon={<Landmark />}
+              label="Available customer cash"
+              value={money(dashboard.kpis.availableCustomerCashMinor)}
+              detail="Eligible ledger balance"
+              tone="cyan"
+            />
+            <FinanceKpi
+              icon={<Landmark />}
+              label="Reserved funds"
+              value={money(dashboard.kpis.reservedFundsMinor)}
+              detail="Orders and withdrawals"
+              tone="blue"
+            />
+            <FinanceKpi
+              icon={<ArrowDownToLine />}
+              label="Pending deposits"
+              value={money(dashboard.kpis.pendingDepositsMinor)}
+              detail="Pending money movements"
+              tone="purple"
+            />
+            <FinanceKpi
+              icon={<ArrowUpRight />}
+              label="Pending withdrawals"
+              value={money(dashboard.kpis.pendingWithdrawalsMinor)}
+              detail="Pending money movements"
+              tone="gold"
+            />
+            <FinanceKpi
+              icon={<Landmark />}
+              label="Available to withdraw"
+              value={money(financialSeparation?.customerLiabilities.withdrawalEligibleMinor)}
+              detail="Provider/risk eligible cash"
+              tone="green"
+            />
+            <FinanceKpi
+              icon={<WalletCards />}
+              label="Collector proceeds"
+              value={money(financialSeparation?.customerLiabilities.collectorProceedsMinor)}
+              detail="Payable customer proceeds"
+              tone="purple"
+            />
+            <FinanceKpi
+              icon={<ArrowUpRight />}
+              label="Withdrawal reservations"
+              value={money(financialSeparation?.customerLiabilities.withdrawalReservationMinor)}
+              detail="Active external payout holds"
+              tone="blue"
+            />
+          </div>
+        </section>
+
+        <section className="admin-finance-authority-section is-provider">
+          <div className="admin-finance-authority-heading">
+            <div>
+              <h3>Stripe platform liquidity</h3>
+              <p>Provider evidence only. It never changes the customer wallet ledger.</p>
+            </div>
+            <span>{liquidityOperationalStatus ?? "UNKNOWN"}</span>
+          </div>
+          <div className="admin-finance-separation-metrics">
+            <Metric
+              label="Available GBP balance"
+              value={providerMoney(
+                separatedStripe?.providerAvailableMinor ??
+                  dashboard.payoutLiquidity?.providerAvailableMinor,
+                separatedStripe?.payoutLiquidityStatus ??
+                  dashboard.payoutLiquidity?.providerLiquidityStatus,
+              )}
+              tone={liquidityTone(
+                separatedStripe?.payoutLiquidityStatus ??
+                  dashboard.payoutLiquidity?.providerLiquidityStatus,
+              )}
+            />
+            <Metric
+              label="Pending GBP balance"
+              value={providerMoney(
+                separatedStripe?.providerPendingMinor ??
+                  dashboard.payoutLiquidity?.providerPendingMinor,
+                separatedStripe?.payoutLiquidityStatus ??
+                  dashboard.payoutLiquidity?.providerLiquidityStatus,
+              )}
+              tone="purple"
+            />
+            <Metric
+              label="After payout reservations"
+              value={providerMoney(
+                separatedStripe?.availableAfterReservationsMinor ??
+                  dashboard.payoutLiquidity?.availableAfterReservationsMinor,
+                separatedStripe?.payoutLiquidityStatus ??
+                  dashboard.payoutLiquidity?.providerLiquidityStatus,
+              )}
+              tone="cyan"
+            />
+            <Metric
+              label="Pending provider payouts"
+              value={money(separatedStripe?.pendingPayoutObligationMinor)}
+              tone="gold"
+            />
+            <Metric
+              label="Liquidity coverage"
+              value={providerCoverage(
+                separatedStripe?.payoutLiquidityCoverageBps ??
+                  dashboard.payoutLiquidity?.payoutLiquidityCoverageBps,
+                separatedStripe?.payoutLiquidityStatus ??
+                  dashboard.payoutLiquidity?.providerLiquidityStatus,
+              )}
+              tone={operationalLiquidityTone(liquidityOperationalStatus)}
+            />
+            <Metric
+              label="Required operating reserve"
+              value={
+                separatedStripe?.requiredOperationalReserveMinor === null
+                  ? "Not configured"
+                  : money(separatedStripe?.requiredOperationalReserveMinor)
+              }
+              tone="gold"
+            />
+            <Metric
+              label="Liquidity surplus / deficit"
+              value={
+                separatedStripe?.liquiditySurplusOrDeficitMinor === null
+                  ? "Unknown"
+                  : money(separatedStripe?.liquiditySurplusOrDeficitMinor)
+              }
+              tone={operationalLiquidityTone(liquidityOperationalStatus)}
+            />
+            <Metric
+              label="Connected balance evidence"
+              value={money(separatedStripe?.connectedAvailableEvidenceMinor)}
+              tone="purple"
+            />
+          </div>
+          <p className="admin-finance-muted">
+            {separatedStripe?.payoutLiquidityStatus === "UNAVAILABLE"
+              ? "Stripe could not be read. Provider liquidity is unknown and all release decisions remain fail-closed."
+              : liquidityOperationalStatus === "DEFICIT"
+                ? `${money(separatedStripe?.liquidityShortfallMinor)} is below the protected customer-liability, payout-obligation, and explicit-reserve requirement.`
+                : `Liquidity status: ${titleCase(liquidityOperationalStatus)}. Only the Stripe Platform Payments Balance is used for withdrawal preflight; Connect balances are retained as trace evidence.`}
+          </p>
+        </section>
+
+        <section className="admin-finance-authority-section is-company">
+          <div className="admin-finance-authority-heading">
+            <div>
+              <h3>Slice company revenue</h3>
+              <p>
+                Recognised fees less provider expenses. Never customer cash or Stripe liquidity.
+              </p>
+            </div>
+            <span>{separatedRevenue?.safeToSweepStatus ?? "BLOCKED"}</span>
+          </div>
+          <div className="admin-finance-separation-metrics">
+            <Metric
+              label="Recognised net revenue"
+              value={money(
+                separatedRevenue?.recognisedNetRevenueMinor ??
+                  dashboard.platformRevenue?.estimatedNetContributionMinor,
+              )}
+              tone="green"
+            />
+            <Metric
+              label="Explicit operating reserve"
+              value={
+                separatedRevenue?.operationalReserveConfigured
+                  ? money(separatedRevenue.operationalReserveMinor)
+                  : "Not configured"
+              }
+              tone="gold"
+            />
+            <Metric
+              label="Safe to sweep"
+              value={money(separatedRevenue?.safeToSweepMinor)}
+              tone={separatedRevenue?.safeToSweepStatus === "READY" ? "green" : "red"}
+            />
+            <Metric
+              label="Already swept"
+              value={money(separatedRevenue?.alreadySweptMinor)}
+              tone="purple"
+            />
+            <Metric
+              label="Provider cost evidence"
+              value={
+                separatedRevenue?.pendingProviderCostCount
+                  ? `${separatedRevenue.pendingProviderCostCount} pending`
+                  : "Complete"
+              }
+              tone={separatedRevenue?.pendingProviderCostCount ? "gold" : "green"}
+            />
+            <Metric label="External execution" value="Not configured" tone="blue" />
+          </div>
+          <p
+            className={`admin-finance-muted${separatedRevenue?.safeToSweepStatus === "BLOCKED" ? " is-warning" : ""}`}
+          >
+            {separatedRevenue?.safeToSweepStatus === "READY"
+              ? "A dual-control sweep request may be recorded. Approval does not send a Stripe payout."
+              : separatedRevenue?.blockedReasons.length
+                ? `Sweep is blocked: ${separatedRevenue.blockedReasons.map(titleCase).join(", ")}.`
+                : "Sweep readiness is intentionally blocked until the server can prove a safe amount."}
+          </p>
+        </section>
+      </div>
 
       <div className="admin-finance-layout">
         <div className="admin-finance-main-card">

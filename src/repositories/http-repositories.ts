@@ -4032,6 +4032,241 @@ const mapAdminPlatformRecords = (raw: unknown): AdminPlatformRecordsResponse => 
   };
 };
 
+const mapAdminFinancialSeparation = (
+  raw: unknown,
+): AdminFinanceDashboard["financialSeparation"] => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const value = objectField(raw, "admin financial separation");
+  const customer = objectField(value.customerLiabilities, "financial separation.customer");
+  const stripe = objectField(value.stripePlatformLiquidity, "financial separation.stripe");
+  const company = objectField(value.sliceCompanyRevenue, "financial separation.company");
+  const minor = (entry: unknown, field: string) => stringField(entry, field);
+  const liquiditySource = stringField(stripe.liquiditySource, "financial separation.stripe.source");
+  const liquidityStatus = stringField(
+    stripe.payoutLiquidityStatus,
+    "financial separation.stripe.status",
+  );
+  const sweepStatus = stringField(
+    company.safeToSweepStatus,
+    "financial separation.company.sweepStatus",
+  );
+  const operationalStatus = stringField(
+    stripe.operationalStatus,
+    "financial separation.stripe.operationalStatus",
+  );
+  if (!["STRIPE_PLATFORM_PAYMENTS_BALANCE", "NOT_APPLICABLE"].includes(liquiditySource))
+    throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid financial separation liquidity source.");
+  if (!["AVAILABLE", "INSUFFICIENT", "UNAVAILABLE", "NOT_APPLICABLE"].includes(liquidityStatus))
+    throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid financial separation liquidity status.");
+  if (!["READY", "BLOCKED"].includes(sweepStatus))
+    throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid financial separation sweep status.");
+  if (!["HEALTHY", "CAUTION", "DEFICIT", "UNKNOWN"].includes(operationalStatus))
+    throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid financial separation operational status.");
+  return {
+    calculatedAt: stringField(value.calculatedAt, "financial separation.calculatedAt"),
+    customerLiabilities: {
+      totalLiabilityMinor: minor(
+        customer.totalLiabilityMinor,
+        "financial separation.customer.total",
+      ),
+      availableLiabilityMinor: minor(
+        customer.availableLiabilityMinor,
+        "financial separation.customer.available",
+      ),
+      reservedMinor: minor(customer.reservedMinor, "financial separation.customer.reserved"),
+      withdrawalEligibleMinor: minor(
+        customer.withdrawalEligibleMinor,
+        "financial separation.customer.withdrawalEligible",
+      ),
+      settlingMinor: minor(customer.settlingMinor, "financial separation.customer.settling"),
+      collectorProceedsMinor: minor(
+        customer.collectorProceedsMinor,
+        "financial separation.customer.proceeds",
+      ),
+      bacsRiskHeldMinor: minor(
+        customer.bacsRiskHeldMinor,
+        "financial separation.customer.bacsHold",
+      ),
+      pendingDepositsMinor: minor(
+        customer.pendingDepositsMinor,
+        "financial separation.customer.pendingDeposits",
+      ),
+      pendingWithdrawalsMinor: minor(
+        customer.pendingWithdrawalsMinor,
+        "financial separation.customer.pendingWithdrawals",
+      ),
+      withdrawalReservationMinor: minor(
+        customer.withdrawalReservationMinor,
+        "financial separation.customer.withdrawalReservations",
+      ),
+      unresolvedReturnExposureMinor: minor(
+        customer.unresolvedReturnExposureMinor,
+        "financial separation.customer.returnExposure",
+      ),
+    },
+    stripePlatformLiquidity: {
+      providerMode: stringField(stripe.providerMode, "financial separation.stripe.providerMode"),
+      liquiditySource: liquiditySource as "STRIPE_PLATFORM_PAYMENTS_BALANCE" | "NOT_APPLICABLE",
+      providerAvailableMinor: nullableString(
+        stripe.providerAvailableMinor,
+        "financial separation.stripe.available",
+      ),
+      providerPendingMinor: nullableString(
+        stripe.providerPendingMinor,
+        "financial separation.stripe.pending",
+      ),
+      availableAfterReservationsMinor: nullableString(
+        stripe.availableAfterReservationsMinor,
+        "financial separation.stripe.afterReservations",
+      ),
+      activeReservationMinor: minor(
+        stripe.activeReservationMinor,
+        "financial separation.stripe.reservations",
+      ),
+      payoutLiquidityStatus: liquidityStatus as
+        "AVAILABLE" | "INSUFFICIENT" | "UNAVAILABLE" | "NOT_APPLICABLE",
+      payoutLiquidityCoverageBps:
+        stripe.payoutLiquidityCoverageBps === null ||
+        stripe.payoutLiquidityCoverageBps === undefined
+          ? null
+          : Number(stripe.payoutLiquidityCoverageBps),
+      nextAvailabilityAt: nullableString(
+        stripe.nextAvailabilityAt,
+        "financial separation.stripe.nextAvailabilityAt",
+      ),
+      checkedAt: stringField(stripe.checkedAt, "financial separation.stripe.checkedAt"),
+      pendingPayoutObligationMinor: minor(
+        stripe.pendingPayoutObligationMinor,
+        "financial separation.stripe.pendingPayouts",
+      ),
+      requiredOperationalReserveMinor: nullableString(
+        stripe.requiredOperationalReserveMinor,
+        "financial separation.stripe.requiredReserve",
+      ),
+      requiredPlatformRetentionMinor: nullableString(
+        stripe.requiredPlatformRetentionMinor,
+        "financial separation.stripe.requiredRetention",
+      ),
+      liquiditySurplusOrDeficitMinor: nullableString(
+        stripe.liquiditySurplusOrDeficitMinor,
+        "financial separation.stripe.surplusOrDeficit",
+      ),
+      liquidityShortfallMinor: nullableString(
+        stripe.liquidityShortfallMinor,
+        "financial separation.stripe.shortfall",
+      ),
+      operationalStatus: operationalStatus as "HEALTHY" | "CAUTION" | "DEFICIT" | "UNKNOWN",
+      connectedAvailableEvidenceMinor: minor(
+        stripe.connectedAvailableEvidenceMinor,
+        "financial separation.stripe.connectedAvailable",
+      ),
+      connectedPendingEvidenceMinor: minor(
+        stripe.connectedPendingEvidenceMinor,
+        "financial separation.stripe.connectedPending",
+      ),
+      connectedBalanceEvidenceAt: nullableString(
+        stripe.connectedBalanceEvidenceAt,
+        "financial separation.stripe.connectedEvidenceAt",
+      ),
+    },
+    sliceCompanyRevenue: {
+      feeRevenueByCategory: Array.isArray(company.feeRevenueByCategory)
+        ? company.feeRevenueByCategory.map((entry) => {
+            const item = objectField(entry, "financial separation.company.category");
+            return {
+              category: stringField(item.category, "financial separation.company.category.name"),
+              amountMinor: minor(item.amountMinor, "financial separation.company.category.amount"),
+            };
+          })
+        : [],
+      grossFeeRevenueMinor: minor(
+        company.grossFeeRevenueMinor,
+        "financial separation.company.gross",
+      ),
+      providerExpensesMinor: minor(
+        company.providerExpensesMinor,
+        "financial separation.company.expenses",
+      ),
+      knownProviderCostsMinor: minor(
+        company.knownProviderCostsMinor,
+        "financial separation.company.knownCosts",
+      ),
+      pendingProviderCostCount: Number(company.pendingProviderCostCount ?? 0),
+      recognisedNetRevenueMinor: minor(
+        company.recognisedNetRevenueMinor,
+        "financial separation.company.net",
+      ),
+      alreadySweptMinor: minor(company.alreadySweptMinor, "financial separation.company.swept"),
+      committedSweepMinor: minor(
+        company.committedSweepMinor,
+        "financial separation.company.committed",
+      ),
+      unsweptRecognisedRevenueMinor: minor(
+        company.unsweptRecognisedRevenueMinor,
+        "financial separation.company.unswept",
+      ),
+      operationalReserveConfigured: Boolean(company.operationalReserveConfigured),
+      operationalReserveMinor: nullableString(
+        company.operationalReserveMinor,
+        "financial separation.company.reserve",
+      ),
+      protectedLiquidityMinor: nullableString(
+        company.protectedLiquidityMinor,
+        "financial separation.company.protected",
+      ),
+      availableAboveProtectionMinor: nullableString(
+        company.availableAboveProtectionMinor,
+        "financial separation.company.availableAboveProtection",
+      ),
+      safeToSweepMinor: minor(company.safeToSweepMinor, "financial separation.company.safe"),
+      safeToSweepStatus: sweepStatus as "READY" | "BLOCKED",
+      blockedReasons: Array.isArray(company.blockedReasons)
+        ? company.blockedReasons.map(String)
+        : [],
+      externalExecutionStatus: "NOT_CONFIGURED",
+    },
+    providerTraces: Array.isArray(value.providerTraces)
+      ? value.providerTraces.map((entry) => {
+          const trace = objectField(entry, "financial separation.provider trace");
+          return {
+            id: stringField(trace.id, "financial separation.provider trace.id"),
+            type: stringField(trace.type, "financial separation.provider trace.type"),
+            rail: stringField(trace.rail, "financial separation.provider trace.rail"),
+            status: stringField(trace.status, "financial separation.provider trace.status"),
+            grossMinor: minor(trace.grossMinor, "financial separation.provider trace.gross"),
+            sliceFeeMinor: minor(trace.sliceFeeMinor, "financial separation.provider trace.fee"),
+            providerAmountMinor: nullableString(
+              trace.providerAmountMinor,
+              "financial separation.provider trace.providerAmount",
+            ),
+            providerFeeMinor: nullableString(
+              trace.providerFeeMinor,
+              "financial separation.provider trace.providerFee",
+            ),
+            providerNetMinor: nullableString(
+              trace.providerNetMinor,
+              "financial separation.provider trace.providerNet",
+            ),
+            providerReferenceRecorded: Boolean(trace.providerReferenceRecorded),
+            providerBalanceTransactionRecorded: Boolean(trace.providerBalanceTransactionRecorded),
+            providerAvailableOn: nullableString(
+              trace.providerAvailableOn,
+              "financial separation.provider trace.availableOn",
+            ),
+            connectPayoutStatus: nullableString(
+              trace.connectPayoutStatus,
+              "financial separation.provider trace.connectStatus",
+            ),
+            updatedAt: stringField(
+              trace.updatedAt,
+              "financial separation.provider trace.updatedAt",
+            ),
+          };
+        })
+      : [],
+  };
+};
+
 const mapAdminFinanceDashboard = (raw: unknown): AdminFinanceDashboard => {
   const value = objectField(raw, "admin finance dashboard");
   const kpis = objectField(value.kpis, "admin finance dashboard.kpis");
@@ -4197,6 +4432,7 @@ const mapAdminFinanceDashboard = (raw: unknown): AdminFinanceDashboard => {
             };
           })()
         : undefined,
+    financialSeparation: mapAdminFinancialSeparation(value.financialSeparation),
     overview: {
       totalVolumeMinor: mapMinor(overview.totalVolumeMinor, "finance.overview.totalVolumeMinor"),
       buyVolumeMinor: mapMinor(overview.buyVolumeMinor, "finance.overview.buyVolumeMinor"),

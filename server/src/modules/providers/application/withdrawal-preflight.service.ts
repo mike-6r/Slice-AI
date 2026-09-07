@@ -269,7 +269,9 @@ export class WithdrawalPreflightService {
     });
   }
 
-  async adminProjection(): Promise<ProviderLiquidityProjection> {
+  async adminProjection(
+    forceRefresh = false,
+  ): Promise<ProviderLiquidityProjection> {
     const [accounts, settling, activeReservationMinor, snapshot] =
       await Promise.all([
         this.db.financialAccount.findMany({
@@ -295,7 +297,7 @@ export class WithdrawalPreflightService {
           _sum: { amountMinor: true },
         }),
         this.activeReservationMinor(),
-        this.snapshot(false),
+        this.snapshot(forceRefresh),
       ]);
     let customerCashLiabilityMinor = 0n;
     let withdrawalEligibleLiabilityMinor = 0n;

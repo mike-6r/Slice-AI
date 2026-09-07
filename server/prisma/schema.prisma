@@ -3437,6 +3437,11 @@ model PlatformRevenueSettlement {
   providerExpensesMinor      BigInt
   eligibleSettlementMinor    BigInt
   requestedAmountMinor       BigInt
+  /// Operator reason and immutable read-model snapshots are required for all
+  /// new company revenue sweep requests. Historical rows may not have them.
+  reason                     String?
+  beforeFinancialSnapshot    Json?
+  afterFinancialSnapshot     Json?
   requestIdempotencyKeyHash  String                          @unique
   approvalIdempotencyKeyHash String?                         @unique
   status                     PlatformRevenueSettlementStatus @default(DRAFT)

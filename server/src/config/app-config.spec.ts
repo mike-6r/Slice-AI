@@ -12,6 +12,21 @@ describe('loadAppConfig', () => {
     });
   });
 
+  it('keeps company revenue sweeping fail-closed until an explicit reserve is set', () => {
+    expect(
+      loadAppConfig({
+        ...unitTestEnvironment,
+        FINANCE_OPERATIONAL_RESERVE_MINOR: '',
+      }).financeOperationalReserveMinor,
+    ).toBeUndefined();
+    expect(
+      loadAppConfig({
+        ...unitTestEnvironment,
+        FINANCE_OPERATIONAL_RESERVE_MINOR: '250000',
+      }).financeOperationalReserveMinor,
+    ).toBe(250000);
+  });
+
   it('exposes an explicit beta deployment mode without treating it as production', () => {
     const beta = loadAppConfig({
       NODE_ENV: 'test',
@@ -153,7 +168,10 @@ describe('loadAppConfig', () => {
   it('uses the provider-neutral feature flag to keep SMS fail-closed', () => {
     expect(
       loadAppConfig({ NODE_ENV: 'test', TWILIO_SMS_ENABLED: 'false' }),
-    ).toMatchObject({ phoneVerificationEnabled: false, phoneDeliveryMode: 'local_test' });
+    ).toMatchObject({
+      phoneVerificationEnabled: false,
+      phoneDeliveryMode: 'local_test',
+    });
   });
 
   it('rejects insecure production cookies and accepts the secure production default', () => {
@@ -314,24 +332,36 @@ describe('loadAppConfig', () => {
   });
 
   it('requires an explicit Stripe provider and test secret for Identity sandbox enablement', () => {
-    expect(() => loadAppConfig({ ...unitTestEnvironment, STRIPE_IDENTITY_ENABLED: 'true' })).toThrow(
-      'STRIPE_IDENTITY_ENABLED requires a Stripe provider mode.',
-    );
-    expect(() => loadAppConfig({
-      ...unitTestEnvironment,
-      PROVIDER_MODE: 'stripe_sandbox',
-      STRIPE_IDENTITY_ENABLED: 'true',
-    })).toThrow('Stripe Identity sandbox requires a test-mode secret key.');
-    expect(loadAppConfig({
-      ...unitTestEnvironment,
-      PROVIDER_MODE: 'stripe_sandbox',
-      STRIPE_IDENTITY_ENABLED: 'true',
-      STRIPE_SECRET_KEY: 'sk_test_' + 'a'.repeat(32),
-    }).stripeIdentityEnabled).toBe(true);
+    expect(() =>
+      loadAppConfig({
+        ...unitTestEnvironment,
+        STRIPE_IDENTITY_ENABLED: 'true',
+      }),
+    ).toThrow('STRIPE_IDENTITY_ENABLED requires a Stripe provider mode.');
+    expect(() =>
+      loadAppConfig({
+        ...unitTestEnvironment,
+        PROVIDER_MODE: 'stripe_sandbox',
+        STRIPE_IDENTITY_ENABLED: 'true',
+      }),
+    ).toThrow('Stripe Identity sandbox requires a test-mode secret key.');
+    expect(
+      loadAppConfig({
+        ...unitTestEnvironment,
+        PROVIDER_MODE: 'stripe_sandbox',
+        STRIPE_IDENTITY_ENABLED: 'true',
+        STRIPE_SECRET_KEY: 'sk_test_' + 'a'.repeat(32),
+      }).stripeIdentityEnabled,
+    ).toBe(true);
   });
 
   it('rejects the retired US bank funding rail in the GBP product mode', () => {
-    expect(() => loadAppConfig({ ...unitTestEnvironment, STRIPE_BANK_FUNDING_RAIL: 'us_bank_account' })).toThrow();
+    expect(() =>
+      loadAppConfig({
+        ...unitTestEnvironment,
+        STRIPE_BANK_FUNDING_RAIL: 'us_bank_account',
+      }),
+    ).toThrow();
   });
 
   it('rejects live enablement unless Stripe live mode is selected', () => {

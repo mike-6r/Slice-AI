@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { AccessControlModule } from '../identity/access/access-control.module';
 import { AuthModule } from '../identity/auth/auth.module';
 import { FinanceModule } from '../finance/finance.module';
@@ -22,7 +22,13 @@ import { StripeCardFundingService } from './application/stripe-card-funding.serv
 import { ProvidersController } from './http/providers.controller';
 
 @Module({
-  imports: [AuthModule, AccessControlModule, FinanceModule, OutboxModule, EmailDeliveryModule],
+  imports: [
+    AuthModule,
+    AccessControlModule,
+    forwardRef(() => FinanceModule),
+    OutboxModule,
+    EmailDeliveryModule,
+  ],
   controllers: [ProvidersController],
   providers: [
     ProviderCryptoService,
