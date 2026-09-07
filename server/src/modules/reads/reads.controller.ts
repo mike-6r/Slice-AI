@@ -944,6 +944,16 @@ const publicCollectorUserInclude = (
                 status: true,
               },
             },
+            valuationDecisions: {
+              where: { status: 'ACTIVE' },
+              orderBy: [{ decidedAt: 'desc' }, { id: 'desc' }],
+              take: 1,
+              select: {
+                valueMinor: true,
+                currency: true,
+                decidedAt: true,
+              },
+            },
           },
         },
         media: {
@@ -1027,6 +1037,11 @@ async function publicCollectorView(
           asOf: Date;
           status: string;
         }>;
+        valuationDecisions: Array<{
+          valueMinor: bigint;
+          currency: string;
+          decidedAt: Date;
+        }>;
       } | null;
     }>;
   },
@@ -1049,15 +1064,17 @@ async function publicCollectorView(
         if (!asset || (isBeta && asset.slug.startsWith('slice-demo-')))
           return [];
         const market = asset.marketSnapshots[0] ?? null;
+        const valuation = asset.valuationDecisions[0] ?? null;
         return [
           {
             submission,
             asset,
             market,
+            valuation,
           },
         ];
       })
-      .map(async ({ submission, asset, market }) => ({
+      .map(async ({ submission, asset, market, valuation }) => ({
         publicId: asset.publicId,
         slug: asset.slug,
         title: asset.title,
@@ -1137,12 +1154,14 @@ async function publicCollectorView(
           ): media is { id: string; slot: string; url: string; alt: string } =>
             Boolean(media.url),
         ),
-        market: market
+        market: valuation || market
           ? {
-              estimatedValueMinor: market.estimatedMarketValueMinor.toString(),
-              currency: market.currency,
-              asOf: market.asOf.toISOString(),
-              dataStatus: market.status,
+              estimatedValueMinor: (
+                valuation?.valueMinor ?? market!.estimatedMarketValueMinor
+              ).toString(),
+              currency: valuation?.currency ?? market!.currency,
+              asOf: (valuation?.decidedAt ?? market!.asOf).toISOString(),
+              dataStatus: market?.status ?? 'LIVE',
             }
           : null,
       })),

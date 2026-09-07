@@ -151,6 +151,13 @@ const blank: ListingForm = {
   preferredDeliveryMethod: "",
 };
 
+export function isAvailableSubmissionCategory(
+  categoryId: string,
+  categories: ReadonlyArray<{ id: string }> | undefined,
+) {
+  return Boolean(categoryId && categories?.some((category) => category.id === categoryId));
+}
+
 export function SubmissionPage() {
   useCurrency();
   const services = useAppServices();
@@ -175,6 +182,24 @@ export function SubmissionPage() {
   const saveStopped = useRef(false);
   const revisionRecovery = useRef(false);
   const previewUrls = useRef<Record<string, string>>({});
+  const feedbackRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    if (!localError) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const feedback = feedbackRef.current;
+      if (!feedback) return;
+
+      feedback.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "center",
+      });
+      feedback.focus({ preventScroll: true });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [localError]);
 
   const categories = useQuery({
     queryKey: ["catalogue", "submission-categories"],
@@ -210,7 +235,6 @@ export function SubmissionPage() {
     enabled: session.isAuthenticated && Boolean(form.categoryId),
     staleTime: 60_000,
   });
-  const draftStorageKey = currentUser.data ? `slice:list-draft:${currentUser.data.id}` : null;
   const detail = useQuery({
     queryKey: ["submissions", draft?.id ?? requestedDraftId],
     queryFn: () => services.repositories.submissions.getOwn(draft?.id ?? requestedDraftId!),
@@ -223,7 +247,10 @@ export function SubmissionPage() {
     retry: false,
   });
 
-  const validIdentity = Boolean(form.categoryId && form.name.trim());
+  const selectedCategory = categories.data?.find((category) => category.id === form.categoryId);
+  const validIdentity = Boolean(
+    isAvailableSubmissionCategory(form.categoryId, categories.data) && form.name.trim(),
+  );
   const marketReady = Boolean(
     validIdentity && form.year.trim() && form.set.trim() && form.cardNumber.trim(),
   );
@@ -266,8 +293,6 @@ export function SubmissionPage() {
       saveStopped.current = false;
       revisionRecovery.current = false;
       setNotice("Draft saved privately.");
-      if (draftStorageKey && typeof window !== "undefined")
-        window.sessionStorage.setItem(draftStorageKey, created.id);
       if (variables.nextStep) setStep(variables.nextStep);
       await client.invalidateQueries({ queryKey: ["submissions", "mine"] });
     },
@@ -304,8 +329,6 @@ export function SubmissionPage() {
       lastSaved.current = fingerprint;
       saveStopped.current = false;
       setNotice("Saved");
-      if (draftStorageKey && typeof window !== "undefined")
-        window.sessionStorage.setItem(draftStorageKey, updated.id);
       client.setQueryData(["submissions", draft?.id], updated);
       await client.invalidateQueries({ queryKey: ["submissions", "mine"] });
       if (variables.nextStep) setStep(variables.nextStep);
@@ -491,25 +514,6 @@ export function SubmissionPage() {
     return () => Object.values(urls).forEach((url) => URL.revokeObjectURL(url));
   }, []);
   useEffect(() => {
-    if (
-      requestedDraftId ||
-      !drafts.data ||
-      draft ||
-      !draftStorageKey ||
-      typeof window === "undefined"
-    )
-      return;
-    const savedId = window.sessionStorage.getItem(draftStorageKey);
-    const saved = drafts.data.items.find(
-      (item) =>
-        item.id === savedId && canResumeListing(item.status),
-    );
-    if (!saved) return;
-    setDraft(saved);
-    version.current = saved.version;
-    setStep(Math.min(Math.max(saved.currentStep || 1, 1), 7));
-  }, [draft, draftStorageKey, drafts.data, requestedDraftId]);
-  useEffect(() => {
     if (!requestedDraftId || !detail.data || detail.data.id !== requestedDraftId) return;
     if (!canResumeListing(detail.data.status)) {
       void navigate({
@@ -600,6 +604,7 @@ export function SubmissionPage() {
     version.current = detail.data.version;
     lastSaved.current = JSON.stringify({
       categoryId: hydratedForm.categoryId,
+      gradeScaleEntryId: hydratedForm.gradeScaleEntryId || null,
       metadata: metadataFromForm(hydratedForm),
     });
   }, [detail.data]);
@@ -866,7 +871,6 @@ export function SubmissionPage() {
       <ListState title="Opening submission" detail="This record is no longer an editable draft." />
     );
 
-  const selectedCategory = categories.data?.find((category) => category.id === form.categoryId);
   const submission = detail.data;
   const gradedCard = Boolean(form.grader.trim() && form.grader !== "Ungraded");
   const evidenceReady = requiredSlotsForGrading(gradedCard).every(
@@ -968,7 +972,7 @@ export function SubmissionPage() {
           </p>
         ) : null}
         {localError || fullActionError ? (
-          <p className="list-guided-error" role="alert">
+          <p ref={feedbackRef} className="list-guided-error" role="alert" tabIndex={-1}>
             <CircleAlert aria-hidden="true" /> {localError ?? friendlyError(fullActionError)}
           </p>
         ) : null}
@@ -978,6 +982,9 @@ export function SubmissionPage() {
             <IdentityStep
               categories={categories.data ?? []}
               form={form}
+              categoryUnavailable={Boolean(
+                form.categoryId && categories.data?.length && !selectedCategory,
+              )}
               onChange={change}
               referenceUrl={referenceUrl}
               onReferenceUrl={setReferenceUrl}
@@ -1222,6 +1229,7 @@ function StepProgress({
 function IdentityStep({
   categories,
   form,
+  categoryUnavailable,
   onChange,
   referenceUrl,
   onReferenceUrl,
@@ -1232,6 +1240,7 @@ function IdentityStep({
 }: {
   categories: Array<{ id: string; name: string }>;
   form: ListingForm;
+  categoryUnavailable: boolean;
   onChange: <K extends keyof ListingForm>(key: K, value: ListingForm[K]) => void;
   referenceUrl: string;
   onReferenceUrl: (value: string) => void;
@@ -1325,6 +1334,12 @@ function IdentityStep({
               </option>
             ))}
           </select>
+          {categoryUnavailable ? (
+            <small className="list-field-note" role="status">
+              This draft’s saved category is no longer available. Choose an available category to
+              continue and save your changes.
+            </small>
+          ) : null}
         </label>
         <label>
           Card or collectible name

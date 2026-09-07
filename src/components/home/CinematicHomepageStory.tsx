@@ -43,10 +43,11 @@ function useSceneVisibility() {
       setVisible(true);
       return;
     }
-    const observer = new IntersectionObserver(
-      ([entry]) => setVisible(Boolean(entry?.isIntersecting)),
-      { threshold: 0.2 },
-    );
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry?.isIntersecting || entry.intersectionRatio < 0.3) return;
+      setVisible(true);
+      observer.disconnect();
+    }, { threshold: [0, 0.3] });
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
@@ -84,43 +85,57 @@ function usePointerTilt() {
   return ref;
 }
 
-function useSceneScrollProgress(sceneSelector: string, variableName: string) {
+function useScenePlaybackProgress(sceneSelector: string, variableName: string, durationMs: number) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     const element = ref.current;
-    if (!element || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!element) return;
+    const scene = element.closest<HTMLElement>(sceneSelector);
+    if (!scene || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      element.style.setProperty(variableName, "1");
+      setProgress(1);
+      return;
+    }
 
     let frame = 0;
-    const update = () => {
-      frame = 0;
-      const scene = element.closest<HTMLElement>(sceneSelector);
-      if (!scene) return;
-
-      const availableScroll = Math.max(scene.offsetHeight - window.innerHeight, 1);
-      const nextProgress = Math.min(
-        1,
-        Math.max(0, -scene.getBoundingClientRect().top / availableScroll),
+    let started = false;
+    const setPlaybackProgress = (nextProgress: number) => {
+      const bounded = Math.min(1, Math.max(0, nextProgress));
+      element.style.setProperty(variableName, bounded.toFixed(3));
+      setProgress((current) =>
+        Math.abs(current - bounded) > 0.008 || bounded === 1 ? bounded : current,
       );
-      element.style.setProperty(variableName, nextProgress.toFixed(3));
-      setProgress((current) => (Math.abs(current - nextProgress) > 0.008 ? nextProgress : current));
-    };
-    const requestUpdate = () => {
-      if (!frame) frame = window.requestAnimationFrame(update);
     };
 
-    update();
-    const settleTimer = window.setTimeout(update, 80);
-    window.addEventListener("scroll", requestUpdate, { passive: true });
-    window.addEventListener("resize", requestUpdate);
+    const play = () => {
+      if (started) return;
+      started = true;
+      const startedAt = window.performance.now();
+      const animate = (now: number) => {
+        const elapsed = Math.min(1, (now - startedAt) / durationMs);
+        const eased = 1 - Math.pow(1 - elapsed, 3);
+        setPlaybackProgress(eased);
+        if (elapsed < 1) frame = window.requestAnimationFrame(animate);
+      };
+      frame = window.requestAnimationFrame(animate);
+    };
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting || entry.intersectionRatio < 0.3) return;
+        play();
+        observer.disconnect();
+      },
+      { threshold: [0, 0.3] },
+    );
+    observer.observe(scene);
     return () => {
-      window.removeEventListener("scroll", requestUpdate);
-      window.removeEventListener("resize", requestUpdate);
-      window.clearTimeout(settleTimer);
+      observer.disconnect();
       if (frame) window.cancelAnimationFrame(frame);
     };
-  }, [sceneSelector, variableName]);
+  }, [durationMs, sceneSelector, variableName]);
 
   return { ref, progress };
 }
@@ -183,7 +198,6 @@ function CardVisual({ compact = false }: { compact?: boolean }) {
 
 function HeroScene({ authenticated }: { authenticated: boolean }) {
   const visualRef = usePointerTilt();
-  const heroScroll = useSceneScrollProgress(".v2-scene--hero", "--v2-hero-progress");
   const illustrativeValue = HOMEPAGE_OWNERSHIP_EXAMPLE.illustrativeValuation.replace(".00", "");
   const slicePrice = HOMEPAGE_OWNERSHIP_EXAMPLE.slicePrice.replace(".00", "");
   const exampleInvestment = HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestment.replace(".00", "");
@@ -191,11 +205,7 @@ function HeroScene({ authenticated }: { authenticated: boolean }) {
 
   return (
     <Scene className="v2-scene--hero" label="One real collectible, one Slice">
-      <div
-        ref={heroScroll.ref}
-        className="v2-sticky v2-hero"
-        style={{ "--v2-hero-progress": heroScroll.progress.toFixed(3) } as CSSProperties}
-      >
+      <div className="v2-sticky v2-hero">
         <div className="v2-hero__copy">
           <p className="v2-kicker">Slice / collectible ownership</p>
           <h1>
@@ -312,13 +322,17 @@ const ownershipStoryStages = [
 ] as const;
 
 function OwnershipScene() {
-  const ownershipScroll = useSceneScrollProgress(".v2-scene--ownership", "--v2-ownership-progress");
+  const ownershipPlayback = useScenePlaybackProgress(
+    ".v2-scene--ownership",
+    "--v2-ownership-progress",
+    1_650,
+  );
   const [selectedSliceCount, setSelectedSliceCount] = useState(25);
   const selectedChoice =
     ownershipChoices.find((choice) => choice.count === selectedSliceCount) ?? ownershipChoices[2];
   const activeStage = Math.min(
     ownershipStoryStages.length - 1,
-    Math.floor(ownershipScroll.progress * 5),
+    Math.floor(ownershipPlayback.progress * 5),
   );
   const illustrativeValue = HOMEPAGE_OWNERSHIP_EXAMPLE.illustrativeValuation.replace(".00", "");
   const slicePrice = HOMEPAGE_OWNERSHIP_EXAMPLE.slicePrice.replace(".00", "");
@@ -330,11 +344,11 @@ function OwnershipScene() {
       label="How Slice ownership works"
     >
       <div
-        ref={ownershipScroll.ref}
+        ref={ownershipPlayback.ref}
         className={`v2-sticky v2-ownership v2-ownership-story is-stage-${activeStage}`}
         style={
           {
-            "--v2-ownership-progress": ownershipScroll.progress.toFixed(3),
+            "--v2-ownership-progress": ownershipPlayback.progress.toFixed(3),
           } as CSSProperties
         }
       >
@@ -609,14 +623,18 @@ const lifecycle = [
 ] as const;
 
 function LifecycleMarketScene() {
-  const lifecycleScroll = useSceneScrollProgress(".v2-scene--lifecycle", "--v2-lifecycle-progress");
+  const lifecyclePlayback = useScenePlaybackProgress(
+    ".v2-scene--lifecycle",
+    "--v2-lifecycle-progress",
+    1_800,
+  );
   const chamberRef = usePointerTilt();
   const [pinnedStage, setPinnedStage] = useState<number | null>(null);
-  const scrollStage = Math.min(
+  const playbackStage = Math.min(
     lifecycle.length - 1,
-    Math.floor(lifecycleScroll.progress * lifecycle.length),
+    Math.floor(lifecyclePlayback.progress * lifecycle.length),
   );
-  const activeIndex = pinnedStage ?? scrollStage;
+  const activeIndex = pinnedStage ?? playbackStage;
   const activeStage = lifecycle[activeIndex];
   const nextStage = lifecycle[Math.min(activeIndex + 1, lifecycle.length - 1)];
   const ActiveIcon = activeStage.icon;
@@ -628,12 +646,12 @@ function LifecycleMarketScene() {
       label="What happens after you reserve"
     >
       <div
-        ref={lifecycleScroll.ref}
+        ref={lifecyclePlayback.ref}
         className={"v2-sticky v2-lifecycle-story is-stage-" + activeIndex}
         data-stage={activeIndex}
         style={
           {
-            "--v2-lifecycle-progress": lifecycleScroll.progress.toFixed(3),
+            "--v2-lifecycle-progress": lifecyclePlayback.progress.toFixed(3),
             "--v2-lifecycle-stage": activeIndex,
           } as CSSProperties
         }
@@ -739,10 +757,14 @@ function LifecycleMarketScene() {
 }
 
 function PortfolioScene({ authenticated }: { authenticated: boolean }) {
-  const portfolioScroll = useSceneScrollProgress(".v2-scene--portfolio", "--v2-portfolio-progress");
+  const portfolioPlayback = useScenePlaybackProgress(
+    ".v2-scene--portfolio",
+    "--v2-portfolio-progress",
+    1_450,
+  );
   const positionRef = usePointerTilt();
   const reducedMotion = useReducedMotion();
-  const progress = reducedMotion ? 1 : portfolioScroll.progress;
+  const progress = reducedMotion ? 1 : portfolioPlayback.progress;
   const positionProgress = Math.min(1, Math.max(0, (progress - 0.16) / 0.34));
   const expansionProgress = Math.min(1, Math.max(0, (progress - 0.54) / 0.28));
   const slices = Math.round(25 * positionProgress);
@@ -757,7 +779,7 @@ function PortfolioScene({ authenticated }: { authenticated: boolean }) {
       label="Where your ownership goes"
     >
       <div
-        ref={portfolioScroll.ref}
+        ref={portfolioPlayback.ref}
         className="v2-sticky v2-portfolio-reveal"
         style={
           {
@@ -928,8 +950,12 @@ function PortfolioScene({ authenticated }: { authenticated: boolean }) {
 function RealityMarketScene() {
   const trending = useTrendingAssets();
   const reducedMotion = useReducedMotion();
-  const marketScroll = useSceneScrollProgress(".v2-scene--reality", "--v2-real-market-progress");
-  const progress = reducedMotion ? 1 : marketScroll.progress;
+  const marketPlayback = useScenePlaybackProgress(
+    ".v2-scene--reality",
+    "--v2-real-market-progress",
+    1_500,
+  );
+  const progress = reducedMotion ? 1 : marketPlayback.progress;
   const publicAssets = trending.data ?? [];
   const marketState = trending.isPending
     ? "checking"
@@ -943,7 +969,7 @@ function RealityMarketScene() {
   return (
     <Scene id="v2-real-market-scene" className="v2-scene--reality" label="Real Slice marketplace">
       <div
-        ref={marketScroll.ref}
+        ref={marketPlayback.ref}
         className={`v2-market-reveal is-${marketState}`}
         style={{ "--v2-real-market-progress": progress.toFixed(3) } as CSSProperties}
       >

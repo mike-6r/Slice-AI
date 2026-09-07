@@ -34,6 +34,7 @@ describe('ReadsController public collectors', () => {
           gradeScaleEntry: null,
           category: { name: 'Pokémon' },
           marketSnapshots: [],
+          valuationDecisions: [],
         },
       },
     ],
@@ -145,5 +146,37 @@ describe('ReadsController public collectors', () => {
         }),
       ]),
     );
+  });
+
+  it('uses the active Slice valuation when a live listing has no market snapshot', async () => {
+    const { instance, user } = controller();
+    user.findFirst.mockResolvedValue({
+      ...publicRow,
+      submissions: [
+        {
+          ...publicRow.submissions[0],
+          asset: {
+            ...publicRow.submissions[0].asset,
+            valuationDecisions: [
+              {
+                valueMinor: 1_848_292n,
+                currency: 'GBP',
+                decidedAt: new Date('2026-09-07T00:00:00.000Z'),
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    const result = await instance.collector('public-collector');
+    if ('error' in result) throw new Error('Expected public collector data.');
+
+    expect(result.publishedListings?.[0]?.market).toEqual({
+      estimatedValueMinor: '1848292',
+      currency: 'GBP',
+      asOf: '2026-09-07T00:00:00.000Z',
+      dataStatus: 'LIVE',
+    });
   });
 });

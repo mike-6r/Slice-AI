@@ -19,6 +19,10 @@ import {
 import { collectorUsageFor } from './collector-entitlements';
 import { CollectorMembershipService } from '../providers/application/collector-membership.service';
 import { REQUIRED_MEDIA_SLOTS } from '../submissions/domain/submission.policy';
+import {
+  OBJECT_STORAGE,
+  type ObjectStoragePort,
+} from '../submissions/ports/submission-storage.ports';
 
 const pipeline = [
   'DRAFT',
@@ -43,6 +47,7 @@ type WorkspaceMedia = {
   filename: string;
   status: string;
   updatedAt: string;
+  previewUrl?: string | null;
 };
 type WorkspaceItem = {
   id: string;
@@ -138,6 +143,7 @@ export class CollectorWorkspaceService {
     @Inject(APP_CONFIG) private readonly config?: AppConfig,
     private readonly outbox: OutboxWriter = new OutboxWriter(),
     @Optional() private readonly membership?: CollectorMembershipService,
+    @Inject(OBJECT_STORAGE) private readonly storage?: ObjectStoragePort,
   ) {}
 
   async overview(userId: string) {
@@ -786,6 +792,34 @@ export class CollectorWorkspaceService {
     return collectorUsageFor(this.db, userId, entitlements);
   }
 
+  /**
+   * Evidence remains private to its submitting collector. The detail route gets
+   * short-lived URLs only after ownership has been established above; broader
+   * workspace projections deliberately retain metadata only.
+   */
+  private async withPrivateMedia(submission: WorkspaceSubmission) {
+    const asset = assetView(submission);
+    if (!this.storage) return asset;
+    const sourceById = new Map(submission.media.map((media) => [media.id, media]));
+    return {
+      ...asset,
+      media: await Promise.all(
+        asset.media.map(async (media) => ({
+          ...media,
+          previewUrl:
+            media.status === 'SAFE'
+              ? await this.storage!
+                  .createPrivateDownloadUrl(
+                    sourceById.get(media.id)!.objectKey,
+                    new Date(Date.now() + 5 * 60_000),
+                  )
+                  .catch(() => null)
+              : null,
+        })),
+      ),
+    };
+  }
+
   /** Customer-safe list projection. All records are scoped to D10 ownership. */
   async collectibles(userId: string) {
     return (await this.submissionsFor(userId)).map(assetView);
@@ -803,7 +837,7 @@ export class CollectorWorkspaceService {
         message: 'Collectible not found.',
       });
     }
-    const asset = assetView(submission);
+    const asset = await this.withPrivateMedia(submission);
     const requests = requestViews([asset]);
     return {
       asset,

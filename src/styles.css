@@ -10752,10 +10752,14 @@ body:has(.admin-review-detail-page) .admin-review-close {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
   margin-bottom: 0.75rem;
   color: #a7bbc5;
   font-size: 0.7rem;
   font-weight: 700;
+  cursor: pointer;
 }
 .collector-detail-back svg {
   width: 0.9rem;
@@ -10811,6 +10815,49 @@ body:has(.admin-review-detail-page) .admin-review-close {
   padding-inline: 0;
   justify-content: center;
   font-weight: 900;
+}
+.collector-detail-actions-menu {
+  position: relative;
+  z-index: 5;
+}
+.collector-detail-actions-menu > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.collector-detail-actions-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.collector-detail-actions-menu > div {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  display: grid;
+  min-width: 12.5rem;
+  gap: 0.15rem;
+  padding: 0.35rem;
+  border: 1px solid rgba(88, 220, 185, 0.24);
+  border-radius: 0.65rem;
+  background: #081218;
+  box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.36);
+}
+.collector-detail-actions-menu > div > a,
+.collector-detail-actions-menu > div > button {
+  display: flex;
+  width: 100%;
+  padding: 0.55rem 0.6rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: #dce8f1;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-align: left;
+}
+.collector-detail-actions-menu > div > a:hover,
+.collector-detail-actions-menu > div > button:hover {
+  background: rgba(41, 206, 168, 0.1);
+  color: #7bf0d1;
 }
 .collector-detail-summary-card {
   display: grid;
@@ -20629,7 +20676,7 @@ body:has(.collectors-page) .site-shell {
   }
 }
 
-@media (min-width: 1101px) {
+@media (min-width: 651px) {
   .collectors-hero {
     grid-template-columns: minmax(20rem, 0.72fr) minmax(0, 1.55fr);
     gap: clamp(2.5rem, 4vw, 5rem);
@@ -66137,6 +66184,13 @@ html,
   min-height: 2.8rem;
   font-size: 0.82rem;
 }
+.list-field-note {
+  display: block;
+  color: #f8cd6a;
+  font-size: 0.73rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
 .list-guided-heading h1 {
   max-width: 42rem;
 }
@@ -87505,5 +87559,50 @@ body:has(.portfolio-page)
   .approved-home--cinematic-v2 .v2-market-reveal__final {
     position: relative;
     inset: auto;
+  }
+}
+
+/* Main scenes now play their complete narrative on entry. Keep the art direction,
+   but release the old multi-viewport sticky runway so scrolling stays natural. */
+@media (min-width: 1101px) {
+  .approved-home--cinematic-v2 .v2-scene--hero {
+    min-height: max(46rem, calc(100svh - 5.7rem));
+  }
+
+  .approved-home--cinematic-v2 .v2-scene--ownership,
+  .approved-home--cinematic-v2 .v2-scene--lifecycle,
+  .approved-home--cinematic-v2 .v2-scene--portfolio,
+  .approved-home--cinematic-v2 .v2-scene--reality {
+    min-height: auto;
+    padding-top: clamp(3rem, 7vh, 5.5rem);
+    padding-bottom: clamp(3rem, 7vh, 5.5rem);
+  }
+
+  .approved-home--cinematic-v2 .v2-scene--hero .v2-sticky,
+  .approved-home--cinematic-v2 .v2-ownership-story,
+  .approved-home--cinematic-v2 .v2-lifecycle-story,
+  .approved-home--cinematic-v2 .v2-portfolio-reveal,
+  .approved-home--cinematic-v2 .v2-market-reveal {
+    position: relative;
+    top: auto;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .approved-home--cinematic-v2 .v2-market-reveal {
+    --v2-market-outro: 0;
+    grid-template-areas:
+      "heading heading"
+      "transition status"
+      "cards cards"
+      "final final";
+    grid-template-rows: auto auto auto auto;
+    padding: 0;
+  }
+
+  .approved-home--cinematic-v2 .v2-market-reveal__final {
+    position: relative;
+    inset: auto;
+    margin-top: clamp(1.5rem, 4vh, 3rem);
   }
 }

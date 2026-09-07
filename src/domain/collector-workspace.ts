@@ -55,7 +55,15 @@ export type CollectorWorkspaceAsset = {
     } | null;
     receivedAt: string | null;
   } | null;
-  media: Array<{ id: string; slot: string; filename: string; status: string; updatedAt: string }>;
+  media: Array<{
+    id: string;
+    slot: string;
+    filename: string;
+    status: string;
+    updatedAt: string;
+    /** Only present in the authenticated collector detail projection. */
+    previewUrl?: string | null;
+  }>;
   market: {
     isLive: boolean;
     ownersCount: number | null;

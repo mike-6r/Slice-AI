@@ -638,7 +638,6 @@ function PreSaleMarketBody({ asset }: { asset: MarketplaceAsset }) {
   const reference = asset.marketReference;
   const ownershipPerSlice =
     formatHomepageOwnership(preSale.sliceOwnershipPercentageBps) ?? "Defined Slice ownership";
-  const countdown = formatPreSaleCountdown(preSale.deadlineAt);
 
   return (
     <div className="market-card-live-body market-card-presale-body">
@@ -689,24 +688,6 @@ function PreSaleMarketBody({ asset }: { asset: MarketplaceAsset }) {
 
       <PreSaleCardSummary asset={asset} />
 
-      <section className="market-card-live-stats" aria-label="Pre-Sale status">
-        <div>
-          <span>MARKET STATUS</span>
-          <strong>Pre-Sale</strong>
-          <small>Conditional reservations</small>
-        </div>
-        <div>
-          <span>AVAILABLE TO RESERVE</span>
-          <strong>{preSale.availableUnits}</strong>
-          <small>of {preSale.offeredUnits} Slices</small>
-        </div>
-        <div>
-          <span>RESERVATION WINDOW</span>
-          <strong>{countdown}</strong>
-          <small>{preSale.reservedUnits} reserved</small>
-        </div>
-      </section>
-
       <div className="market-card-live-ownership">
         <span className="market-card-live-ownership__icon">
           <PackageCheck aria-hidden="true" />
@@ -716,18 +697,6 @@ function PreSaleMarketBody({ asset }: { asset: MarketplaceAsset }) {
           <small>{ownershipPerSlice} per Slice · converts after intake</small>
         </span>
         <ArrowRight aria-hidden="true" />
-      </div>
-
-      <div className="market-card-live-marketline market-card-presale-marketline">
-        <Clock3 aria-hidden="true" />
-        <span>
-          <strong>Conditional access</strong>
-          <small>
-            {homepagePhysicalStatus(preSale.physicalStatus)} · reservations remain subject to final
-            intake
-          </small>
-        </span>
-        <span className="market-card-live-marketline__dot" aria-hidden="true" />
       </div>
 
       <Link to="/asset/$id" params={{ id: asset.slug }} className="market-card-live-buy">

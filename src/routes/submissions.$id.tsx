@@ -785,6 +785,12 @@ function EvidenceCard({
             alt={`Selected ${slot} evidence preview`}
             className="max-h-52 rounded-lg object-contain"
           />
+        ) : existing?.previewUrl ? (
+          <img
+            src={existing.previewUrl}
+            alt={`${slotLabel(slot)} evidence`}
+            className="max-h-52 rounded-lg object-contain"
+          />
         ) : existing ? (
           <div className="text-center">
             <FileUp className="mx-auto size-8 text-accent" aria-hidden />

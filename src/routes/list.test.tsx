@@ -29,6 +29,7 @@ import {
   SubmissionPage,
   canResumeListing,
   formatGradeDisplay,
+  isAvailableSubmissionCategory,
   restoreWizardStep,
 } from "./list";
 import { isValidPercent } from "./-list-validation";
@@ -123,6 +124,14 @@ function renderList() {
 }
 
 describe("resumed listing drafts", () => {
+  it("does not treat retired draft categories as valid for an automatic save", () => {
+    const activeCategories = [{ id: "cards", name: "Collectible cards" }];
+
+    expect(isAvailableSubmissionCategory("cards", activeCategories)).toBe(true);
+    expect(isAvailableSubmissionCategory("retired-category", activeCategories)).toBe(false);
+    expect(isAvailableSubmissionCategory("", activeCategories)).toBe(false);
+  });
+
   it("reopens drafts and change requests in the listing wizard", () => {
     expect(canResumeListing("DRAFT")).toBe(true);
     expect(canResumeListing("CHANGES_REQUESTED")).toBe(true);

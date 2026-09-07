@@ -7,6 +7,7 @@ import { recordQaRollback } from "@/auth/qa-harness";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/format";
 import { useAppServices } from "@/providers/AppServicesProvider";
+import { queryKeys } from "@/queries/keys";
 const currentUser = "current" as never;
 export const Route = createFileRoute("/notifications")({
   head: () => ({ meta: [{ title: "Notifications | Slice" }] }),
@@ -17,17 +18,24 @@ function Notifications() {
   const client = useQueryClient();
   const { isAuthenticated } = useSession();
   const key = ["notifications", "current"];
+  const unreadKey = queryKeys.notifications.unread;
   const list = useQuery({
     queryKey: key,
     queryFn: () => services.repositories.notifications.listNotifications(currentUser),
     enabled: isAuthenticated,
   });
-  const refresh = () => void client.invalidateQueries({ queryKey: key });
+  const refresh = () => {
+    void client.invalidateQueries({ queryKey: key });
+    void client.invalidateQueries({ queryKey: unreadKey });
+  };
   const read = useMutation({
     mutationFn: (id: string) => services.repositories.notifications.markRead(id),
     onMutate: async (id) => {
       await client.cancelQueries({ queryKey: key });
+      await client.cancelQueries({ queryKey: unreadKey });
       const previous = client.getQueryData<typeof list.data>(key);
+      const previousUnread = client.getQueryData<number>(unreadKey);
+      const wasUnread = previous?.some((item) => item.id === id && !item.readAt) ?? false;
       if (previous)
         client.setQueryData(
           key,
@@ -35,10 +43,14 @@ function Notifications() {
             item.id === id ? { ...item, readAt: new Date().toISOString() } : item,
           ),
         );
-      return { previous };
+      if (wasUnread && typeof previousUnread === "number")
+        client.setQueryData(unreadKey, Math.max(0, previousUnread - 1));
+      return { previous, previousUnread };
     },
     onError: (_error, _id, context) => {
       if (context?.previous) client.setQueryData(key, context.previous);
+      if (typeof context?.previousUnread === "number")
+        client.setQueryData(unreadKey, context.previousUnread);
       recordQaRollback();
     },
     onSuccess: () => toast.success("Notification marked as read."),
@@ -48,16 +60,22 @@ function Notifications() {
     mutationFn: () => services.repositories.notifications.markAllRead(),
     onMutate: async () => {
       await client.cancelQueries({ queryKey: key });
+      await client.cancelQueries({ queryKey: unreadKey });
       const previous = client.getQueryData<typeof list.data>(key);
+      const previousUnread = client.getQueryData<number>(unreadKey);
       if (previous)
         client.setQueryData(
           key,
           previous.map((item) => ({ ...item, readAt: item.readAt ?? new Date().toISOString() })),
         );
-      return { previous };
+      client.setQueryData(unreadKey, 0);
+      return { previous, previousUnread };
     },
     onError: (_error, _variables, context) => {
       if (context?.previous) client.setQueryData(key, context.previous);
+      if (typeof context?.previousUnread === "number")
+        client.setQueryData(unreadKey, context.previousUnread);
+      else void client.invalidateQueries({ queryKey: unreadKey });
       recordQaRollback();
     },
     onSuccess: () => toast.success("Notifications marked as read."),
@@ -82,7 +100,7 @@ function Notifications() {
         </div>
         <button
           type="button"
-          disabled={readAll.isPending || !list.data?.length}
+          disabled={readAll.isPending || unread === 0}
           onClick={() => readAll.mutate()}
           className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-semibold hover:bg-elevated"
         >

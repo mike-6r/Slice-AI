@@ -343,6 +343,7 @@ function CollectorWorkspace() {
             deleting={deleteDraft.isPending}
             onDeleteDraft={(id, version) => deleteDraft.mutate({ id, version })}
             onSectionChange={(section) => open("asset", selected.id, section)}
+            onBack={() => open("collectibles")}
           />
         ) : (
           <WorkspaceState title="Select a collectible" />
@@ -2131,6 +2132,7 @@ function AssetManagement({
   deleting,
   onDeleteDraft,
   onSectionChange,
+  onBack,
 }: {
   asset: CollectorWorkspaceAsset;
   detail?: CollectorAssetDetail;
@@ -2140,6 +2142,7 @@ function AssetManagement({
   deleting: boolean;
   onDeleteDraft: (id: string, version: number) => void;
   onSectionChange: (section: AssetDetailSection) => void;
+  onBack: () => void;
 }) {
   return (
     <AssetManagementView
@@ -2151,6 +2154,7 @@ function AssetManagement({
       deleting={deleting}
       onDeleteDraft={onDeleteDraft}
       onSectionChange={onSectionChange}
+      onBack={onBack}
     />
   );
   /* legacy detail layout retained below temporarily for the existing detail content.
@@ -2311,6 +2315,7 @@ function AssetManagementView({
   deleting,
   onDeleteDraft,
   onSectionChange,
+  onBack,
 }: {
   asset: CollectorWorkspaceAsset;
   detail?: CollectorAssetDetail;
@@ -2320,6 +2325,7 @@ function AssetManagementView({
   deleting: boolean;
   onDeleteDraft: (id: string, version: number) => void;
   onSectionChange: (section: AssetDetailSection) => void;
+  onBack: () => void;
 }) {
   const sections: Array<{ id: AssetDetailSection; label: string }> = [
     { id: "overview", label: "Overview" },
@@ -2333,6 +2339,10 @@ function AssetManagementView({
   const [openSubmission, setOpenSubmission] = useState(false);
   useEffect(() => setSection(initialSection), [asset.id, initialSection]);
   useEffect(() => setOpenSubmission(false), [asset.id]);
+  const selectSection = (next: AssetDetailSection) => {
+    setSection(next);
+    onSectionChange(next);
+  };
   const market = marketResearchSummary(asset);
   const lifecycle = detail?.lifecycle ?? lifecycleFallback(asset, detail?.requests?.[0] ?? null);
   const openAction = (targetRoute?: string) => {
@@ -2366,9 +2376,9 @@ function AssetManagementView({
     >
       <div className="collector-detail-layout">
         <div className="collector-detail-main">
-          <Link to="/collector-workspace" className="collector-detail-back">
+          <button type="button" className="collector-detail-back" onClick={onBack}>
             <ChevronLeft aria-hidden="true" /> My Collectibles
-          </Link>
+          </button>
           <header className="collector-detail-heading">
             <div>
               <h1>{asset.title}</h1>
@@ -2384,12 +2394,27 @@ function AssetManagementView({
             </div>
             <div className="collector-detail-heading__actions">
               {detailAction(asset)}
-              <button
-                className="collector-button collector-button--icon"
-                aria-label="More collectible actions"
-              >
-                ···
-              </button>
+              <details className="collector-detail-actions-menu">
+                <summary
+                  className="collector-button collector-button--icon"
+                  aria-label="More collectible actions"
+                >
+                  ···
+                </summary>
+                <div role="menu" aria-label="More collectible actions">
+                  <button type="button" role="menuitem" onClick={() => selectSection("details")}>
+                    View details
+                  </button>
+                  <button type="button" role="menuitem" onClick={() => selectSection("media")}>
+                    View submitted images
+                  </button>
+                  {asset.slug && asset.market.isLive ? (
+                    <Link to="/asset/$id" params={{ id: asset.slug }} role="menuitem">
+                      Open public market
+                    </Link>
+                  ) : null}
+                </div>
+              </details>
             </div>
           </header>
           <section className="collector-detail-summary-card">
@@ -2439,10 +2464,7 @@ function AssetManagementView({
                 role="tab"
                 aria-selected={section === id}
                 className={section === id ? "is-active" : ""}
-                onClick={() => {
-                  setSection(id);
-                  onSectionChange(id);
-                }}
+                onClick={() => selectSection(id)}
               >
                 {label}
               </button>
@@ -3108,7 +3130,11 @@ function MediaDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
             onClick={() => setSelected(index)}
             aria-label={`View ${friendlyMediaLabel(item.slot)}`}
           >
-            <AssetThumbnail asset={asset} className="collector-media-tile__preview" />
+            <AssetThumbnail
+              asset={asset}
+              media={item}
+              className="collector-media-tile__preview"
+            />
             <strong>{friendlyMediaLabel(item.slot)}</strong>
             <small>
               {sentence(item.status)} · Uploaded {date(item.updatedAt)}
@@ -3144,7 +3170,7 @@ function MediaDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
           >
             <ChevronLeft aria-hidden="true" />
           </button>
-          <AssetThumbnail asset={asset} className="collector-media-lightbox__image" />
+          <AssetThumbnail asset={asset} media={current} className="collector-media-lightbox__image" />
           <div className="collector-media-lightbox__label">
             {friendlyMediaLabel(current.slot)} · {sentence(current.status)}
           </div>
@@ -3444,15 +3470,24 @@ function AssetCard({ asset, open }: { asset: CollectorWorkspaceAsset; open: Open
 
 function AssetThumbnail({
   asset,
+  media,
   className,
 }: {
   asset: CollectorWorkspaceAsset;
+  media?: CollectorWorkspaceAsset["media"][number];
   className?: string;
 }) {
-  const media = collectorAssetMedia(asset);
+  const preview = media?.status === "SAFE" && media.previewUrl ? media.previewUrl : null;
+  const fallback = collectorAssetMedia(asset);
   return (
     <span className={className ?? "collector-asset-thumbnail"}>
-      {media ? <img src={media.src} alt={media.alt} /> : <PackageCheck aria-hidden="true" />}
+      {preview ? (
+        <img src={preview} alt={`${friendlyMediaLabel(media!.slot)} of ${asset.title}`} />
+      ) : fallback ? (
+        <img src={fallback.src} alt={fallback.alt} />
+      ) : (
+        <PackageCheck aria-hidden="true" />
+      )}
     </span>
   );
 }

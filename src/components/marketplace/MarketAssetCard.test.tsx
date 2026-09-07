@@ -263,6 +263,9 @@ describe("MarketAssetCard layout contracts", () => {
     expect(html).toContain("total Slices");
     expect(html).toContain("GBP settlement");
     expect(html).toContain("Awaiting Intake · conditional reservation");
+    expect(html).toContain("Reserve a fractional position");
+    expect(html).not.toContain("MARKET STATUS");
+    expect(html).not.toContain("Conditional access");
   });
 
   it("renders a compact homepage projection for pre-sale assets", () => {

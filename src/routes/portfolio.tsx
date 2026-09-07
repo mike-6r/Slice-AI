@@ -1697,7 +1697,6 @@ function PortfolioKpis({
   const unrealisedPercent =
     summary.unrealisedPnlPercent ??
     (valuation ? percentageOf(valuation.unrealisedValueMinor, valuation.investedCostMinor) : null);
-  const performancePoints = performance.data?.points ?? [];
   return (
     <section className="portfolio-kpis" aria-label="Portfolio summary">
       <PortfolioKpi
@@ -1709,7 +1708,6 @@ function PortfolioKpis({
             : portfolioValueLabel(summary)
         }
         icon={Layers3}
-        sparkline={performancePoints.map((point) => point.valueMinor)}
         detail={
           summary.valuationStatus === "FULL"
             ? performance.data?.periodChangeMinor !== null &&
@@ -1727,8 +1725,7 @@ function PortfolioKpis({
             : formatPortfolioMoney(positionValue)
         }
         icon={Landmark}
-        sparkline={performancePoints.map((point) => point.holdingsValueMinor ?? "0")}
-                detail={`Across ${positionCount} position${positionCount === 1 ? "" : "s"}`}
+        detail={`Across ${positionCount} position${positionCount === 1 ? "" : "s"}`}
       />
       <PortfolioKpi
         label="Available cash"
@@ -1742,7 +1739,6 @@ function PortfolioKpis({
           valuation ? formatSignedPortfolioMoney(valuation.unrealisedValueMinor) : "Unavailable"
         }
         icon={ChartNoAxesCombined}
-        sparkline={performancePoints.map((point) => point.unrealisedPnlMinor ?? "0")}
         tone={
           valuation
             ? BigInt(valuation.unrealisedValueMinor) >= 0n
@@ -1846,7 +1842,6 @@ function PortfolioKpi({
   value,
   detail,
   icon,
-  sparkline,
   tone,
   className = "",
 }: {
@@ -1854,7 +1849,6 @@ function PortfolioKpi({
   value: string;
   detail: ReactNode;
   icon: LucideIcon;
-  sparkline?: string[];
   tone?: "positive" | "negative";
   className?: string;
 }) {
@@ -1866,32 +1860,7 @@ function PortfolioKpi({
         <strong className={tone ? `is-${tone}` : undefined}>{value}</strong>
         <span>{detail}</span>
       </div>
-      {sparkline && sparkline.length > 1 ? <KpiSparkline values={sparkline} /> : null}
     </article>
-  );
-}
-
-function KpiSparkline({ values }: { values: string[] }) {
-  const numeric = values.map(Number);
-  const min = Math.min(...numeric);
-  const max = Math.max(...numeric);
-  const span = Math.max(1, max - min);
-  const line = numeric
-    .map((value, index) => {
-      const x = (index / (numeric.length - 1)) * 100;
-      const y = 90 - ((value - min) / span) * 70;
-      return `${x},${y}`;
-    })
-    .join(" ");
-  return (
-    <svg
-      className="portfolio-kpi__sparkline"
-      viewBox="0 0 100 100"
-      preserveAspectRatio="none"
-      aria-hidden="true"
-    >
-      <polyline points={line} fill="none" vectorEffect="non-scaling-stroke" />
-    </svg>
   );
 }
 
@@ -2215,16 +2184,16 @@ function PerformanceChart({
                   <dd>{formatPortfolioMoney(activePoint.point.holdingsValueMinor)}</dd>
                 </div>
               ) : null}
-              {(activePoint.point.availableCashMinor ?? activePoint.point.cashValueMinor) !==
+              {(activePoint.point.cashValueMinor ?? activePoint.point.availableCashMinor) !==
                 undefined &&
-              (activePoint.point.availableCashMinor ?? activePoint.point.cashValueMinor) !==
+              (activePoint.point.cashValueMinor ?? activePoint.point.availableCashMinor) !==
                 null ? (
                 <div>
-                  <dt>Cash</dt>
+                  <dt>Total cash</dt>
                   <dd>
                     {formatPortfolioMoney(
-                      activePoint.point.availableCashMinor ??
-                        activePoint.point.cashValueMinor ??
+                      activePoint.point.cashValueMinor ??
+                        activePoint.point.availableCashMinor ??
                         "0",
                     )}
                   </dd>
@@ -2276,11 +2245,11 @@ function PerformanceChart({
             Cash
             <strong>
               {formatPortfolioMoney(
-                points.at(-1)!.availableCashMinor ?? points.at(-1)!.cashValueMinor ?? "0",
+                points.at(-1)!.cashValueMinor ?? points.at(-1)!.availableCashMinor ?? "0",
               )}{" "}
               (
               {sharePercent(
-                points.at(-1)!.availableCashMinor ?? points.at(-1)!.cashValueMinor ?? "0",
+                points.at(-1)!.cashValueMinor ?? points.at(-1)!.availableCashMinor ?? "0",
                 points.at(-1)!.valueMinor,
               ) ?? "—"}
               )
