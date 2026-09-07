@@ -138,30 +138,29 @@ function renderPortfolio(
 describe("approved portfolio workspace", () => {
   it("renders authoritative account data without fabricated historical performance", () => {
     const html = renderPortfolio();
-    expect(html).toContain("Total portfolio value");
-    expect(html).toContain("Cash £75.00");
-    expect(html).toContain("Positions value");
-    expect(html).toContain("Unrealised P/L");
-    expect(html).toContain("Allocation");
+    expect(html).toContain("Collector capital");
+    expect(html).toContain("Your collection,");
+    expect(html).toContain("Total account value");
+    expect(html).toContain("Capital deployed");
+    expect(html).toContain("Ready to invest");
+    expect(html).toContain("Reserved for orders");
+    expect(html).toContain("Unrealised return");
     expect(html).toContain("Safe asset");
-    expect(html).toContain("20");
-    expect(html).toContain("Recent activity");
+    expect(html).toContain("1 active position");
+    expect(html).toContain("Collection mix");
+    expect(html).toContain("Live ledger");
     expect(html).toContain("Deposit");
-    expect(html).toContain("Reserved cash");
-    expect(html).toContain("Current account value (GBP)");
-    expect(html).toContain("Value history");
-    expect(html).toContain("No portfolio performance history is available for this period.");
-    expect(html).toContain("Recent orders");
-    expect(html).toContain("View all holdings");
-    expect(html.match(/class="portfolio-summary-kpi/g)).toHaveLength(4);
-    expect(html).not.toContain('class="portfolio-kpi"');
-    expect(html).toContain("portfolio-kpi__content");
-    expect(html.match(/class="kpi-icon-tile"/g)).toHaveLength(4);
+    expect(html).toContain("Account value over time");
+    expect(html).toContain("History appears after the next authoritative account snapshot.");
+    expect(html).toContain("Order tape");
+    expect(html).toContain("Worth a closer look");
+    expect(html).toContain("portfolio-atlas");
+    expect(html).not.toContain("portfolio-summary-kpi");
+    expect(html).not.toContain("portfolio-overview-content");
+    expect(html).not.toContain("Total portfolio value");
     expect(html).not.toContain("Demo Funding");
     expect(html).not.toContain("account-safe-id");
     expect(html).not.toContain("24h change");
-    expect(html).toContain("portfolio-overview-content");
-    expect(html).not.toContain("account-safe-id");
   });
 
   it("integrates an active Pre-Sale reservation into positions without a false empty state", () => {
@@ -189,15 +188,15 @@ describe("approved portfolio workspace", () => {
       },
       reservations: [reservation],
     });
-    expect(html).toContain("Your positions (1)");
+    expect(html).toContain("1 active position");
     expect(html).toContain("Pre-Sale asset");
     expect(html).toContain("£18.50");
-    expect(html).toContain("0.10% ownership reserved");
-    expect(html).toContain("Sell unavailable until finalization.");
-    expect(html).toContain("RESERVE");
-    expect(html).toContain("Pre-Sale reservation · 1 reserved");
+    expect(html).toContain("0.10%");
+    expect(html).toContain("Reservation remains conditional until finalisation");
+    expect(html).toContain("Reserved");
+    expect(html).toContain("Pre-Sale reservation · 1 Slice");
     expect(html).toContain("Awaiting intake");
-    expect(html).not.toContain("You don't have any positions yet.");
+    expect(html).not.toContain("Your collection starts with one Slice.");
     expect(html).not.toContain("Conditional Positions");
   });
 });

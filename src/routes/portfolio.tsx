@@ -311,24 +311,17 @@ export function Portfolio() {
     <main className="portfolio-page portfolio-page--approved">
       <div className="page-shell portfolio-shell">
         {tab === "overview" ? (
-          <section className="portfolio-overview-intro" aria-label="Portfolio summary">
-            <PortfolioHeading
-              query={displaySummaryQuery}
-              tab={tab}
-              holdingSearch={holdingSearch}
-              holdingFilter={holdingFilter}
-              holdingSort={holdingSort}
-              categories={categories}
-              onHoldingSearchChange={() => undefined}
-              onHoldingFilterChange={() => undefined}
-              onHoldingSortChange={() => undefined}
-            />
-            <PortfolioKpis
-              query={displaySummaryQuery}
-              performance={performance}
-              preSaleReservations={activeReservations}
-            />
-          </section>
+          <PortfolioAtlasOverview
+            summary={displaySummaryQuery}
+            holdings={displayHoldingsQuery}
+            performance={performance}
+            preSaleReservations={activeReservations}
+            transactions={transactions}
+            orders={orders}
+            market={market}
+            range={performanceRange}
+            onRangeChange={setPerformanceRange}
+          />
         ) : (
           <>
             <PortfolioHeading
@@ -373,48 +366,7 @@ export function Portfolio() {
             ) : null}
           </>
         )}
-        {tab === "overview" ? (
-          <>
-            <section className="portfolio-overview-content" aria-label="Portfolio overview">
-              <PortfolioPerformancePanel
-                query={displaySummaryQuery}
-                performance={performance}
-                preSaleReservations={activeReservations}
-                range={performanceRange}
-                onRangeChange={setPerformanceRange}
-              />
-              <HoldingsPanel
-                summary={displaySummaryQuery}
-                query={displayHoldingsQuery}
-                categories={categories}
-                filter={holdingFilter}
-                onFilterChange={(value) =>
-                  void navigate({
-                    search: (current) => ({
-                      ...current,
-                      tab: "overview",
-                      holdingsCategory: value === "ALL" ? undefined : value,
-                    }),
-                    replace: true,
-                  })
-                }
-                visibleHoldings={visibleHoldings?.slice(0, 5)}
-                preSaleReservations={activeReservations}
-                assets={assetCatalog}
-                compact
-              />
-              <AllocationPanel query={displaySummaryQuery} />
-              <ActivityPanel query={transactions} compact />
-              <RecentOrdersPanel
-                query={orders}
-                holdings={holdingsForOrders}
-                preSaleReservations={activeReservations}
-                assets={assetCatalog}
-              />
-              <MarketWatchPanel query={market} />
-            </section>
-          </>
-        ) : tab === "holdings" ? (
+        {tab === "overview" ? null : tab === "holdings" ? (
           <HoldingsExperience
             summary={displaySummaryQuery}
             query={holdingsPage}
@@ -1829,6 +1781,605 @@ function PortfolioKpi({
         <span>{detail}</span>
       </div>
     </article>
+  );
+}
+
+/**
+ * The overview is deliberately a separate composition from the operational
+ * holdings, orders, and activity tabs. It gives the account one clear story:
+ * total capital, where it is held, what it has done, and the next useful move.
+ */
+function PortfolioAtlasOverview({
+  summary,
+  holdings,
+  performance,
+  preSaleReservations,
+  transactions,
+  orders,
+  market,
+  range,
+  onRangeChange,
+}: {
+  summary: UseQueryResult<PortfolioSummary>;
+  holdings: UseQueryResult<PortfolioHolding[]>;
+  performance: UseQueryResult<PortfolioPerformance>;
+  preSaleReservations: ActivePreSaleReservation[];
+  transactions: UseQueryResult<{ items: PortfolioTransaction[] }>;
+  orders: UseQueryResult<TradingOrderPage>;
+  market: UseQueryResult<Asset[]>;
+  range: PortfolioPerformanceRange;
+  onRangeChange: (range: PortfolioPerformanceRange) => void;
+}) {
+  const data = summary.data;
+  const totalAccountValue = data?.totalAccountValueMinor ?? data?.estimatedPortfolioValueMinor;
+  const availableCash = data?.availableCashMinor ?? data?.cash.availableMinor;
+  const reservedCash = data?.reservedCashMinor ?? data?.cash.reservedMinor;
+  const positionValue = data ? positionsValueMinor(data, preSaleReservations) : null;
+  const positionCount = (data?.holdings.length ?? 0) + preSaleReservations.length;
+  const valuation = data ? derivePortfolioValuationSnapshot(data) : null;
+  const markedAt = data ? latestPortfolioMarkAt(data) : null;
+  const selectedChange = performance.data?.periodChangeMinor ?? null;
+
+  return (
+    <section className="portfolio-atlas" aria-label="Portfolio command centre">
+      <header className="portfolio-atlas__masthead">
+        <div className="portfolio-atlas__intro">
+          <p className="portfolio-atlas__eyebrow">
+            <i aria-hidden="true" /> Collector capital
+          </p>
+          <h1>
+            Your collection,
+            <span> in focus.</span>
+          </h1>
+          <p className="portfolio-atlas__lede">
+            See how your cash and collectible positions work together—then decide where to go next.
+          </p>
+          <nav className="portfolio-atlas__nav" aria-label="Portfolio sections">
+            <Link to="/portfolio" search={{ tab: "overview" }} className="is-active">
+              Overview
+            </Link>
+            <Link to="/portfolio" search={{ tab: "holdings" }}>
+              Collection
+            </Link>
+            <Link to="/portfolio" search={{ tab: "orders" }}>
+              Orders
+            </Link>
+            <Link to="/portfolio" search={{ tab: "activity" }}>
+              Activity
+            </Link>
+          </nav>
+        </div>
+        <div className="portfolio-atlas__balance" aria-live="polite">
+          <span className="portfolio-atlas__balance-label">Total account value</span>
+          <strong>
+            {summary.isLoading
+              ? "Loading…"
+              : totalAccountValue !== null && totalAccountValue !== undefined
+                ? formatPortfolioMoney(totalAccountValue)
+                : "Unavailable"}
+          </strong>
+          <p className={selectedChange !== null && BigInt(selectedChange) < 0n ? "is-down" : ""}>
+            {selectedChange !== null
+              ? `${formatSignedPortfolioMoney(selectedChange)} ${range}`
+              : "Movement available once history is recorded"}
+          </p>
+          <div className="portfolio-atlas__mark">
+            <i aria-hidden="true" />
+            <span>Last marked</span>
+            <strong>{markedAt ? formatDateTime(markedAt) : "Unavailable"}</strong>
+          </div>
+        </div>
+      </header>
+
+      <dl className="portfolio-atlas__ledger" aria-label="Portfolio capital summary">
+        <div className="portfolio-atlas__ledger-total">
+          <dt>Capital deployed</dt>
+          <dd>{positionValue !== null ? formatPortfolioMoney(positionValue) : "Unavailable"}</dd>
+          <small>
+            {positionCount} {positionCount === 1 ? "collectible position" : "collectible positions"}
+          </small>
+        </div>
+        <div>
+          <dt>Ready to invest</dt>
+          <dd>{availableCash ? formatPortfolioMoney(availableCash) : "Unavailable"}</dd>
+          <small>Cash available for the market</small>
+        </div>
+        <div>
+          <dt>Reserved for orders</dt>
+          <dd>{reservedCash ? formatPortfolioMoney(reservedCash) : "—"}</dd>
+          <small>Held while open orders settle</small>
+        </div>
+        <div>
+          <dt>Unrealised return</dt>
+          <dd
+            className={
+              valuation && BigInt(valuation.unrealisedValueMinor) < 0n ? "is-down" : "is-up"
+            }
+          >
+            {valuation ? formatSignedPortfolioMoney(valuation.unrealisedValueMinor) : "Unavailable"}
+          </dd>
+          <small>
+            {valuation ? "Compared with invested cost" : "Authoritative return data unavailable"}
+          </small>
+        </div>
+      </dl>
+
+      <div className="portfolio-atlas__primary-grid">
+        <PortfolioAtlasValueCanvas
+          summary={summary}
+          performance={performance}
+          preSaleReservations={preSaleReservations}
+          range={range}
+          onRangeChange={onRangeChange}
+        />
+        <PortfolioAtlasCollection holdings={holdings} preSaleReservations={preSaleReservations} />
+      </div>
+
+      <div className="portfolio-atlas__signal-grid">
+        <PortfolioAtlasMix summary={summary} />
+        <PortfolioAtlasActivity transactions={transactions} />
+        <PortfolioAtlasOrderTape orders={orders} preSaleReservations={preSaleReservations} />
+      </div>
+
+      <PortfolioAtlasMarket market={market} />
+    </section>
+  );
+}
+
+function PortfolioAtlasValueCanvas({
+  summary,
+  performance,
+  preSaleReservations,
+  range,
+  onRangeChange,
+}: {
+  summary: UseQueryResult<PortfolioSummary>;
+  performance: UseQueryResult<PortfolioPerformance>;
+  preSaleReservations: ActivePreSaleReservation[];
+  range: PortfolioPerformanceRange;
+  onRangeChange: (range: PortfolioPerformanceRange) => void;
+}) {
+  const portfolio = summary.data;
+  const points = portfolio?.totalAccountValueMinor ? (performance.data?.points ?? []) : [];
+  const totalAccountValue =
+    portfolio?.totalAccountValueMinor ?? portfolio?.estimatedPortfolioValueMinor;
+  const positionsValue = portfolio ? positionsValueMinor(portfolio, preSaleReservations) : null;
+  const latestPoint = points.at(-1);
+  const chartData: PriceChartPoint[] = points.map((point, index) => {
+    const previous = points[index - 1];
+    const first = points[0]!;
+    const value = Number(point.valueMinor) / 100;
+    const previousValue = previous ? Number(previous.valueMinor) / 100 : null;
+    const firstValue = Number(first.valueMinor) / 100;
+    return {
+      value,
+      timestamp: point.timestamp,
+      previousChange: previousValue === null ? null : value - previousValue,
+      previousChangeBps: previousValue === null ? null : observedChangeBps(value, previousValue),
+      rangeChange: value - firstValue,
+      rangeChangeBps: observedChangeBps(value, firstValue),
+    };
+  });
+
+  return (
+    <article className="portfolio-atlas-surface portfolio-atlas-surface--value">
+      <header className="portfolio-atlas-surface__head">
+        <div>
+          <p>Capital movement</p>
+          <h2>Account value over time</h2>
+        </div>
+        <PortfolioAtlasRange active={range} onChange={onRangeChange} />
+      </header>
+      <div className="portfolio-atlas-value__summary">
+        <div>
+          <span>Account value</span>
+          <strong>
+            {totalAccountValue !== null && totalAccountValue !== undefined
+              ? formatPortfolioMoney(totalAccountValue)
+              : "Unavailable"}
+          </strong>
+        </div>
+        <p>
+          {performance.data?.periodChangeMinor !== null &&
+          performance.data?.periodChangeMinor !== undefined
+            ? `${formatSignedPortfolioMoney(performance.data.periodChangeMinor)} ${range}`
+            : "Recorded account history"}
+        </p>
+      </div>
+      {summary.isLoading || performance.isLoading ? (
+        <div className="portfolio-atlas-chart-skeleton" aria-label="Loading portfolio history" />
+      ) : summary.isError || performance.isError ? (
+        <div className="portfolio-atlas-message">
+          <ChartNoAxesCombined aria-hidden="true" />
+          <p>Value history is temporarily unavailable.</p>
+          <button type="button" onClick={() => void performance.refetch()}>
+            Try again
+          </button>
+        </div>
+      ) : chartData.length >= 2 ? (
+        <div className="portfolio-atlas-chart">
+          <PriceChart
+            data={chartData}
+            height={292}
+            className="portfolio-atlas-chart__figure"
+            label="Portfolio account value history"
+            timeRange={portfolioRangeToMarketRange(performance.data?.range ?? range)}
+            formatValue={formatPortfolioChartValue}
+          />
+          {latestPoint ? (
+            <div className="portfolio-atlas-chart__snapshot">
+              <span>Latest snapshot</span>
+              <strong>{formatPerformanceSnapshotDate(latestPoint.timestamp)}</strong>
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="portfolio-atlas-message">
+          <ChartNoAxesCombined aria-hidden="true" />
+          <p>History appears after the next authoritative account snapshot.</p>
+        </div>
+      )}
+      <footer className="portfolio-atlas-value__breakdown">
+        <div>
+          <span>Collectibles</span>
+          <strong>
+            {positionsValue !== null ? formatPortfolioMoney(positionsValue) : "Unavailable"}
+          </strong>
+        </div>
+        <div>
+          <span>Available cash</span>
+          <strong>
+            {portfolio
+              ? formatPortfolioMoney(portfolio.availableCashMinor ?? portfolio.cash.availableMinor)
+              : "Unavailable"}
+          </strong>
+        </div>
+        <div>
+          <span>Latest history</span>
+          <strong>
+            {latestPoint ? formatPortfolioMoney(latestPoint.valueMinor) : "Awaiting history"}
+          </strong>
+        </div>
+      </footer>
+    </article>
+  );
+}
+
+function PortfolioAtlasRange({
+  active,
+  onChange,
+}: {
+  active: PortfolioPerformanceRange;
+  onChange: (range: PortfolioPerformanceRange) => void;
+}) {
+  const periods: PortfolioPerformanceRange[] = ["1D", "1W", "1M", "3M", "1Y", "ALL"];
+  return (
+    <div className="portfolio-atlas-range" aria-label="Portfolio history range">
+      {periods.map((period) => (
+        <button
+          key={period}
+          type="button"
+          className={active === period ? "is-active" : undefined}
+          aria-pressed={active === period}
+          onClick={() => onChange(period)}
+        >
+          {period}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function PortfolioAtlasCollection({
+  holdings,
+  preSaleReservations,
+}: {
+  holdings: UseQueryResult<PortfolioHolding[]>;
+  preSaleReservations: ActivePreSaleReservation[];
+}) {
+  const holding = holdings.data?.[0];
+  const reservation = preSaleReservations[0];
+  const positionCount = (holdings.data?.length ?? 0) + preSaleReservations.length;
+  const valuation = holding ? deriveHoldingValuation(holding) : null;
+  const ownership = holding?.totalUnits
+    ? `${holding.userOwnershipPercent ?? ownershipPercent(holding.ownedUnits, holding.totalUnits)}%`
+    : holding
+      ? "Unavailable"
+      : reservation
+        ? reservationOwnership(reservation)
+        : null;
+  const assetTitle = holding ? holdingDisplayLabel(holding) : reservation?.asset.title;
+  const assetMeta = holding
+    ? [holding.category, holding.setName, holding.grade].filter(Boolean).join(" · ")
+    : reservation
+      ? `Pre-Sale reservation · ${reservation.units} ${reservation.units === "1" ? "Slice" : "Slices"}`
+      : null;
+  const assetSlug = holding?.slug ?? reservation?.asset.slug ?? null;
+  const assetValue = holding?.estimatedValueMinor ?? reservation?.grossMinor ?? null;
+
+  return (
+    <article className="portfolio-atlas-surface portfolio-atlas-surface--collection">
+      <header className="portfolio-atlas-surface__head">
+        <div>
+          <p>Collection now</p>
+          <h2>
+            {positionCount
+              ? `${positionCount} active ${positionCount === 1 ? "position" : "positions"}`
+              : "Your first position"}
+          </h2>
+        </div>
+        <Link to="/portfolio" search={{ tab: "holdings" }} className="portfolio-atlas-link">
+          See collection <ArrowRight aria-hidden="true" />
+        </Link>
+      </header>
+      {holdings.isLoading ? (
+        <div className="portfolio-atlas-collection__skeleton" aria-label="Loading collection" />
+      ) : assetTitle ? (
+        <Link
+          to="/asset/$id"
+          params={{ id: assetSlug ?? "" }}
+          className={`portfolio-atlas-collection__feature${assetSlug ? "" : " is-disabled"}`}
+          aria-disabled={assetSlug ? undefined : true}
+          onClick={(event) => {
+            if (!assetSlug) event.preventDefault();
+          }}
+        >
+          <span className="portfolio-atlas-collection__media" aria-hidden="true">
+            {holding?.thumbnailUrl ? <img src={holding.thumbnailUrl} alt="" /> : <Layers3 />}
+            <i>{holding ? "Held" : "Reserved"}</i>
+          </span>
+          <span className="portfolio-atlas-collection__copy">
+            <span className="portfolio-atlas-collection__eyebrow">Position 01</span>
+            <strong>{assetTitle}</strong>
+            <small>{assetMeta}</small>
+            <span className="portfolio-atlas-collection__metrics">
+              <span>
+                <small>Ownership</small>
+                <strong>{ownership ?? "Unavailable"}</strong>
+              </span>
+              <span>
+                <small>Marked value</small>
+                <strong>{assetValue ? formatPortfolioMoney(assetValue) : "Unavailable"}</strong>
+              </span>
+            </span>
+            <span
+              className={`portfolio-atlas-collection__return${valuation && BigInt(valuation.unrealisedValueMinor) < 0n ? " is-down" : ""}`}
+            >
+              {valuation
+                ? `${formatSignedPortfolioMoney(valuation.unrealisedValueMinor)} unrealised`
+                : reservation
+                  ? "Reservation remains conditional until finalisation"
+                  : "Authoritative return data unavailable"}
+            </span>
+          </span>
+        </Link>
+      ) : (
+        <div className="portfolio-atlas-empty">
+          <Landmark aria-hidden="true" />
+          <div>
+            <strong>Your collection starts with one Slice.</strong>
+            <p>Explore published collectibles to build your first position.</p>
+            <Link to="/marketplace">
+              Explore the market <ArrowRight aria-hidden="true" />
+            </Link>
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function PortfolioAtlasMix({ summary }: { summary: UseQueryResult<PortfolioSummary> }) {
+  const rows = summary.data ? deriveCategoryAllocation(summary.data) : null;
+  return (
+    <article className="portfolio-atlas-surface portfolio-atlas-surface--mix">
+      <header className="portfolio-atlas-surface__head">
+        <div>
+          <p>Collection mix</p>
+          <h2>Where your capital sits</h2>
+        </div>
+      </header>
+      {summary.isLoading ? (
+        <div className="portfolio-atlas-mini-skeleton" aria-label="Loading collection mix" />
+      ) : rows?.length ? (
+        <>
+          <div className="portfolio-atlas-mix__bar" aria-label="Allocation by collectible category">
+            {rows.map((row, index) => (
+              <span
+                key={row.label}
+                style={{
+                  flexBasis: `${Math.max(row.percentageBps / 100, 0.5)}%`,
+                  backgroundColor: ALLOCATION_COLOURS[index % ALLOCATION_COLOURS.length],
+                }}
+              />
+            ))}
+          </div>
+          <ul className="portfolio-atlas-mix__list">
+            {rows.slice(0, 3).map((row, index) => (
+              <li key={row.label}>
+                <i
+                  style={{ backgroundColor: ALLOCATION_COLOURS[index % ALLOCATION_COLOURS.length] }}
+                />
+                <span>{row.label}</span>
+                <strong>{formatBps(row.percentageBps)}</strong>
+                <small>{formatPortfolioMoney(row.valueMinor)}</small>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <div className="portfolio-atlas-mini-empty">
+          Allocation appears when positions are marked.
+        </div>
+      )}
+    </article>
+  );
+}
+
+function PortfolioAtlasActivity({
+  transactions,
+}: {
+  transactions: UseQueryResult<{ items: PortfolioTransaction[] }>;
+}) {
+  return (
+    <article className="portfolio-atlas-surface portfolio-atlas-surface--activity">
+      <header className="portfolio-atlas-surface__head">
+        <div>
+          <p>Live ledger</p>
+          <h2>Latest account movement</h2>
+        </div>
+        <Link to="/portfolio" search={{ tab: "activity" }} className="portfolio-atlas-link">
+          All activity <ArrowRight aria-hidden="true" />
+        </Link>
+      </header>
+      {transactions.isLoading ? (
+        <div className="portfolio-atlas-mini-skeleton" aria-label="Loading account activity" />
+      ) : transactions.data?.items.length ? (
+        <ol className="portfolio-atlas-activity">
+          {transactions.data.items.slice(0, 4).map((item, index) => (
+            <li key={`${item.reference ?? item.type}-${item.effectiveAt}-${index}`}>
+              <i className={item.side === "CREDIT" ? "is-credit" : "is-debit"} aria-hidden="true">
+                {item.side === "CREDIT" ? <ArrowUpRight /> : <ArrowDownRight />}
+              </i>
+              <span>
+                <strong>{transactionLabel(item)}</strong>
+                <small>{formatDate(item.effectiveAt)}</small>
+              </span>
+              <em className={item.side === "CREDIT" ? "is-credit" : "is-debit"}>
+                {formatTransactionMoney(item)}
+              </em>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <div className="portfolio-atlas-mini-empty">
+          Your first account movement will appear here.
+        </div>
+      )}
+    </article>
+  );
+}
+
+function PortfolioAtlasOrderTape({
+  orders,
+  preSaleReservations,
+}: {
+  orders: UseQueryResult<TradingOrderPage>;
+  preSaleReservations: ActivePreSaleReservation[];
+}) {
+  const orderItems = orders.data?.items.slice(0, 3) ?? [];
+  return (
+    <article className="portfolio-atlas-surface portfolio-atlas-surface--orders">
+      <header className="portfolio-atlas-surface__head">
+        <div>
+          <p>Order tape</p>
+          <h2>Open and recent intent</h2>
+        </div>
+        <Link to="/portfolio" search={{ tab: "orders" }} className="portfolio-atlas-link">
+          All orders <ArrowRight aria-hidden="true" />
+        </Link>
+      </header>
+      {orders.isLoading ? (
+        <div className="portfolio-atlas-mini-skeleton" aria-label="Loading orders" />
+      ) : orderItems.length || preSaleReservations.length ? (
+        <ul className="portfolio-atlas-orders">
+          {orderItems.map((order) => (
+            <li key={order.id}>
+              <span className={order.side === "BUY" ? "is-buy" : "is-sell"}>{order.side}</span>
+              <strong>{order.assetSummary?.title ?? "Collectible order"}</strong>
+              <small>
+                {order.originalUnits} {order.originalUnits === "1" ? "Slice" : "Slices"} ·{" "}
+                {formatPortfolioMoney(order.limitPriceMinor)}
+              </small>
+              <em>{formatPortfolioOrderStatus(order)}</em>
+            </li>
+          ))}
+          {!orderItems.length
+            ? preSaleReservations.slice(0, 2).map((reservation) => (
+                <li key={`reservation-${reservation.id}`}>
+                  <span className="is-reserved">reserve</span>
+                  <strong>{reservation.asset.title}</strong>
+                  <small>
+                    {reservation.units} {reservation.units === "1" ? "Slice" : "Slices"} ·{" "}
+                    {formatPortfolioMoney(reservation.grossMinor)}
+                  </small>
+                  <em>Awaiting intake</em>
+                </li>
+              ))
+            : null}
+        </ul>
+      ) : (
+        <div className="portfolio-atlas-mini-empty">
+          No orders are working. <Link to="/marketplace">Explore the market</Link>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function PortfolioAtlasMarket({ market }: { market: UseQueryResult<Asset[]> }) {
+  return (
+    <section className="portfolio-atlas-market" aria-label="Market opportunities">
+      <header>
+        <div>
+          <p>Market pulse</p>
+          <h2>Worth a closer look</h2>
+        </div>
+        <Link to="/marketplace" className="portfolio-atlas-link">
+          Explore all collectibles <ArrowRight aria-hidden="true" />
+        </Link>
+      </header>
+      {market.isLoading ? (
+        <div
+          className="portfolio-atlas-market__skeleton"
+          aria-label="Loading market opportunities"
+        />
+      ) : market.data?.length ? (
+        <div className="portfolio-atlas-market__rail">
+          {market.data
+            .filter((asset): asset is Asset & { slug: string } => Boolean(asset.slug))
+            .slice(0, 4)
+            .map((asset, index) => {
+              const media = frontAssetMedia(asset);
+              const marketValue =
+                asset.sliceValuation?.amount ?? asset.market?.estimatedMarketValue;
+              return (
+                <Link
+                  key={asset.id}
+                  to="/asset/$id"
+                  params={{ id: asset.slug }}
+                  className="portfolio-atlas-market__asset"
+                >
+                  <span className="portfolio-atlas-market__index">0{index + 1}</span>
+                  <span className="portfolio-atlas-market__media" aria-hidden="true">
+                    {media ? <img src={media.url} alt="" /> : <Eye />}
+                  </span>
+                  <span className="portfolio-atlas-market__copy">
+                    <small>{asset.details.category}</small>
+                    <strong>{asset.details.title}</strong>
+                    <em>
+                      {marketValue
+                        ? formatDisplayMoney(
+                            marketValue.amount,
+                            marketValue.currency,
+                            getCurrencyPresentation().currency,
+                            getCurrencyPresentation().rates,
+                            { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+                          )
+                        : "Value unavailable"}
+                    </em>
+                  </span>
+                  <ArrowRight aria-hidden="true" />
+                </Link>
+              );
+            })}
+        </div>
+      ) : (
+        <div className="portfolio-atlas-mini-empty">
+          Market highlights are unavailable right now.
+        </div>
+      )}
+    </section>
   );
 }
 

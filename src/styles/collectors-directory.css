@@ -3926,3 +3926,267 @@ body:has(.collectors-page)
     min-height: 11rem;
   }
 }
+
+/* Tablet and compact desktop gallery. This range was still inheriting the old
+   thumbnail-strip geometry, which made the reservation values float over the
+   artwork. Keep the full catalogue tile treatment here too. */
+@media (max-width: 1080px) and (min-width: 681px) {
+  body:has(.collectors-page) .collector-directory-card .collector-card-listings {
+    position: relative;
+    padding: 0.9rem;
+    overflow: hidden;
+    border-color: color-mix(in srgb, var(--collector-accent) 31%, rgb(119 177 165 / 0.19));
+    border-radius: 0.9rem;
+    background:
+      radial-gradient(
+        circle at 50% 0%,
+        color-mix(in srgb, var(--collector-accent) 11%, transparent),
+        transparent 54%
+      ),
+      linear-gradient(150deg, rgb(6 27 30 / 0.9), rgb(2 13 17 / 0.94));
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-card-listings__heading {
+    position: relative;
+    z-index: 1;
+    min-height: 1.5rem;
+    margin-bottom: 0.7rem;
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-card-listings__heading > span {
+    color: #dff8f0;
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.09em;
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-mini-strip,
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    > .collector-directory-card:only-child
+    .collector-mini-strip {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(20rem, 1fr);
+    gap: 0.7rem;
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-mini-strip.is-single {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body:has(.collectors-page)
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding,
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    > .collector-directory-card:only-child
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding {
+    display: grid;
+    min-height: 20rem;
+    height: auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(12rem, 1fr) auto;
+    overflow: hidden;
+    border-color: rgb(105 190 174 / 0.28);
+    border-radius: 0.78rem;
+    background:
+      radial-gradient(ellipse 54% 44% at 50% 0%, rgb(42 212 174 / 0.11), transparent 72%),
+      linear-gradient(155deg, rgb(11 35 38 / 0.98), rgb(3 14 18 / 0.99));
+  }
+
+  body:has(.collectors-page)
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__media {
+    display: grid;
+    min-height: 0;
+    place-items: center;
+    overflow: hidden;
+    border-right: 0;
+    border-bottom: 1px solid rgb(116 193 178 / 0.17);
+    background:
+      linear-gradient(180deg, rgb(8 27 31 / 0.5), rgb(3 15 20 / 0.9)),
+      radial-gradient(ellipse 42% 72% at 50% 74%, rgb(43 222 181 / 0.18), transparent 72%);
+  }
+
+  body:has(.collectors-page)
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__media::before {
+    position: absolute;
+    inset: 0.7rem;
+    border: 1px solid rgb(121 194 180 / 0.1);
+    border-radius: 0.48rem;
+    background-image:
+      linear-gradient(rgb(109 189 176 / 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(109 189 176 / 0.04) 1px, transparent 1px);
+    background-size: 1.1rem 1.1rem;
+    content: "";
+    pointer-events: none;
+  }
+
+  body:has(.collectors-page)
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__media
+    img {
+    position: relative;
+    z-index: 1;
+    width: min(12rem, 76%);
+    height: calc(100% - 1.2rem);
+    max-width: 100%;
+    padding: 0.3rem;
+    object-fit: contain;
+  }
+
+  body:has(.collectors-page)
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__status {
+    z-index: 2;
+    top: 0.58rem;
+    right: 0.58rem;
+    left: auto;
+    max-width: calc(100% - 1.16rem);
+    padding: 0.24rem 0.4rem;
+    border-radius: 999px;
+    background: rgb(3 19 21 / 0.92);
+    box-shadow: 0 0.35rem 0.9rem rgb(0 0 0 / 0.22);
+    font-size: 0.46rem;
+    line-height: 1;
+  }
+
+  body:has(.collectors-page)
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__copy,
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    > .collector-directory-card:only-child
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__copy {
+    display: flex;
+    min-height: 7.7rem;
+    gap: 0.45rem;
+    padding: 0.68rem 0.72rem 0.72rem;
+    background: linear-gradient(180deg, rgb(7 23 27 / 0.36), rgb(3 13 17 / 0.22));
+  }
+
+  body:has(.collectors-page)
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__identity {
+    gap: 0.2rem;
+  }
+
+  body:has(.collectors-page)
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__identity
+    strong {
+    color: #f0fcf8;
+    font-size: 0.72rem;
+  }
+
+  body:has(.collectors-page)
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__identity
+    small {
+    color: #8fa9a4;
+    font-size: 0.5rem;
+  }
+
+  body:has(.collectors-page)
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.4rem;
+    padding: 0.38rem 0;
+  }
+
+  body:has(.collectors-page)
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__metrics
+    small {
+    color: #789894;
+    font-size: 0.42rem;
+  }
+
+  body:has(.collectors-page)
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__metrics
+    strong {
+    color: #def7ef;
+    font-size: 0.69rem;
+  }
+
+  body:has(.collectors-page)
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__availability {
+    display: flex;
+    gap: 0.25rem 0.45rem;
+    color: #91afa8;
+    font-size: 0.47rem;
+  }
+
+  body:has(.collectors-page)
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__deadline {
+    display: none;
+  }
+
+  body:has(.collectors-page)
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__state {
+    display: inline-flex;
+    width: fit-content;
+    margin-top: auto;
+    color: #eac25a;
+    font-size: 0.47rem;
+    font-weight: 720;
+  }
+}
+
+@media (max-width: 680px) {
+  body:has(.collectors-page) .collector-directory-card .collector-card-listings {
+    padding: 0.75rem;
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-mini-strip {
+    grid-auto-rows: auto;
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-mini-holding {
+    min-height: 16rem;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 9.5rem auto;
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-mini-holding__media {
+    border-right: 0;
+    border-bottom: 1px solid rgb(116 193 178 / 0.17);
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-mini-holding__copy {
+    display: flex;
+    min-height: 6.5rem;
+    padding: 0.65rem;
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-mini-holding__deadline {
+    display: none;
+  }
+}
