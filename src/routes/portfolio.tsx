@@ -28,6 +28,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
+import { PriceChart, type PriceChartPoint } from "@/components/Chart";
 import { KpiIconTile } from "@/components/ui/KpiIconTile";
 import type { PreSaleReservationView } from "@/data/repositories";
 import type {
@@ -49,6 +50,7 @@ import { useAppServices } from "@/providers/AppServicesProvider";
 import { formatDisplayMoney } from "@/currency/currency-presentation";
 import { getCurrencyPresentation } from "@/currency/currency-store";
 import { queryKeys } from "@/queries/keys";
+import type { TimeRange } from "@/domain/market";
 import {
   PORTFOLIO_EMPTY_STATES,
   PORTFOLIO_ERROR_STATES,
@@ -312,7 +314,6 @@ export function Portfolio() {
           <section className="portfolio-overview-intro" aria-label="Portfolio summary">
             <PortfolioHeading
               query={displaySummaryQuery}
-              performance={performance}
               tab={tab}
               holdingSearch={holdingSearch}
               holdingFilter={holdingFilter}
@@ -332,7 +333,6 @@ export function Portfolio() {
           <>
             <PortfolioHeading
               query={displaySummaryQuery}
-              performance={performance}
               tab={tab}
               holdingSearch={holdingSearch}
               holdingFilter={holdingFilter}
@@ -1447,7 +1447,17 @@ function RecentOrdersPanel({
           </table>
         </div>
       ) : (
-        <PanelEmpty message="You don't have any recent orders." />
+        <PortfolioEmptyState
+          className="portfolio-empty-state--order-desk"
+          icon={<ShoppingCart aria-hidden="true" />}
+          message="Your order desk is clear."
+          detail="Orders and reservations will appear here after you take action in the market."
+          action={
+            <Link to="/marketplace" className="portfolio-empty-state__link">
+              Explore the market <ArrowRight aria-hidden="true" />
+            </Link>
+          }
+        />
       )}
     </PortfolioPanel>
   );
@@ -1527,7 +1537,6 @@ function formatPortfolioOrderStatus(order: TradingOrderView) {
 
 function PortfolioHeading({
   query,
-  performance,
   tab,
   holdingSearch,
   holdingFilter,
@@ -1538,7 +1547,6 @@ function PortfolioHeading({
   onHoldingSortChange,
 }: {
   query: UseQueryResult<PortfolioSummary>;
-  performance: UseQueryResult<PortfolioPerformance>;
   tab: PortfolioTab;
   holdingSearch: string;
   holdingFilter: HoldingFilter;
@@ -1580,7 +1588,6 @@ function PortfolioHeading({
                 : "The complete view of your cash, collectible positions and market value."}
         </p>
       </div>
-      {isOverview ? <PortfolioHeroSparkline query={performance} /> : null}
       {isHoldings ? (
         <div className="portfolio-heading__controls">
           <label className="portfolio-holdings-search">
@@ -1634,36 +1641,6 @@ function PortfolioHeading({
         </div>
       )}
     </header>
-  );
-}
-
-function PortfolioHeroSparkline({ query }: { query: UseQueryResult<PortfolioPerformance> }) {
-  const points = query.data?.points ?? [];
-  if (points.length < 2) return <div className="portfolio-heading__sparkline" aria-hidden="true" />;
-  const values = points.map((point) => Number(point.valueMinor));
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = Math.max(1, max - min);
-  const line = values
-    .map((value, index) => {
-      const x = (index / (values.length - 1)) * 100;
-      const y = 94 - ((value - min) / span) * 75;
-      return `${x},${y}`;
-    })
-    .join(" ");
-  return (
-    <div className="portfolio-heading__sparkline" aria-hidden="true">
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="portfolio-heading-fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stopColor="#27dfb4" stopOpacity="0.26" />
-            <stop offset="1" stopColor="#27dfb4" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <polygon points={`0,100 ${line} 100,100`} fill="url(#portfolio-heading-fill)" />
-        <polyline points={line} fill="none" vectorEffect="non-scaling-stroke" />
-      </svg>
-    </div>
   );
 }
 
@@ -1985,7 +1962,6 @@ function PerformanceChart({
   hasExternalCashFlow: boolean;
 }) {
   const points = hasPortfolioData ? (query.data?.points ?? []) : [];
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   if (query.isLoading) return <ChartSkeleton />;
   if (query.isError) {
     return (
@@ -2014,225 +1990,49 @@ function PerformanceChart({
       </div>
     );
   }
-  const values = points.map((point) => Number(point.valueMinor));
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const rawSpan = Math.max(1, max - min);
-  const domainPadding = rawSpan * 0.12;
-  const domainMin = Math.max(0, min - domainPadding);
-  const domainMax = max + domainPadding;
-  const domainSpan = Math.max(1, domainMax - domainMin);
-  const chartPoints = points.map((point, index) => ({
-    point,
-    index,
-    x: 2.5 + (index / (points.length - 1)) * 95,
-    y: 12 + (1 - (Number(point.valueMinor) - domainMin) / domainSpan) * 72,
-  }));
-  // Portfolio snapshots can legitimately jump when cash is added or withdrawn.
-  // A direct line preserves recorded observations without implying a smoothed
-  // market move between them.
-  const line = buildPerformanceHistoryPath(chartPoints);
-  const area = `${line} L 97.5,90 L 2.5,90 Z`;
-  const dateIndexes = Array.from(
-    new Set([0, Math.floor((points.length - 1) / 2), points.length - 1]),
-  );
-  const activePoint = activeIndex === null ? null : (chartPoints[activeIndex] ?? null);
-  const direction = query.data?.direction ?? "NEUTRAL";
-  const chartTone = hasExternalCashFlow ? "neutral" : direction.toLowerCase();
-  const axisValues = [
-    domainMax,
-    domainMin + domainSpan * 0.75,
-    domainMin + domainSpan * 0.5,
-    domainMin + domainSpan * 0.25,
-    domainMin,
-  ];
+  const firstPoint = points[0]!;
+  const latestPoint = points.at(-1)!;
+  const chartData: PriceChartPoint[] = points.map((point, index) => {
+    const previous = points[index - 1];
+    const value = Number(point.valueMinor) / 100;
+    const previousValue = previous ? Number(previous.valueMinor) / 100 : null;
+    const firstValue = Number(firstPoint.valueMinor) / 100;
+    return {
+      value,
+      timestamp: point.timestamp,
+      previousChange: previousValue === null ? null : value - previousValue,
+      previousChangeBps: previousValue === null ? null : observedChangeBps(value, previousValue),
+      rangeChange: value - firstValue,
+      rangeChangeBps: observedChangeBps(value, firstValue),
+    };
+  });
   return (
-    <div className={`portfolio-performance-chart portfolio-performance-chart--${chartTone}`}>
-      <div className="portfolio-performance-chart__plot">
-        <div className="portfolio-performance-chart__axis" aria-hidden="true">
-          {axisValues.map((value, index) => (
-            <span key={`${value}-${index}`}>
-              {formatPortfolioMoney(Math.round(value).toString())}
-            </span>
-          ))}
+    <div className="portfolio-performance-chart portfolio-performance-chart--market">
+      <div className="portfolio-performance-chart__plot portfolio-performance-chart__plot--market">
+        <PriceChart
+          data={chartData}
+          height={248}
+          className="portfolio-performance-price-chart"
+          label={`Portfolio value history${hasExternalCashFlow ? "; includes external cash movements" : ""}`}
+          timeRange={portfolioRangeToMarketRange(query.data?.range ?? "ALL")}
+          formatValue={formatPortfolioChartValue}
+        />
+        <div className="portfolio-performance-chart__snapshot-label">
+          <span>Last recorded snapshot</span>
+          <strong>{formatPerformanceSnapshotDate(latestPoint.timestamp)}</strong>
         </div>
-        <svg
-          viewBox="0 0 100 100"
-          role="img"
-          aria-label={`Portfolio value over the selected period${
-            hasExternalCashFlow ? "; includes external cash flows" : ""
-          }`}
-          preserveAspectRatio="none"
-          onPointerMove={(event) => {
-            const bounds = event.currentTarget.getBoundingClientRect();
-            const relativeX = Math.max(
-              0,
-              Math.min(1, (event.clientX - bounds.left) / Math.max(bounds.width, 1)),
-            );
-            const targetX = 2.5 + relativeX * 95;
-            const nearestIndex = chartPoints.reduce(
-              (nearest, candidate, index) =>
-                Math.abs(candidate.x - targetX) < Math.abs(chartPoints[nearest]!.x - targetX)
-                  ? index
-                  : nearest,
-              0,
-            );
-            setActiveIndex(nearestIndex);
-          }}
-          onPointerLeave={() => setActiveIndex(null)}
-        >
-          <defs>
-            <linearGradient id="portfolio-performance-area" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="currentColor" stopOpacity="0.18" />
-              <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          {[10, 30, 50, 70, 90].map((y) => (
-            <line
-              key={y}
-              x1="0"
-              x2="100"
-              y1={y}
-              y2={y}
-              className="portfolio-performance-chart__grid-line"
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
-          {[2.5, 50, 97.5].map((x) => (
-            <line
-              key={`vertical-${x}`}
-              x1={x}
-              x2={x}
-              y1="12"
-              y2="90"
-              className="portfolio-performance-chart__vertical-grid-line"
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
-          <path d={area} className="portfolio-performance-chart__area" />
-          <path
-            d={line}
-            className="portfolio-performance-chart__line"
-            fill="none"
-            vectorEffect="non-scaling-stroke"
-          />
-          {chartPoints.map(({ x, y, index }) => (
-            <circle
-              key={`${x}-${y}-${index}`}
-              cx={x}
-              cy={y}
-              r={activeIndex === index ? "2.8" : chartPoints.length <= 24 ? "1.35" : "0.8"}
-              className="portfolio-performance-chart__observation"
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
-          <circle
-            cx={activePoint?.x ?? chartPoints.at(-1)!.x}
-            cy={activePoint?.y ?? chartPoints.at(-1)!.y}
-            r={activePoint ? "2.25" : "1.65"}
-            className="portfolio-performance-chart__endpoint"
-            vectorEffect="non-scaling-stroke"
-          />
-          {activePoint ? (
-            <g className="portfolio-performance-chart__crosshair" aria-hidden="true">
-              <line x1={activePoint.x} x2={activePoint.x} y1="8" y2="90" />
-              <line x1="2.5" x2="97.5" y1={activePoint.y} y2={activePoint.y} />
-              <circle cx={activePoint.x} cy={activePoint.y} r="4.5" />
-              <circle cx={activePoint.x} cy={activePoint.y} r="2" />
-            </g>
-          ) : null}
-          <rect
-            className="portfolio-performance-chart__interaction"
-            x="0"
-            y="0"
-            width="100"
-            height="92"
-            tabIndex={0}
-            aria-label="Inspect portfolio value at each point in the selected period"
-            onFocus={() => setActiveIndex(chartPoints.length - 1)}
-            onBlur={() => setActiveIndex(null)}
-          />
-        </svg>
-        <div className="portfolio-performance-chart__x-axis" aria-hidden="true">
-          {dateIndexes.map((index) => (
-            <span
-              key={`${points[index]?.timestamp}-${index}`}
-              style={{ left: `${chartPoints[index]?.x ?? 0}%` }}
-            >
-              {formatPerformancePointDate(points[index]?.timestamp ?? "")}
-            </span>
-          ))}
-        </div>
-        {activePoint ? (
-          <div
-            className={`portfolio-performance-tooltip${activePoint.x > 82 ? " is-left" : ""}${activePoint.x < 18 ? " is-right" : ""}${activePoint.y < 28 ? " is-below" : ""}${activePoint.y > 76 ? " is-above" : ""}`}
-            style={{ left: `${activePoint.x}%`, top: `${activePoint.y}%` }}
-            role="status"
-          >
-            <time>{formatPerformancePointDate(activePoint.point.timestamp)}</time>
-            <strong>{formatPortfolioMoney(activePoint.point.valueMinor)}</strong>
-            <span>Account value</span>
-            <dl>
-              {activePoint.point.holdingsValueMinor !== undefined &&
-              activePoint.point.holdingsValueMinor !== null ? (
-                <div>
-                  <dt>Collectibles</dt>
-                  <dd>{formatPortfolioMoney(activePoint.point.holdingsValueMinor)}</dd>
-                </div>
-              ) : null}
-              {(activePoint.point.cashValueMinor ?? activePoint.point.availableCashMinor) !==
-                undefined &&
-              (activePoint.point.cashValueMinor ?? activePoint.point.availableCashMinor) !==
-                null ? (
-                <div>
-                  <dt>Total cash</dt>
-                  <dd>
-                    {formatPortfolioMoney(
-                      activePoint.point.cashValueMinor ??
-                        activePoint.point.availableCashMinor ??
-                        "0",
-                    )}
-                  </dd>
-                </div>
-              ) : null}
-              {activePoint.point.reservedValueMinor !== undefined &&
-              activePoint.point.reservedValueMinor !== null ? (
-                <div>
-                  <dt>Reserved cash</dt>
-                  <dd>{formatPortfolioMoney(activePoint.point.reservedValueMinor)}</dd>
-                </div>
-              ) : null}
-              {activePoint.point.unrealisedPnlMinor !== undefined &&
-              activePoint.point.unrealisedPnlMinor !== null ? (
-                <div>
-                  <dt>Unrealised P/L</dt>
-                  <dd>{formatSignedPortfolioMoney(activePoint.point.unrealisedPnlMinor)}</dd>
-                </div>
-              ) : null}
-              {activePoint.point.cashFlowAdjustedChangeMinor !== undefined &&
-              activePoint.point.cashFlowAdjustedChangeMinor !== null ? (
-                <div>
-                  <dt>After cash flows</dt>
-                  <dd>
-                    {formatSignedPortfolioMoney(activePoint.point.cashFlowAdjustedChangeMinor)}
-                  </dd>
-                </div>
-              ) : null}
-            </dl>
-          </div>
-        ) : null}
       </div>
-      <div className="portfolio-performance-chart__legend" aria-label="Portfolio value breakdown">
+      {hasExternalCashFlow ? (
+        <p className="portfolio-performance-chart__note">
+          Recorded cash movements are included in this account-value history.
+        </p>
+      ) : null}
+      <div className="portfolio-performance-chart__legend" aria-label="Latest portfolio snapshot">
         <div>
           <i className="is-holdings" aria-hidden="true" />
           <span>
             Holdings
-            <strong>
-              {formatPortfolioMoney(points.at(-1)!.holdingsValueMinor ?? "0")} (
-              {sharePercent(points.at(-1)!.holdingsValueMinor ?? "0", points.at(-1)!.valueMinor) ??
-                "—"}
-              )
-            </strong>
+            <strong>{formatPortfolioMoney(latestPoint.holdingsValueMinor ?? "0")}</strong>
           </span>
         </div>
         <div>
@@ -2241,25 +2041,17 @@ function PerformanceChart({
             Cash
             <strong>
               {formatPortfolioMoney(
-                points.at(-1)!.cashValueMinor ?? points.at(-1)!.availableCashMinor ?? "0",
-              )}{" "}
-              (
-              {sharePercent(
-                points.at(-1)!.cashValueMinor ?? points.at(-1)!.availableCashMinor ?? "0",
-                points.at(-1)!.valueMinor,
-              ) ?? "—"}
-              )
+                latestPoint.cashValueMinor ?? latestPoint.availableCashMinor ?? "0",
+              )}
             </strong>
-            {points.at(-1)!.reservedValueMinor && points.at(-1)!.reservedValueMinor !== "0" ? (
-              <small>
-                Reserved {formatPortfolioMoney(points.at(-1)!.reservedValueMinor ?? "0")}
-              </small>
+            {latestPoint.reservedValueMinor && latestPoint.reservedValueMinor !== "0" ? (
+              <small>Reserved {formatPortfolioMoney(latestPoint.reservedValueMinor ?? "0")}</small>
             ) : null}
           </span>
         </div>
         <div className="portfolio-performance-chart__legend-total">
           <span>
-            Total<strong>{formatPortfolioMoney(points.at(-1)!.valueMinor)}</strong>
+            Latest history<strong>{formatPortfolioMoney(latestPoint.valueMinor)}</strong>
           </span>
         </div>
       </div>
@@ -2267,18 +2059,30 @@ function PerformanceChart({
   );
 }
 
-function buildPerformanceHistoryPath(points: Array<{ x: number; y: number }>) {
-  if (!points.length) return "";
-  if (points.length === 1) return `M ${points[0]!.x},${points[0]!.y}`;
-  return points.reduce((path, point, index) => {
-    if (index === 0) return `M ${point.x},${point.y}`;
-    return `${path} L ${point.x},${point.y}`;
-  }, "");
+function portfolioRangeToMarketRange(range: PortfolioPerformanceRange): TimeRange {
+  const ranges: Record<PortfolioPerformanceRange, TimeRange> = {
+    "1D": "24H",
+    "1W": "7D",
+    "1M": "30D",
+    "3M": "90D",
+    "1Y": "1Y",
+    ALL: "ALL",
+  };
+  return ranges[range];
 }
 
-function formatPerformancePointDate(value: string) {
+function formatPortfolioChartValue(value: number) {
+  return formatPortfolioMoney(Math.round(value * 100).toString());
+}
+
+function observedChangeBps(value: number, comparison: number) {
+  if (!Number.isFinite(value) || !Number.isFinite(comparison) || comparison === 0) return null;
+  return Math.round(((value - comparison) / Math.abs(comparison)) * 10_000);
+}
+
+function formatPerformanceSnapshotDate(value: string) {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown snapshot time";
+  if (Number.isNaN(date.getTime())) return "Unavailable";
   return new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
     month: "short",
@@ -4029,10 +3833,6 @@ function percentageOf(value: string, total: string) {
   if (denominator <= 0n) return null;
   const sign = numerator > 0n ? "+" : "";
   return `${sign}${(Number((numerator * 10_000n) / denominator) / 100).toFixed(2)}%`;
-}
-function sharePercent(value: string, total: string) {
-  const percentage = percentageOf(value, total);
-  return percentage?.replace(/^\+/, "");
 }
 function ownershipPercent(units: string, total: string) {
   const denominator = BigInt(total);

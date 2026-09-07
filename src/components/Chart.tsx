@@ -87,6 +87,11 @@ type PriceChartProps = {
   className?: string;
   currency?: SupportedCurrency;
   timeRange?: TimeRange;
+  /**
+   * Lets account-level charts preserve the viewer's currency presentation
+   * without duplicating the shared interaction and tooltip system.
+   */
+  formatValue?: (value: number) => string;
 };
 
 export type PriceChartPoint = {
@@ -159,6 +164,7 @@ export function PriceChart({
   className,
   currency = "GBP",
   timeRange,
+  formatValue,
 }: PriceChartProps) {
   // Gradients are referenced by id, so each instance needs its own or charts bleed into each other.
   const gradientId = useId();
@@ -169,6 +175,7 @@ export function PriceChart({
 
   const pointsData = data.map((item) => (isPriceChartPoint(item) ? item : { value: item }));
   const values = pointsData.map((item) => item.value);
+  const displayValue = formatValue ?? ((value: number) => formatMoney(value, currency));
 
   const rawMin = Math.min(...values);
   const rawMax = Math.max(...values);
@@ -292,7 +299,7 @@ export function PriceChart({
         >
           {ticks.map((tick, index) => (
             <span key={index} className="leading-none">
-              {formatAxisLabel(tick, currency, rawMax - rawMin)}
+              {formatValue ? displayValue(tick) : formatAxisLabel(tick, currency, rawMax - rawMin)}
             </span>
           ))}
         </div>
@@ -315,14 +322,14 @@ export function PriceChart({
           role="status"
           aria-live="polite"
         >
-          <strong>{formatMoney(activePoint.value, currency)}</strong>
+          <strong>{displayValue(activePoint.value)}</strong>
           <span>{formatTooltipDate(activePoint.timestamp)}</span>
           {activePoint.previousChange !== undefined ? (
             <span>
               Previous observation:{" "}
               {activePoint.previousChange === null
                 ? "Not available"
-                : `${activePoint.previousChange >= 0 ? "+" : ""}${formatMoney(activePoint.previousChange, currency)}${formatBps(activePoint.previousChangeBps) ? ` (${formatBps(activePoint.previousChangeBps)})` : ""}`}
+                : `${activePoint.previousChange >= 0 ? "+" : ""}${displayValue(activePoint.previousChange)}${formatBps(activePoint.previousChangeBps) ? ` (${formatBps(activePoint.previousChangeBps)})` : ""}`}
             </span>
           ) : null}
           {activePoint.rangeChange !== undefined ? (
@@ -330,7 +337,7 @@ export function PriceChart({
               Range start:{" "}
               {activePoint.rangeChange === null
                 ? "Not available"
-                : `${activePoint.rangeChange >= 0 ? "+" : ""}${formatMoney(activePoint.rangeChange, currency)}${formatBps(activePoint.rangeChangeBps) ? ` (${formatBps(activePoint.rangeChangeBps)})` : ""}`}
+                : `${activePoint.rangeChange >= 0 ? "+" : ""}${displayValue(activePoint.rangeChange)}${formatBps(activePoint.rangeChangeBps) ? ` (${formatBps(activePoint.rangeChangeBps)})` : ""}`}
             </span>
           ) : null}
           {activePoint.source ? (

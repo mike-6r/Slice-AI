@@ -829,7 +829,10 @@ body:has(.collectors-page) .main-navigation > .site-shell {
 
 .collectors-directory-toolbar {
   display: grid;
-  grid-template-columns: minmax(17rem, 1fr) minmax(11rem, 0.62fr) minmax(10rem, 0.55fr) minmax(11rem, 0.62fr);
+  grid-template-columns: minmax(17rem, 1fr) minmax(11rem, 0.62fr) minmax(10rem, 0.55fr) minmax(
+      11rem,
+      0.62fr
+    );
   gap: 0.65rem;
   padding: 0.85rem 0;
   border-top: 1px solid rgba(162, 190, 199, 0.1);
@@ -1169,25 +1172,53 @@ body:has(.collectors-page) .main-navigation > .site-shell {
 }
 
 @media (max-width: 980px) {
-  .collectors-directory-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .collectors-directory-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 760px) {
-  .collectors-page .collectors-shell { width: min(calc(100% - 2rem), 70rem); }
-  .collectors-hero--directory { grid-template-columns: 1fr; gap: 1.5rem; padding-top: 2.6rem; }
-  .collectors-hero-aside { max-width: none; }
-  .collectors-directory-toolbar { grid-template-columns: 1fr 1fr; }
-  .collectors-directory-search { grid-column: 1 / -1; }
-  .collectors-featured-grid { grid-template-columns: 1fr; }
-  .collectors-directory-grid { grid-template-columns: 1fr; }
+  .collectors-page .collectors-shell {
+    width: min(calc(100% - 2rem), 70rem);
+  }
+  .collectors-hero--directory {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    padding-top: 2.6rem;
+  }
+  .collectors-hero-aside {
+    max-width: none;
+  }
+  .collectors-directory-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+  .collectors-directory-search {
+    grid-column: 1 / -1;
+  }
+  .collectors-featured-grid {
+    grid-template-columns: 1fr;
+  }
+  .collectors-directory-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 480px) {
-  .collectors-directory-toolbar { grid-template-columns: 1fr; }
-  .collectors-directory-search { grid-column: auto; }
-  .collectors-directory-stats > div { padding-inline: 0.4rem; }
-  .collectors-directory-stats dt { font-size: 0.5rem; }
-  .collectors-directory-stats dd { font-size: 0.76rem; }
+  .collectors-directory-toolbar {
+    grid-template-columns: 1fr;
+  }
+  .collectors-directory-search {
+    grid-column: auto;
+  }
+  .collectors-directory-stats > div {
+    padding-inline: 0.4rem;
+  }
+  .collectors-directory-stats dt {
+    font-size: 0.5rem;
+  }
+  .collectors-directory-stats dd {
+    font-size: 0.76rem;
+  }
 }
 
 /* Mockup match: the directory is a compact, single-grid community index. */
@@ -1686,7 +1717,10 @@ body:has(.collectors-page) .collectors-page .collectors-shell {
 
   body:has(.collectors-page) .collectors-directory-toolbar {
     display: grid;
-    grid-template-columns: minmax(18rem, 1.45fr) minmax(14rem, 1fr) minmax(14rem, 1fr) minmax(12rem, 0.8fr);
+    grid-template-columns: minmax(18rem, 1.45fr) minmax(14rem, 1fr) minmax(14rem, 1fr) minmax(
+        12rem,
+        0.8fr
+      );
     align-items: stretch;
     gap: 0.8rem;
     padding: 0.5rem 0.9rem 0.65rem;
@@ -1790,7 +1824,10 @@ body:has(.collectors-page) .collectors-page .collectors-shell {
     font-size: clamp(3.35rem, 4.4vw, 4.25rem);
   }
 
-  body:has(.collectors-page) .collectors-hero--directory .collectors-hero-copy > p:not(.collectors-kicker) {
+  body:has(.collectors-page)
+    .collectors-hero--directory
+    .collectors-hero-copy
+    > p:not(.collectors-kicker) {
     max-width: 28rem;
     margin-top: 0.75rem;
     font-size: 0.8rem;
@@ -1942,7 +1979,10 @@ body:has(.collectors-page) .collectors-hero--directory .collectors-hero-copy h1 
   color: #23dca8;
 }
 
-body:has(.collectors-page) .collectors-hero--directory .collectors-hero-copy > p:not(.collectors-kicker) {
+body:has(.collectors-page)
+  .collectors-hero--directory
+  .collectors-hero-copy
+  > p:not(.collectors-kicker) {
   max-width: 34rem;
   margin-top: 1.15rem;
   color: #a7c1b9;
@@ -2113,9 +2153,7 @@ body:has(.collectors-page) .collectors-directory-command {
   padding: clamp(1.2rem, 2.2vw, 1.75rem);
   border: 1px solid rgb(93 181 165 / 0.2);
   border-radius: 1.05rem 1.05rem 0 0;
-  background:
-    linear-gradient(110deg, rgb(35 205 166 / 0.09), transparent 42%),
-    rgb(5 20 23 / 0.82);
+  background: linear-gradient(110deg, rgb(35 205 166 / 0.09), transparent 42%), rgb(5 20 23 / 0.82);
 }
 
 body:has(.collectors-page) .collectors-directory-command h2 {
@@ -2172,7 +2210,10 @@ body:has(.collectors-page) .collectors-directory-command__signal > strong small 
 }
 
 body:has(.collectors-page) .collectors-directory-toolbar {
-  grid-template-columns: minmax(18rem, 1.28fr) minmax(11rem, 0.7fr) minmax(10.5rem, 0.62fr) minmax(10.5rem, 0.62fr);
+  grid-template-columns: minmax(18rem, 1.28fr) minmax(11rem, 0.7fr) minmax(10.5rem, 0.62fr) minmax(
+      10.5rem,
+      0.62fr
+    );
   gap: 0.55rem;
   margin: 0;
   padding: 0.72rem;
@@ -2192,7 +2233,9 @@ body:has(.collectors-page) .collectors-select-control {
 
 body:has(.collectors-page) .collectors-directory-search:focus-within {
   border-color: rgb(61 232 187 / 0.72);
-  box-shadow: 0 0 0 0.22rem rgb(40 220 176 / 0.09), inset 0 1px rgb(225 255 245 / 0.04);
+  box-shadow:
+    0 0 0 0.22rem rgb(40 220 176 / 0.09),
+    inset 0 1px rgb(225 255 245 / 0.04);
 }
 
 body:has(.collectors-page) .collectors-directory-search button {
@@ -2262,9 +2305,15 @@ body:has(.collectors-page) .collector-directory-card {
   border-color: color-mix(in srgb, var(--collector-accent) 30%, rgb(132 185 174 / 0.18));
   border-radius: 1rem;
   background:
-    linear-gradient(145deg, color-mix(in srgb, var(--collector-accent) 11%, transparent), transparent 38%),
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--collector-accent) 11%, transparent),
+      transparent 38%
+    ),
     linear-gradient(155deg, rgb(10 31 34 / 0.98), rgb(3 12 16 / 0.99));
-  box-shadow: inset 0 1px rgb(233 255 247 / 0.055), 0 1.15rem 2.7rem rgb(0 0 0 / 0.22);
+  box-shadow:
+    inset 0 1px rgb(233 255 247 / 0.055),
+    0 1.15rem 2.7rem rgb(0 0 0 / 0.22);
 }
 
 body:has(.collectors-page) .collector-directory-card > header {
@@ -2327,22 +2376,34 @@ body:has(.collectors-page) .collectors-directory-grid > .collector-directory-car
   padding: clamp(1.2rem, 2.2vw, 1.75rem);
 }
 
-body:has(.collectors-page) .collectors-directory-grid > .collector-directory-card:only-child > header {
+body:has(.collectors-page)
+  .collectors-directory-grid
+  > .collector-directory-card:only-child
+  > header {
   grid-area: identity;
 }
 
-body:has(.collectors-page) .collectors-directory-grid > .collector-directory-card:only-child .collector-profile-copy {
+body:has(.collectors-page)
+  .collectors-directory-grid
+  > .collector-directory-card:only-child
+  .collector-profile-copy {
   grid-area: copy;
   margin-top: 1.1rem;
 }
 
-body:has(.collectors-page) .collectors-directory-grid > .collector-directory-card:only-child .collector-directory-stats {
+body:has(.collectors-page)
+  .collectors-directory-grid
+  > .collector-directory-card:only-child
+  .collector-directory-stats {
   grid-area: stats;
   align-self: end;
   margin: 1.1rem 0 0;
 }
 
-body:has(.collectors-page) .collectors-directory-grid > .collector-directory-card:only-child .collector-card-listings {
+body:has(.collectors-page)
+  .collectors-directory-grid
+  > .collector-directory-card:only-child
+  .collector-card-listings {
   display: grid;
   grid-area: assets;
   align-self: stretch;
@@ -2351,35 +2412,60 @@ body:has(.collectors-page) .collectors-directory-grid > .collector-directory-car
   border: 1px solid color-mix(in srgb, var(--collector-accent) 25%, rgb(125 185 172 / 0.15));
   border-radius: 0.9rem;
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--collector-accent) 8%, transparent), transparent 60%),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--collector-accent) 8%, transparent),
+      transparent 60%
+    ),
     rgb(3 14 17 / 0.7);
 }
 
-body:has(.collectors-page) .collectors-directory-grid > .collector-directory-card:only-child .collector-card-listings__heading {
+body:has(.collectors-page)
+  .collectors-directory-grid
+  > .collector-directory-card:only-child
+  .collector-card-listings__heading {
   color: #c6e4db;
   font-size: 0.68rem;
 }
 
-body:has(.collectors-page) .collectors-directory-grid > .collector-directory-card:only-child .collector-mini-strip {
+body:has(.collectors-page)
+  .collectors-directory-grid
+  > .collector-directory-card:only-child
+  .collector-mini-strip {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.7rem;
   margin-top: 0.7rem;
 }
 
-body:has(.collectors-page) .collectors-directory-grid > .collector-directory-card:only-child .collector-mini-strip:not(.is-single) .collector-mini-holding {
+body:has(.collectors-page)
+  .collectors-directory-grid
+  > .collector-directory-card:only-child
+  .collector-mini-strip:not(.is-single)
+  .collector-mini-holding {
   grid-template-columns: minmax(6.75rem, 0.72fr) minmax(0, 1.28fr);
   height: 13.9rem;
 }
 
-body:has(.collectors-page) .collectors-directory-grid > .collector-directory-card:only-child .collector-mini-strip:not(.is-single) .collector-mini-holding__copy {
+body:has(.collectors-page)
+  .collectors-directory-grid
+  > .collector-directory-card:only-child
+  .collector-mini-strip:not(.is-single)
+  .collector-mini-holding__copy {
   display: grid;
 }
 
-body:has(.collectors-page) .collectors-directory-grid > .collector-directory-card:only-child .collector-mini-holding__copy strong {
+body:has(.collectors-page)
+  .collectors-directory-grid
+  > .collector-directory-card:only-child
+  .collector-mini-holding__copy
+  strong {
   font-size: 0.72rem;
 }
 
-body:has(.collectors-page) .collectors-directory-grid > .collector-directory-card:only-child .collector-card-footer {
+body:has(.collectors-page)
+  .collectors-directory-grid
+  > .collector-directory-card:only-child
+  .collector-card-footer {
   grid-area: actions;
   align-self: end;
   width: 100%;
@@ -2463,17 +2549,28 @@ body:has(.collectors-page) .collectors-directory-grid > .collector-directory-car
     grid-column: auto;
   }
 
-  body:has(.collectors-page) .collectors-directory-grid > .collector-directory-card:only-child .collector-card-listings {
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    > .collector-directory-card:only-child
+    .collector-card-listings {
     display: block;
     margin-top: 1rem;
   }
 
-  body:has(.collectors-page) .collectors-directory-grid > .collector-directory-card:only-child .collector-mini-strip:not(.is-single) .collector-mini-holding {
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    > .collector-directory-card:only-child
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding {
     grid-template-columns: 1fr;
     height: 9rem;
   }
 
-  body:has(.collectors-page) .collectors-directory-grid > .collector-directory-card:only-child .collector-mini-strip:not(.is-single) .collector-mini-holding__copy {
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    > .collector-directory-card:only-child
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__copy {
     display: none;
   }
 }
@@ -2525,7 +2622,10 @@ body:has(.collectors-page) .collectors-directory-grid > .collector-directory-car
     font-size: clamp(2.8rem, 4.5vw, 4.55rem);
   }
 
-  body:has(.collectors-page) .collectors-hero--directory .collectors-hero-copy > p:not(.collectors-kicker) {
+  body:has(.collectors-page)
+    .collectors-hero--directory
+    .collectors-hero-copy
+    > p:not(.collectors-kicker) {
     margin-top: 0.8rem;
   }
 
@@ -2600,7 +2700,11 @@ body:has(.collectors-page) .collectors-directory-grid .collector-directory-card 
   border: 1px solid color-mix(in srgb, var(--collector-accent) 36%, rgb(116 167 157 / 0.2));
   border-radius: 1.15rem;
   background:
-    radial-gradient(ellipse 55% 75% at 0% 0%, color-mix(in srgb, var(--collector-accent) 12%, transparent), transparent 74%),
+    radial-gradient(
+      ellipse 55% 75% at 0% 0%,
+      color-mix(in srgb, var(--collector-accent) 12%, transparent),
+      transparent 74%
+    ),
     linear-gradient(145deg, rgb(9 28 31 / 0.99), rgb(3 12 16 / 0.995));
   box-shadow:
     inset 0 1px rgb(235 255 248 / 0.07),
@@ -2888,15 +2992,23 @@ body:has(.collectors-page) .collector-directory-card .collector-card-footer a {
   white-space: nowrap;
 }
 
-body:has(.collectors-page) .collector-directory-card .collector-card-footer .collector-card-profile-link {
+body:has(.collectors-page)
+  .collector-directory-card
+  .collector-card-footer
+  .collector-card-profile-link {
   flex: 1 1 auto;
   border-color: transparent;
   background: linear-gradient(110deg, #28d8aa, #14a887);
-  box-shadow: inset 0 1px rgb(255 255 255 / 0.18), 0 0.65rem 1.2rem rgb(15 150 118 / 0.16);
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 0.18),
+    0 0.65rem 1.2rem rgb(15 150 118 / 0.16);
   color: #03130f;
 }
 
-body:has(.collectors-page) .collector-directory-card .collector-card-footer .collector-card-assets-link {
+body:has(.collectors-page)
+  .collector-directory-card
+  .collector-card-footer
+  .collector-card-assets-link {
   flex: 0 0 auto;
   background: rgb(7 23 26 / 0.75);
 }
@@ -2907,7 +3019,10 @@ body:has(.collectors-page) .collector-directory-card .collector-card-footer a:ho
   transform: translateY(-1px);
 }
 
-body:has(.collectors-page) .collector-directory-card .collector-card-footer .collector-card-profile-link:hover {
+body:has(.collectors-page)
+  .collector-directory-card
+  .collector-card-footer
+  .collector-card-profile-link:hover {
   background: linear-gradient(110deg, #4ae7bd, #1cc69d);
   color: #02110d;
 }
@@ -2921,7 +3036,11 @@ body:has(.collectors-page) .collector-directory-card .collector-card-listings {
   border: 1px solid color-mix(in srgb, var(--collector-accent) 24%, rgb(119 177 165 / 0.17));
   border-radius: 0.92rem;
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--collector-accent) 7%, transparent), transparent 54%),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--collector-accent) 7%, transparent),
+      transparent 54%
+    ),
     rgb(2 14 17 / 0.7);
 }
 
@@ -2978,7 +3097,9 @@ body:has(.collectors-page) .collector-directory-card .collector-mini-holding {
 
 body:has(.collectors-page) .collector-directory-card .collector-mini-holding:hover {
   border-color: rgb(76 223 185 / 0.56);
-  box-shadow: 0 0.65rem 1.35rem rgb(0 0 0 / 0.25), 0 0 1rem rgb(38 214 170 / 0.07);
+  box-shadow:
+    0 0.65rem 1.35rem rgb(0 0 0 / 0.25),
+    0 0 1rem rgb(38 214 170 / 0.07);
   transform: translateY(-0.12rem);
 }
 
@@ -2991,8 +3112,7 @@ body:has(.collectors-page) .collector-directory-card .collector-mini-holding__me
   overflow: hidden;
   border-right: 1px solid rgb(126 187 174 / 0.14);
   background:
-    radial-gradient(circle at 50% 45%, rgb(47 211 171 / 0.14), transparent 65%),
-    rgb(4 18 21 / 0.94);
+    radial-gradient(circle at 50% 45%, rgb(47 211 171 / 0.14), transparent 65%), rgb(4 18 21 / 0.94);
 }
 
 body:has(.collectors-page) .collector-directory-card .collector-mini-holding__media img {
@@ -3004,7 +3124,11 @@ body:has(.collectors-page) .collector-directory-card .collector-mini-holding__me
   transition: transform 220ms ease;
 }
 
-body:has(.collectors-page) .collector-directory-card .collector-mini-holding:hover .collector-mini-holding__media img {
+body:has(.collectors-page)
+  .collector-directory-card
+  .collector-mini-holding:hover
+  .collector-mini-holding__media
+  img {
   transform: scale(1.035);
 }
 
@@ -3082,7 +3206,11 @@ body:has(.collectors-page) .collector-directory-card .collector-mini-holding__me
   gap: 0.12rem;
 }
 
-body:has(.collectors-page) .collector-directory-card .collector-mini-holding__metrics > span + span {
+body:has(.collectors-page)
+  .collector-directory-card
+  .collector-mini-holding__metrics
+  > span
+  + span {
   padding-left: 0.38rem;
   border-left: 1px solid rgb(129 185 174 / 0.14);
 }
@@ -3146,8 +3274,15 @@ body:has(.collectors-page) .collector-directory-card .collector-mini-holding__st
   font-weight: 700;
 }
 
-body:has(.collectors-page) .collector-directory-card .collector-mini-holding__availability + .collector-mini-holding__deadline + .collector-mini-holding__state,
-body:has(.collectors-page) .collector-directory-card .collector-mini-holding__availability + .collector-mini-holding__state {
+body:has(.collectors-page)
+  .collector-directory-card
+  .collector-mini-holding__availability
+  + .collector-mini-holding__deadline
+  + .collector-mini-holding__state,
+body:has(.collectors-page)
+  .collector-directory-card
+  .collector-mini-holding__availability
+  + .collector-mini-holding__state {
   color: #e8bd4d;
 }
 
@@ -3270,7 +3405,10 @@ body:has(.collectors-page)
     gap: 0.55rem 0;
   }
 
-  body:has(.collectors-page) .collector-directory-card .collector-directory-stats > div:nth-child(3) {
+  body:has(.collectors-page)
+    .collector-directory-card
+    .collector-directory-stats
+    > div:nth-child(3) {
     border-left: 0;
   }
 
@@ -3308,7 +3446,483 @@ body:has(.collectors-page)
     flex-direction: column;
   }
 
-  body:has(.collectors-page) .collector-directory-card .collector-card-footer .collector-card-assets-link {
+  body:has(.collectors-page)
+    .collector-directory-card
+    .collector-card-footer
+    .collector-card-assets-link {
     width: 100%;
+  }
+}
+
+/* Directory collector card — catalogue edition.
+   The directory can contain one result, so its card must earn the full canvas:
+   identity is a concise publisher record and every listed collectible gets a
+   real tile rather than being squeezed into a decorative thumbnail strip. */
+@media (min-width: 1081px) {
+  body:has(.collectors-page) .collectors-directory-grid .collector-directory-card,
+  body:has(.collectors-page) .collectors-directory-grid .collector-directory-card:only-child {
+    min-height: 26.25rem;
+    grid-template-columns: minmax(20.5rem, 0.64fr) minmax(0, 1.36fr);
+    gap: clamp(1.25rem, 2.8vw, 2.75rem);
+    padding: clamp(1.15rem, 2.1vw, 1.65rem);
+    border-color: color-mix(in srgb, var(--collector-accent) 46%, rgb(122 178 168 / 0.22));
+    border-radius: 1.25rem;
+    background:
+      radial-gradient(
+        ellipse 48% 72% at 0% 0%,
+        color-mix(in srgb, var(--collector-accent) 15%, transparent),
+        transparent 74%
+      ),
+      radial-gradient(ellipse 38% 68% at 100% 100%, rgb(19 121 104 / 0.08), transparent 76%),
+      linear-gradient(145deg, rgb(8 27 31 / 0.99), rgb(2 11 15 / 0.995));
+  }
+
+  body:has(.collectors-page) .collectors-directory-grid .collector-directory-card__identity {
+    position: relative;
+    padding: 0.2rem 0.25rem 0.1rem;
+  }
+
+  body:has(.collectors-page) .collectors-directory-grid .collector-directory-card__identity::after {
+    position: absolute;
+    top: 0.15rem;
+    right: calc(clamp(0.625rem, 1.4vw, 1.35rem) * -1);
+    bottom: 0.15rem;
+    width: 1px;
+    background: linear-gradient(
+      180deg,
+      transparent,
+      rgb(91 192 173 / 0.3) 18%,
+      rgb(91 192 173 / 0.14) 80%,
+      transparent
+    );
+    box-shadow: 0 0 1.25rem rgb(42 206 166 / 0.1);
+    content: "";
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-directory-card__identity
+    > header {
+    grid-template-columns: 3.45rem minmax(0, 1fr);
+    align-items: start;
+    gap: 0.8rem;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-directory-card__identity
+    .collector-public-status {
+    grid-column: 2;
+    width: fit-content;
+    margin-top: -0.52rem;
+    padding: 0.2rem 0.38rem;
+    border: 1px solid rgb(68 221 179 / 0.24);
+    border-radius: 999px;
+    background: rgb(5 33 33 / 0.5);
+    font-size: 0.49rem;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-avatar {
+    width: 3.45rem;
+    height: 3.45rem;
+    background: radial-gradient(circle at 35% 28%, rgb(62 221 182 / 0.24), rgb(8 60 57 / 0.88));
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--collector-accent) 48%, transparent),
+      0 0 1.45rem color-mix(in srgb, var(--collector-accent) 12%, transparent);
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-card-identity
+    a {
+    font-size: clamp(1.15rem, 1.65vw, 1.42rem);
+    letter-spacing: -0.055em;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-profile-copy {
+    gap: 0.72rem;
+    margin-top: 1.35rem;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-profile-copy
+    > strong {
+    overflow: visible;
+    color: #d9eee7;
+    font-size: 0.86rem;
+    line-height: 1.45;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-specialty-chips {
+    gap: 0.42rem;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-specialty-chips
+    span {
+    min-height: 1.7rem;
+    padding: 0.27rem 0.58rem;
+    border-color: rgb(105 198 181 / 0.27);
+    background: linear-gradient(135deg, rgb(45 171 145 / 0.16), rgb(10 36 38 / 0.32));
+    color: #bce5d9;
+    font-size: 0.56rem;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-catalogue-summary {
+    gap: 0.25rem;
+    margin-top: 0.2rem;
+    padding: 0.82rem 0.9rem;
+    border: 1px solid rgb(101 182 168 / 0.17);
+    border-radius: 0.7rem;
+    background: rgb(3 16 20 / 0.44);
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-catalogue-summary
+    > span {
+    font-size: 0.5rem;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-catalogue-summary
+    > strong {
+    color: #e0f4ed;
+    font-size: 0.7rem;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-directory-stats {
+    margin-top: 1rem;
+    padding: 0.82rem 0;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-directory-stats
+    dd {
+    color: #f0fff9;
+    font-size: 1.26rem;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-card-activity {
+    margin-top: 1rem;
+    padding: 0.7rem 0.78rem;
+    border: 1px solid rgb(99 177 166 / 0.15);
+    border-radius: 0.72rem;
+    background: rgb(3 16 19 / 0.32);
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-card-footer {
+    gap: 0.65rem;
+    margin-top: 1rem;
+    padding-top: 1rem;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-card-footer
+    a {
+    min-height: 2.55rem;
+    border-radius: 0.72rem;
+    font-size: 0.64rem;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-card-listings {
+    position: relative;
+    isolation: isolate;
+    padding: 1.05rem;
+    border-color: color-mix(in srgb, var(--collector-accent) 30%, rgb(119 177 165 / 0.18));
+    border-radius: 1rem;
+    background:
+      radial-gradient(
+        circle at 50% 0%,
+        color-mix(in srgb, var(--collector-accent) 11%, transparent),
+        transparent 55%
+      ),
+      linear-gradient(145deg, rgb(5 23 27 / 0.86), rgb(2 12 16 / 0.86));
+    box-shadow:
+      inset 0 1px rgb(232 255 247 / 0.04),
+      0 1rem 2rem rgb(0 0 0 / 0.14);
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-card-listings::before {
+    position: absolute;
+    z-index: -1;
+    top: 3.4rem;
+    right: 1rem;
+    bottom: 1rem;
+    left: 1rem;
+    border: 1px solid rgb(105 180 169 / 0.08);
+    border-radius: 0.72rem;
+    background-image:
+      linear-gradient(rgb(103 183 170 / 0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(103 183 170 / 0.045) 1px, transparent 1px);
+    background-size: 1.45rem 1.45rem;
+    content: "";
+    pointer-events: none;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-card-listings__heading {
+    margin-bottom: 0.9rem;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-card-listings__heading
+    > span {
+    color: #e1f8f1;
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.1em;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-mini-strip,
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    > .collector-directory-card:only-child
+    .collector-mini-strip {
+    position: relative;
+    display: grid;
+    min-height: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(17.5rem, 1fr);
+    gap: 0.85rem;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-mini-strip.is-single {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding,
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    > .collector-directory-card:only-child
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding {
+    height: auto;
+    min-height: 17.5rem;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(9.25rem, 1fr) auto;
+    border-color: rgb(113 193 177 / 0.25);
+    border-radius: 0.82rem;
+    background:
+      radial-gradient(circle at 50% 0%, rgb(41 213 174 / 0.1), transparent 42%),
+      linear-gradient(150deg, rgb(10 34 37 / 0.98), rgb(3 13 17 / 0.99));
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__media {
+    min-height: 0;
+    border-right: 0;
+    border-bottom: 1px solid rgb(118 188 176 / 0.16);
+    background:
+      radial-gradient(ellipse 45% 62% at 50% 72%, rgb(43 221 179 / 0.18), transparent 75%),
+      linear-gradient(180deg, rgb(7 25 29 / 0.58), rgb(3 16 20 / 0.84));
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__media::after {
+    position: absolute;
+    right: 0.75rem;
+    bottom: 0.55rem;
+    left: 0.75rem;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgb(72 229 187 / 0.65), transparent);
+    box-shadow: 0 0 0.8rem rgb(43 222 179 / 0.34);
+    content: "";
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__media
+    img {
+    width: min(10rem, 72%);
+    height: calc(100% - 0.65rem);
+    padding: 0.4rem 0.25rem 0.25rem;
+    object-fit: contain;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__status {
+    top: 0.55rem;
+    right: 0.55rem;
+    left: auto;
+    max-width: calc(100% - 1.1rem);
+    padding: 0.24rem 0.42rem;
+    border-radius: 0.42rem;
+    background: rgb(3 20 21 / 0.9);
+    font-size: 0.46rem;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__copy,
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    > .collector-directory-card:only-child
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__copy {
+    display: flex;
+    gap: 0.45rem;
+    padding: 0.7rem 0.75rem 0.75rem;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__identity {
+    gap: 0.22rem;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__identity
+    strong {
+    color: #f0fcf8;
+    font-size: 0.76rem;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__identity
+    small {
+    font-size: 0.53rem;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__metrics {
+    gap: 0.48rem;
+    padding: 0.45rem 0;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__metrics
+    small {
+    font-size: 0.45rem;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__metrics
+    strong {
+    font-size: 0.72rem;
+  }
+
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__availability,
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__deadline,
+  body:has(.collectors-page)
+    .collectors-directory-grid
+    .collector-directory-card
+    .collector-mini-strip:not(.is-single)
+    .collector-mini-holding__state {
+    font-size: 0.5rem;
+  }
+}
+
+@media (max-width: 1080px) and (min-width: 681px) {
+  body:has(.collectors-page) .collectors-directory-grid .collector-directory-card,
+  body:has(.collectors-page) .collectors-directory-grid .collector-directory-card:only-child {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body:has(.collectors-page) .collectors-directory-grid .collector-directory-card__identity::after {
+    display: none;
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-mini-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body:has(.collectors-page) .collector-directory-card .collector-mini-holding {
+    min-height: 11rem;
   }
 }
