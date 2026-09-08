@@ -51,6 +51,7 @@ const detailsForm = {
   certificationNumber: "",
   condition: "Near Mint",
   details: "",
+  inPossession: false,
   termsAcknowledged: false,
   marketCheckStatus: "" as const,
   marketCheckAcknowledged: false,
@@ -644,6 +645,7 @@ describe("Document 010 list asset UI", () => {
         preGrade={null}
         evidenceReady={false}
         onEdit={() => undefined}
+        onPossessionChange={() => undefined}
         onTermsChange={() => undefined}
       />,
     );
@@ -656,6 +658,8 @@ describe("Document 010 list asset UI", () => {
     expect(html).toContain("Collector estimate only — not a Slice valuation.");
     expect(html).toContain("What happens next?");
     expect(html).toContain("Submission checklist");
+    expect(html).toContain("Physical possession confirmed");
+    expect(html).toContain("I confirm that I currently have the physical collectible");
     expect(html).toContain("Need help?");
     expect(html).toContain("View guide");
     expect(html).toContain("A few items still need attention.");

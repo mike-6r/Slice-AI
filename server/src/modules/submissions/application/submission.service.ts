@@ -1518,13 +1518,35 @@ export class SubmissionService {
         },
       ],
     };
+    // Automated qualification owns all fresh submissions. The staff queue is
+    // reserved for an explicit HUMAN_REVIEW_REQUIRED decision; keeping a
+    // COLLECTOR_ACTION_REQUIRED or BLOCKED submission here incorrectly makes
+    // self-review restrictions look like the reason it did not progress.
+    // Legacy rows without an automated decision remain visible so they can be
+    // resolved through the existing staff workflow.
+    const manualReviewEligible: Prisma.AssetSubmissionWhereInput = {
+      OR: [
+        { decisionCode: 'HUMAN_REVIEW_REQUIRED' },
+        { decisionCode: null },
+      ],
+    };
     const requestedBase: Prisma.AssetSubmissionWhereInput[] = [
       isAdmin
-        ? { status: { in: ['SUBMITTED', 'IN_REVIEW'] } }
+        ? {
+            AND: [
+              { status: { in: ['SUBMITTED', 'IN_REVIEW'] } },
+              manualReviewEligible,
+            ],
+          }
         : {
-            OR: [
-              { status: 'SUBMITTED', reviewerId: null },
-              { status: 'IN_REVIEW', reviewerId: actor.userId },
+            AND: [
+              manualReviewEligible,
+              {
+                OR: [
+                  { status: 'SUBMITTED', reviewerId: null },
+                  { status: 'IN_REVIEW', reviewerId: actor.userId },
+                ],
+              },
             ],
           },
       ...(input.status ? [{ status: input.status }] : []),

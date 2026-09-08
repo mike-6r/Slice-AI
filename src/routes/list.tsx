@@ -103,6 +103,7 @@ type ListingForm = {
   certificationNumber: string;
   condition: string;
   details: string;
+  inPossession: boolean;
   termsAcknowledged: boolean;
   marketCheckStatus: MarketResearchSnapshot["state"] | "";
   marketCheckAcknowledged: boolean;
@@ -136,6 +137,7 @@ const blank: ListingForm = {
   certificationNumber: "",
   condition: "",
   details: "",
+  inPossession: false,
   termsAcknowledged: false,
   marketCheckStatus: "",
   marketCheckAcknowledged: false,
@@ -573,6 +575,7 @@ export function SubmissionPage() {
       certificationNumber: text("certificationNumber"),
       condition: text("condition"),
       details: text("details"),
+      inPossession: saved.inPossession === true,
       termsAcknowledged: saved.termsAcknowledged === true,
       marketCheckStatus:
         saved.marketCheckStatus === "FOUND" ||
@@ -664,6 +667,12 @@ export function SubmissionPage() {
   };
   const changeTermsAcknowledged = (checked: boolean) => {
     const nextForm = { ...form, termsAcknowledged: checked };
+    setForm(nextForm);
+    saveStopped.current = false;
+    if (draft) update.mutate({ metadataOverride: metadataFromForm(nextForm) });
+  };
+  const changePossession = (checked: boolean) => {
+    const nextForm = { ...form, inPossession: checked };
     setForm(nextForm);
     saveStopped.current = false;
     if (draft) update.mutate({ metadataOverride: metadataFromForm(nextForm) });
@@ -921,6 +930,7 @@ export function SubmissionPage() {
       ? "AI review"
       : null,
     !form.termsAcknowledged ? "submission terms" : null,
+    !form.inPossession ? "possession confirmation" : null,
   ].filter((item): item is string => Boolean(item));
   const reviewReady = reviewBlockers.length === 0;
   const submitReview = () => {
@@ -1089,6 +1099,7 @@ export function SubmissionPage() {
                 (location) => location.id === form.preferredIntakeLocationId,
               )}
               onEdit={setStep}
+              onPossessionChange={changePossession}
               onTermsChange={changeTermsAcknowledged}
             />
           ) : null}
@@ -4108,6 +4119,7 @@ export function ReviewStep({
   evidenceReady,
   deliveryLocation,
   onEdit,
+  onPossessionChange,
   onTermsChange,
 }: {
   form: ListingForm;
@@ -4118,6 +4130,7 @@ export function ReviewStep({
   evidenceReady: boolean;
   deliveryLocation?: CollectorVaultProjection;
   onEdit: (step: number) => void;
+  onPossessionChange: (checked: boolean) => void;
   onTermsChange: (checked: boolean) => void;
 }) {
   const graded = Boolean(form.grader.trim() && form.grader !== "Ungraded");
@@ -4181,6 +4194,7 @@ export function ReviewStep({
           : "AI card review ready",
       complete: rawReviewComplete,
     },
+    { label: "Physical possession confirmed", complete: form.inPossession },
     { label: "Submission terms acknowledged", complete: form.termsAcknowledged },
   ];
   const blockers = checklist.filter((item) => !item.complete).map((item) => item.label);
@@ -4464,6 +4478,18 @@ export function ReviewStep({
               more information.
             </p>
           </aside>
+
+          <label className="list-terms-check list-review-terms">
+            <input
+              type="checkbox"
+              checked={form.inPossession}
+              onChange={(event) => onPossessionChange(event.target.checked)}
+            />
+            <span>
+              I confirm that I currently have the physical collectible and can send or bring it to
+              the selected Slice intake location if the submission is accepted.
+            </span>
+          </label>
 
           <label className="list-terms-check list-review-terms">
             <input
@@ -4934,6 +4960,7 @@ function metadataFromForm(form: ListingForm): CreateSubmissionDraft["declaredMet
       : {}),
     ...(form.aiReviewSkipped ? { aiReviewStatus: "AI_REVIEW_SKIPPED" as const } : {}),
     ...(customerReference ? { customerReference } : {}),
+    inPossession: form.inPossession,
     termsAcknowledged: form.termsAcknowledged,
   };
 }
