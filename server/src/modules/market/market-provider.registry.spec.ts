@@ -15,12 +15,13 @@ function config(overrides: Partial<AppConfig> = {}) {
 describe('PriceChartingProvider', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  it('supports the canonical Pokémon category aliases used by the catalogue', () => {
+  it('supports the catalogue card categories backed by PriceCharting', () => {
     const provider = new PriceChartingProvider(config());
 
     expect(provider.supports('poke-mon')).toBe(true);
     expect(provider.supports('pokemon-tcg')).toBe(true);
     expect(provider.supports('sports-cards')).toBe(true);
+    expect(provider.supports('one-piece-card-game')).toBe(true);
   });
 
   it('uses the documented product endpoint and token query parameter', async () => {

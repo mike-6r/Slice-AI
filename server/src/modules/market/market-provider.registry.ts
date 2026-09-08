@@ -61,6 +61,7 @@ export class PriceChartingProvider implements MarketDataProvider {
       'football',
       'basketball',
       'hockey',
+      'onepiececardgame',
     ].includes(normalizedCategory);
   }
 
