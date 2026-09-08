@@ -29,6 +29,7 @@ import {
   SubmissionPage,
   canResumeListing,
   formatGradeDisplay,
+  intakeLocationAcceptsCategory,
   isAvailableSubmissionCategory,
   restoreWizardStep,
 } from "./list";
@@ -130,6 +131,24 @@ describe("resumed listing drafts", () => {
     expect(isAvailableSubmissionCategory("cards", activeCategories)).toBe(true);
     expect(isAvailableSubmissionCategory("retired-category", activeCategories)).toBe(false);
     expect(isAvailableSubmissionCategory("", activeCategories)).toBe(false);
+  });
+
+  it("does not offer an intake location outside the listing category", () => {
+    expect(
+      intakeLocationAcceptsCategory(
+        { acceptedCategories: ["pokemon-category"] },
+        "one-piece-category",
+      ),
+    ).toBe(false);
+    expect(
+      intakeLocationAcceptsCategory(
+        { acceptedCategories: ["one-piece-category"] },
+        "one-piece-category",
+      ),
+    ).toBe(true);
+    expect(
+      intakeLocationAcceptsCategory({ acceptedCategories: [] }, "one-piece-category"),
+    ).toBe(true);
   });
 
   it("reopens drafts and change requests in the listing wizard", () => {

@@ -158,6 +158,19 @@ export function isAvailableSubmissionCategory(
   return Boolean(categoryId && categories?.some((category) => category.id === categoryId));
 }
 
+export function intakeLocationAcceptsCategory(
+  location: Pick<CollectorVaultProjection, "acceptedCategories">,
+  categoryId: string,
+) {
+  const acceptedCategories = location.acceptedCategories;
+  return Boolean(
+    categoryId &&
+      (!Array.isArray(acceptedCategories) ||
+        acceptedCategories.length === 0 ||
+        acceptedCategories.includes(categoryId)),
+  );
+}
+
 export function SubmissionPage() {
   useCurrency();
   const services = useAppServices();
@@ -235,6 +248,9 @@ export function SubmissionPage() {
     enabled: session.isAuthenticated && Boolean(form.categoryId),
     staleTime: 60_000,
   });
+  const compatibleIntakeLocations = (intakeLocations.data ?? []).filter((location) =>
+    intakeLocationAcceptsCategory(location, form.categoryId),
+  );
   const detail = useQuery({
     queryKey: ["submissions", draft?.id ?? requestedDraftId],
     queryFn: () => services.repositories.submissions.getOwn(draft?.id ?? requestedDraftId!),
@@ -623,7 +639,12 @@ export function SubmissionPage() {
   }, [draft, payloadFingerprint, persistCurrentDraft, update.isPending, validIdentity]);
 
   const change = <K extends keyof ListingForm>(key: K, value: ListingForm[K]) => {
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => {
+      const next = { ...current, [key]: value };
+      return key === "categoryId"
+        ? { ...next, preferredIntakeLocationId: "", preferredDeliveryMethod: "" }
+        : next;
+    });
     saveStopped.current = false;
     if (
       key !== "termsAcknowledged" &&
@@ -1051,7 +1072,7 @@ export function SubmissionPage() {
           {step === 6 ? (
             <DeliveryLocationStep
               form={form}
-              locations={intakeLocations.data ?? []}
+              locations={compatibleIntakeLocations}
               loading={intakeLocations.isLoading}
               onChange={change}
             />
@@ -1064,7 +1085,7 @@ export function SubmissionPage() {
               submission={submission}
               preGrade={preGrade.data?.current ?? null}
               evidenceReady={evidenceReady}
-              deliveryLocation={intakeLocations.data?.find(
+              deliveryLocation={compatibleIntakeLocations.find(
                 (location) => location.id === form.preferredIntakeLocationId,
               )}
               onEdit={setStep}
