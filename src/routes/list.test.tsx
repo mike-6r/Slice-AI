@@ -147,9 +147,9 @@ describe("resumed listing drafts", () => {
         "one-piece-category",
       ),
     ).toBe(true);
-    expect(
-      intakeLocationAcceptsCategory({ acceptedCategories: [] }, "one-piece-category"),
-    ).toBe(true);
+    expect(intakeLocationAcceptsCategory({ acceptedCategories: [] }, "one-piece-category")).toBe(
+      true,
+    );
   });
 
   it("reopens drafts and change requests in the listing wizard", () => {
@@ -421,6 +421,7 @@ describe("Document 010 list asset UI", () => {
           certificationNumber: "163184852",
           normalizedCertificationNumber: "163184852",
           status: "CLEAR",
+          duplicateCheckStatus: "CLEAR",
           verificationMode: "SLICE_DUPLICATE_CHECK",
           officialVerificationUrl: null,
           verifiedGrade: null,
@@ -434,11 +435,12 @@ describe("Document 010 list asset UI", () => {
         onVerifyCertification={() => undefined}
       />,
     );
-    expect(html).toContain("Check on Slice");
+    expect(html).toContain("Verify certificate");
     expect(html).toContain("Certificate number available");
-    expect(html).toContain("No matching certificate number is currently listed on Slice");
-    expect(html).not.toContain("Official lookup requested");
-    expect(html).not.toContain("Open official lookup");
+    expect(html).toContain(
+      "Slice duplicate check passed. A provider grade has not yet been confirmed.",
+    );
+    expect(html).toContain("grading-provider certificate record");
   });
 
   it("renders a truthful matched market reference and offer intent without converting provider currency", () => {

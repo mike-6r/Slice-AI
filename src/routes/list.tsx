@@ -167,9 +167,9 @@ export function intakeLocationAcceptsCategory(
   const acceptedCategories = location.acceptedCategories;
   return Boolean(
     categoryId &&
-      (!Array.isArray(acceptedCategories) ||
-        acceptedCategories.length === 0 ||
-        acceptedCategories.includes(categoryId)),
+    (!Array.isArray(acceptedCategories) ||
+      acceptedCategories.length === 0 ||
+      acceptedCategories.includes(categoryId)),
   );
 }
 
@@ -501,7 +501,13 @@ export function SubmissionPage() {
       setNotice(
         updated.certificationVerification?.status === "ALREADY_LISTED"
           ? "That certificate number is already listed on Slice. Use a different number."
-          : "Certificate number checked against Slice listings. Staff will confirm the physical card during review.",
+          : updated.certificationVerification?.status === "VERIFIED"
+            ? "Certificate and grade verified by the grading provider."
+            : updated.certificationVerification?.status === "MISMATCH"
+              ? "The provider found this certificate, but its grade or card details do not match your listing."
+              : updated.certificationVerification?.status === "TEMPORARILY_UNAVAILABLE"
+                ? "Certificate verification is temporarily unavailable. You can try again later; this listing will not be auto-qualified without provider evidence."
+                : "Certificate provider verification needs staff review before this listing can be auto-qualified.",
       );
       await detail.refetch();
     },
@@ -906,9 +912,15 @@ export function SubmissionPage() {
   const evidenceReady = requiredSlotsForGrading(gradedCard).every(
     (slot) => activeMedia(submission, slot)?.status === "SAFE",
   );
-  const certificationCheckPassed = ["CLEAR", "VERIFIED"].includes(
-    detail.data?.certificationVerification?.status ?? "",
-  );
+  const certificationCheckPassed = [
+    "CLEAR",
+    "VERIFIED",
+    "MISMATCH",
+    "CERT_NOT_FOUND",
+    "TEMPORARILY_UNAVAILABLE",
+    "UNSUPPORTED",
+    "AMBIGUOUS",
+  ].includes(detail.data?.certificationVerification?.status ?? "");
   const reviewBlockers = [
     !(
       form.categoryId &&
@@ -922,9 +934,7 @@ export function SubmissionPage() {
     !(form.marketCheckAcknowledged && form.marketCheckStatus) ? "market check" : null,
     !isValidPercent(form.offerIntentPercent) ? "offer percentage" : null,
     !evidenceReady ? "required photos" : null,
-    !form.preferredIntakeLocationId || !form.preferredDeliveryMethod
-      ? "delivery preference"
-      : null,
+    !form.preferredIntakeLocationId || !form.preferredDeliveryMethod ? "delivery preference" : null,
     gradedCard && !certificationCheckPassed ? "certificate check" : null,
     !gradedCard && !form.aiReviewSkipped && preGrade.data?.current?.status !== "SUCCEEDED"
       ? "AI review"
@@ -940,9 +950,7 @@ export function SubmissionPage() {
       return;
     }
     if (reviewBlockers.length) {
-      setLocalError(
-        `Complete before submitting: ${reviewBlockers.join(", ")}.`,
-      );
+      setLocalError(`Complete before submitting: ${reviewBlockers.join(", ")}.`);
       return;
     }
     submit.mutate();
@@ -1617,14 +1625,14 @@ export function DetailsStep({
               </span>
               <div>
                 <strong>Certificate verification</strong>
-                <p>Check whether the number is already listed on Slice.</p>
+                <p>Check the Slice claim and the grading-provider certificate record.</p>
               </div>
               <span className="list-certification-panel__badge">Required for graded cards</span>
             </div>
             <label>
               <span className="list-field-label">
                 Certification number
-              <TooltipHint label="Enter the number printed on the slab label. Slice only checks whether that certificate number is already attached to a listing on this site. Staff confirms the actual card during review." />
+                <TooltipHint label="Enter the number printed on the slab label. Slice first checks for an internal duplicate, then uses supported grading-provider evidence to confirm the certificate and grade. A provider response is required for automatic qualification." />
               </span>
               <div className="list-certification-input">
                 <input
@@ -1643,17 +1651,25 @@ export function DetailsStep({
                   }
                   onClick={onVerifyCertification}
                 >
-                  {verifyPending ? "Checking Slice…" : "Check on Slice"}
+                  {verifyPending ? "Verifying certificate…" : "Verify certificate"}
                 </button>
               </div>
               <small id="certification-number-help" className="list-field-help">
-                {verification?.status === "CLEAR" || verification?.status === "VERIFIED"
+                {verification?.status === "VERIFIED"
                   ? verification.status === "VERIFIED"
-                    ? "Slice staff confirmed the physical card and certificate."
-                    : "No matching certificate number is currently listed on Slice. Staff will confirm the physical card during review."
-                  : verification?.status === "ALREADY_LISTED"
-                    ? "This number is already attached to another Slice listing. Use a different certificate number."
-                    : "Run the Slice check again or contact staff if this number is correct."}
+                    ? "The grading provider confirmed the certificate and submitted grade."
+                    : ""
+                  : verification?.status === "MISMATCH"
+                    ? `The grading provider found this certificate, but its reported grade (${verification.verifiedGrade ?? "unavailable"}) does not match the listing. Do not change the listing automatically; staff will review it.`
+                    : verification?.status === "ALREADY_LISTED"
+                      ? "This number is already attached to another Slice listing. Use a different certificate number."
+                      : verification?.status === "CERT_NOT_FOUND"
+                        ? "The grading provider could not find this certificate number. Check the slab label or continue for staff review."
+                        : verification?.status === "TEMPORARILY_UNAVAILABLE"
+                          ? "The grading provider is temporarily unavailable. You can try again later; this listing cannot be auto-qualified without the result."
+                          : verification?.status === "CLEAR"
+                            ? "The number is not currently claimed by another Slice listing. Provider grade verification is still required for automatic qualification."
+                            : "Provider verification is not available for this certificate. This listing can continue to staff review."}
               </small>
             </label>
             {verification ? (
@@ -1665,21 +1681,33 @@ export function DetailsStep({
                 <div>
                   <strong>
                     {verification.status === "VERIFIED"
-                      ? "Certificate confirmed by staff"
-                      : verification.status === "CLEAR"
-                        ? "Certificate number available"
-                        : verification.status === "ALREADY_LISTED"
-                          ? "Certificate number already listed"
-                          : "Certificate check needs attention"}
+                      ? "Certificate and grade verified"
+                      : verification.status === "MISMATCH"
+                        ? "Provider record does not match"
+                        : verification.status === "CLEAR"
+                          ? "Certificate number available"
+                          : verification.status === "ALREADY_LISTED"
+                            ? "Certificate number already listed"
+                            : verification.status === "TEMPORARILY_UNAVAILABLE"
+                              ? "Provider temporarily unavailable"
+                              : verification.status === "CERT_NOT_FOUND"
+                                ? "Certificate not found by provider"
+                                : "Certificate check needs attention"}
                   </strong>
                   <span>
                     {verification.status === "VERIFIED"
-                      ? `${verification.companyCode} ${verification.verifiedLabel ?? verification.verifiedGrade ?? "physical card confirmed"}`
-                      : verification.status === "CLEAR"
-                        ? "This is a Slice duplicate check, not a grading-company verification."
-                        : verification.status === "ALREADY_LISTED"
-                          ? "A certificate number can only be used by one active Slice listing."
-                          : "The certificate number still needs attention before this graded card can continue."}
+                      ? `${verification.companyCode} ${verification.verifiedLabel ?? verification.verifiedGrade ?? "certificate verified"}`
+                      : verification.status === "MISMATCH"
+                        ? `The provider reported ${verification.verifiedGrade ?? "a different card or grade"}; your listing was not changed.`
+                        : verification.status === "CLEAR"
+                          ? "Slice duplicate check passed. A provider grade has not yet been confirmed."
+                          : verification.status === "ALREADY_LISTED"
+                            ? "A certificate number can only be used by one active Slice listing."
+                            : verification.status === "TEMPORARILY_UNAVAILABLE"
+                              ? "Provider evidence was not saved. Try verification again later or continue to staff review."
+                              : verification.status === "CERT_NOT_FOUND"
+                                ? "The provider did not recognize this certificate number."
+                                : "The certificate number still needs attention before this graded card can continue."}
                   </span>
                 </div>
               </div>
@@ -1951,9 +1979,9 @@ export function MarketStep({
                     ? "Reference found"
                     : hasCustomerReference
                       ? "Reference saved — value unavailable"
-                    : research?.state === "UNAVAILABLE"
-                      ? "Market source unavailable"
-                      : "No exact market reference found"}
+                      : research?.state === "UNAVAILABLE"
+                        ? "Market source unavailable"
+                        : "No exact market reference found"}
                 </h3>
               </div>
               {research?.dataQuality ? (
@@ -2166,9 +2194,7 @@ function OfferIntent({
   const options = ["25", "50", "75", "100", "custom"] as const;
   const percent = Number(form.offerIntentPercent);
   const validPercent = Number.isFinite(percent) && percent > 0 && percent <= 100;
-  const totalMinor = form.collectorExpectedValue
-    ? majorToMinor(form.collectorExpectedValue)
-    : null;
+  const totalMinor = form.collectorExpectedValue ? majorToMinor(form.collectorExpectedValue) : null;
   const supply = /^\d+$/.test(form.collectorExpectedSupply)
     ? BigInt(form.collectorExpectedSupply)
     : 0n;
@@ -2206,7 +2232,8 @@ function OfferIntent({
             />
           </div>
           <small id="collector-value-help" className="list-field-help">
-            Editable provisional context for the whole collectible. Slice staff set the final valuation.
+            Editable provisional context for the whole collectible. Slice staff set the final
+            valuation.
           </small>
         </label>
         <label>
@@ -4143,9 +4170,15 @@ export function ReviewStep({
   const marketComplete = Boolean(
     form.marketCheckAcknowledged && (form.marketCheckStatus || research),
   );
-  const certificationCheckPassed = ["CLEAR", "VERIFIED"].includes(
-    submission?.certificationVerification?.status ?? "",
-  );
+  const certificationCheckPassed = [
+    "CLEAR",
+    "VERIFIED",
+    "MISMATCH",
+    "CERT_NOT_FOUND",
+    "TEMPORARILY_UNAVAILABLE",
+    "UNSUPPORTED",
+    "AMBIGUOUS",
+  ].includes(submission?.certificationVerification?.status ?? "");
   const rawReviewComplete = graded || form.aiReviewSkipped || preGrade?.status === "SUCCEEDED";
   const cardDetailsComplete = Boolean(
     form.categoryId &&
@@ -4289,8 +4322,8 @@ export function ReviewStep({
               <div className="list-review-fallback list-review-fallback--reference">
                 <strong>PriceCharting reference saved</strong>
                 <p>
-                  The product link is attached, but it did not provide a usable market value.
-                  Slice will review the value manually.
+                  The product link is attached, but it did not provide a usable market value. Slice
+                  will review the value manually.
                 </p>
                 {customerReferenceUrl ? (
                   <a href={customerReferenceUrl} target="_blank" rel="noreferrer">
@@ -4359,7 +4392,8 @@ export function ReviewStep({
                 ) : null}
                 {estimateMinor ? (
                   <p className="list-review-illustrative">
-                    Provisional total value: {sourceMoney(estimateMinor, form.collectorExpectedCurrency)} ·{" "}
+                    Provisional total value:{" "}
+                    {sourceMoney(estimateMinor, form.collectorExpectedCurrency)} ·{" "}
                     {supply.toLocaleString()} total shares
                     {pricePerShareMinor
                       ? ` · ${sourceMoney(pricePerShareMinor, form.collectorExpectedCurrency)} per share`
@@ -4707,7 +4741,8 @@ function MySubmissions({ submissions }: { submissions: AssetSubmission[] }) {
 }
 function SubmissionReceived({ submission }: { submission: SubmissionDetail }) {
   const qualification = submission.qualification;
-  const isQualified = qualification?.customerStatus === "PRE_SALE_QUALIFIED" || submission.status === "APPROVED";
+  const isQualified =
+    qualification?.customerStatus === "PRE_SALE_QUALIFIED" || submission.status === "APPROVED";
   const needsAction = qualification?.customerStatus === "NEEDS_YOUR_ACTION";
   const isRetrying = qualification?.customerStatus === "SYSTEM_RETRYING";
   const statusTitle = isQualified
@@ -4716,26 +4751,31 @@ function SubmissionReceived({ submission }: { submission: SubmissionDetail }) {
       ? "A quick update is needed"
       : isRetrying
         ? "Slice is finishing your listing"
-      : qualification?.customerStatus === "BLOCKED_CONTACT_SUPPORT"
-        ? "We need to speak with you"
-        : "Your listing is being checked";
+        : qualification?.customerStatus === "BLOCKED_CONTACT_SUPPORT"
+          ? "We need to speak with you"
+          : "Your listing is being checked";
   const statusBody = isQualified
     ? "The automated checks passed. Your collectible is available for conditional reservations while Slice completes physical intake and verification."
     : needsAction
-      ? qualification.reasons[0] ?? "Please update the requested listing information, then submit it again."
+      ? (qualification.reasons[0] ??
+        "Please update the requested listing information, then submit it again.")
       : isRetrying
         ? "No action is needed from you. Slice is retrying the automated hand-off and will continue the listing when it succeeds."
-      : qualification?.customerStatus === "BLOCKED_CONTACT_SUPPORT"
-        ? "This listing cannot move forward automatically. Contact Slice Support and we’ll explain the next step."
-        : "Slice is checking your listing and will route it to staff only when a decision needs human judgment.";
+        : qualification?.customerStatus === "BLOCKED_CONTACT_SUPPORT"
+          ? "This listing cannot move forward automatically. Contact Slice Support and we’ll explain the next step."
+          : "Slice is checking your listing and will route it to staff only when a decision needs human judgment.";
   return (
     <main className="list-page list-page--guided">
       <div className="list-guided-shell">
         <section className="list-received">
           <Check />
-          <p className="page-kicker">{isQualified ? "Pre-Sale qualified" : "Submission received"}</p>
+          <p className="page-kicker">
+            {isQualified ? "Pre-Sale qualified" : "Submission received"}
+          </p>
           <h1>{submissionName(submission.declaredMetadata)}</h1>
-          <p>{statusTitle}. {statusBody}</p>
+          <p>
+            {statusTitle}. {statusBody}
+          </p>
           {qualification?.nextAction ? (
             <p className="list-received-next-action">
               <strong>Next step:</strong> {qualification.nextAction.action}
@@ -4746,7 +4786,15 @@ function SubmissionReceived({ submission }: { submission: SubmissionDetail }) {
           ) : null}
           <ol>
             <li>Submitted</li>
-            <li>{isQualified ? "Automated checks passed" : needsAction ? "Your update" : isRetrying ? "Automated hand-off retrying" : "Slice review, if needed"}</li>
+            <li>
+              {isQualified
+                ? "Automated checks passed"
+                : needsAction
+                  ? "Your update"
+                  : isRetrying
+                    ? "Automated hand-off retrying"
+                    : "Slice review, if needed"}
+            </li>
             <li>Physical intake and verification</li>
             <li>Final marketplace eligibility</li>
           </ol>
@@ -4909,9 +4957,7 @@ function metadataFromForm(form: ListingForm): CreateSubmissionDraft["declaredMet
         externalReferenceId: form.customerReference.externalReferenceId,
         normalizedUrl: form.customerReference.normalizedUrl,
         originalTitle: form.customerReference.originalTitle,
-        ...(form.customerReference.imageUrl
-          ? { imageUrl: form.customerReference.imageUrl }
-          : {}),
+        ...(form.customerReference.imageUrl ? { imageUrl: form.customerReference.imageUrl } : {}),
         ...(form.customerReference.observedAskingPrice
           ? { observedAskingPrice: form.customerReference.observedAskingPrice }
           : {}),
@@ -5033,8 +5079,7 @@ export function formatGradeDisplay(value: string) {
 function formatGradeOptionLabel(grade: GradeOption) {
   const numericGrade = formatGradeDisplay(grade.grade);
   const labelIsNumericGrade =
-    /^\d+(?:\.\d+)?$/.test(grade.label.trim()) &&
-    formatGradeDisplay(grade.label) === numericGrade;
+    /^\d+(?:\.\d+)?$/.test(grade.label.trim()) && formatGradeDisplay(grade.label) === numericGrade;
   return [
     numericGrade,
     labelIsNumericGrade ? null : grade.label,

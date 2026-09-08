@@ -129,7 +129,11 @@ export function evaluateQualification(input: {
   policy: QualificationPolicy;
   accountStatus: string;
   identity: Record<string, unknown>;
-  certification: { status: string; verifiedGrade?: string | null } | null;
+  certification: {
+    duplicateStatus: string | null;
+    providerStatus: string | null;
+    verifiedGrade?: string | null;
+  } | null;
   certificationClaimedByOther: boolean;
   media: Array<{
     slot: string;
@@ -246,37 +250,94 @@ export function evaluateQualification(input: {
     );
   if (!raw) {
     const cert = input.certification;
-    if (input.certificationClaimedByOther || cert?.status === 'ALREADY_LISTED')
+    if (
+      input.certificationClaimedByOther ||
+      cert?.duplicateStatus === 'ALREADY_LISTED'
+    )
       add(
         'CERTIFICATION_DUPLICATE',
         'BLOCKED',
         'That certification number is already associated with another Slice record.',
       );
-    else if (cert?.status === 'MISMATCH')
+    else if (cert?.providerStatus === 'MISMATCH')
       add(
         'CERTIFICATION_MATCH',
         'UNCERTAIN',
-        'The certification result does not match the submitted collectible.',
+        normalizeGrade(input.identity.grade) &&
+          normalizeGrade(cert.verifiedGrade)
+          ? `The submitted grade (${input.identity.grade}) does not match the grading-provider grade (${cert.verifiedGrade}).`
+          : 'The certification result does not match the submitted collectible.',
+        true,
+        {
+          submittedGrade: input.identity.grade ?? null,
+          verifiedGrade: cert.verifiedGrade ?? null,
+        },
       );
-    else if (!cert || !['CLEAR', 'VERIFIED'].includes(cert.status))
+    else if (cert?.duplicateStatus !== 'CLEAR')
       add(
-        'CERTIFICATION_CHECK',
+        'CERTIFICATION_DUPLICATE',
         'UNCERTAIN',
-        'Certification evidence needs staff confirmation before this listing can progress.',
+        'The Slice duplicate check needs to complete before this listing can progress.',
+      );
+    else if (cert?.providerStatus === 'VERIFIED')
+      add(
+        'CERTIFICATION_PROVIDER',
+        'PASS',
+        'The grading provider confirmed this certification number.',
+      );
+    else if (cert?.providerStatus === 'CERT_NOT_FOUND')
+      add(
+        'CERTIFICATION_PROVIDER',
+        'UNCERTAIN',
+        'The grading provider could not find this certification number.',
+      );
+    else if (cert?.providerStatus === 'TEMPORARILY_UNAVAILABLE')
+      add(
+        'CERTIFICATION_PROVIDER',
+        'UNCERTAIN',
+        'The grading provider is temporarily unavailable. This listing needs staff review.',
+      );
+    else if (cert?.providerStatus === 'UNSUPPORTED')
+      add(
+        'CERTIFICATION_PROVIDER',
+        'UNCERTAIN',
+        'Automated grading-provider verification is not available for this listing.',
       );
     else
       add(
-        'CERTIFICATION_CHECK',
-        'PASS',
-        'The certification number passed the Slice duplicate and verification checks.',
+        'CERTIFICATION_PROVIDER',
+        'UNCERTAIN',
+        'Certification evidence needs staff confirmation before this listing can progress.',
       );
     const submittedGrade = normalizeGrade(input.identity.grade);
     const verifiedGrade = normalizeGrade(cert?.verifiedGrade);
-    if (verifiedGrade && submittedGrade && verifiedGrade !== submittedGrade)
+    if (cert?.providerStatus === 'VERIFIED' && !verifiedGrade)
+      add(
+        'CERTIFICATION_GRADE',
+        'UNCERTAIN',
+        'The grading provider did not return a usable verified grade.',
+      );
+    else if (
+      verifiedGrade &&
+      submittedGrade &&
+      verifiedGrade !== submittedGrade
+    )
       add(
         'CERTIFICATION_GRADE',
         'UNCERTAIN',
         'The submitted grade does not match the verified grade.',
+        true,
+        { submitted: input.identity.grade, verified: cert?.verifiedGrade },
+      );
+    else if (
+      cert?.providerStatus === 'VERIFIED' &&
+      verifiedGrade &&
+      submittedGrade
+    )
+      add(
+        'CERTIFICATION_GRADE',
+        'PASS',
+        'The submitted grade matches the grading-provider result.',
         true,
         { submitted: input.identity.grade, verified: cert?.verifiedGrade },
       );

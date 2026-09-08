@@ -29,7 +29,11 @@ const base = {
     cardNumber: '1',
     grade: '10',
   },
-  certification: { status: 'CLEAR', verifiedGrade: '10' },
+  certification: {
+    duplicateStatus: 'CLEAR',
+    providerStatus: 'VERIFIED',
+    verifiedGrade: '10',
+  },
   certificationClaimedByOther: false,
   media: ['front', 'back', 'grading-label'].map((slot) => ({
     slot,
@@ -88,6 +92,50 @@ describe('automated qualification policy', () => {
     });
     expect(result.outcome).toBe('BLOCKED');
   });
+  it('does not auto-qualify a Slice-clear certificate without provider grade evidence', () => {
+    const result = evaluateQualification({
+      ...base,
+      certification: {
+        duplicateStatus: 'CLEAR',
+        providerStatus: null,
+        verifiedGrade: null,
+      },
+    });
+    expect(result.outcome).toBe('HUMAN_REVIEW_REQUIRED');
+    expect(result.checks).toContainEqual(
+      expect.objectContaining({
+        code: 'CERTIFICATION_PROVIDER',
+        result: 'UNCERTAIN',
+      }),
+    );
+  });
+  it('routes a provider grade mismatch away from auto qualification', () => {
+    const result = evaluateQualification({
+      ...base,
+      certification: {
+        duplicateStatus: 'CLEAR',
+        providerStatus: 'MISMATCH',
+        verifiedGrade: '9.00',
+      },
+    });
+    expect(result.outcome).toBe('HUMAN_REVIEW_REQUIRED');
+    expect(result.reasons.join(' ')).toContain('10');
+    expect(result.reasons.join(' ')).toContain('9.00');
+  });
+  it.each(['CERT_NOT_FOUND', 'TEMPORARILY_UNAVAILABLE', 'UNSUPPORTED'])(
+    'routes provider state %s to staff review without inventing a grade',
+    (providerStatus) => {
+      const result = evaluateQualification({
+        ...base,
+        certification: {
+          duplicateStatus: 'CLEAR',
+          providerStatus,
+          verifiedGrade: null,
+        },
+      });
+      expect(result.outcome).toBe('HUMAN_REVIEW_REQUIRED');
+    },
+  );
   it('calculates integer provisional supply terms', () => {
     const terms = calculateProvisionalTerms(
       { collectorExpectedValueMinor: '100000', offerIntentPercent: '62.5' },

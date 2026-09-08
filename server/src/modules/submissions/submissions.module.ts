@@ -5,9 +5,7 @@ import { MarketResearchModule } from '../market-research/market-research.module'
 import { SubmissionService } from './application/submission.service';
 import { LocalMalwareScanner } from './infrastructure/local-submission-storage';
 import { SubmissionController } from './http/submission.controller';
-import {
-  MALWARE_SCANNER,
-} from './ports/submission-storage.ports';
+import { MALWARE_SCANNER } from './ports/submission-storage.ports';
 import { SubmissionStorageModule } from './submission-storage.module';
 import { RawCardPreGradeService } from './application/raw-card-pregrade.service';
 import { OutboxModule } from '../outbox/outbox.module';
@@ -16,19 +14,41 @@ import {
   XimilarRawCardPreGradeProvider,
 } from './application/raw-card-pregrade.provider';
 import { QualificationService } from './application/qualification.service';
+import {
+  GRADING_CERTIFICATION_PROVIDER,
+  PsaCertificationProvider,
+} from './application/grading-certification.provider';
 
 @Module({
-  imports: [AuthModule, AccessControlModule, MarketResearchModule, SubmissionStorageModule, OutboxModule],
+  imports: [
+    AuthModule,
+    AccessControlModule,
+    MarketResearchModule,
+    SubmissionStorageModule,
+    OutboxModule,
+  ],
   controllers: [SubmissionController],
   providers: [
     SubmissionService,
     QualificationService,
     RawCardPreGradeService,
     XimilarRawCardPreGradeProvider,
-    { provide: RAW_CARD_PREGRADE_PROVIDER, useExisting: XimilarRawCardPreGradeProvider },
+    {
+      provide: RAW_CARD_PREGRADE_PROVIDER,
+      useExisting: XimilarRawCardPreGradeProvider,
+    },
+    PsaCertificationProvider,
+    {
+      provide: GRADING_CERTIFICATION_PROVIDER,
+      useExisting: PsaCertificationProvider,
+    },
     LocalMalwareScanner,
     { provide: MALWARE_SCANNER, useExisting: LocalMalwareScanner },
   ],
-  exports: [RawCardPreGradeService, QualificationService, SubmissionStorageModule],
+  exports: [
+    RawCardPreGradeService,
+    QualificationService,
+    SubmissionStorageModule,
+  ],
 })
 export class SubmissionsModule {}

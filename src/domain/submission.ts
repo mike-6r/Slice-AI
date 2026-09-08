@@ -63,6 +63,7 @@ export interface CertificationVerification {
     | "MISMATCH"
     | "CERT_NOT_FOUND"
     | string;
+  duplicateCheckStatus: string | null;
   verificationMode:
     | "SLICE_DUPLICATE_CHECK"
     | "OFFICIAL_API"
@@ -191,7 +192,13 @@ export interface QualificationQueueItem {
   reasons: string[];
   actions: unknown[];
   checks: Array<{ code: string; result: string; reason: string }>;
-  submission: { id: string; ownerUserId: string; status: string; categoryId: string; submittedAt: ISODateTime | null };
+  submission: {
+    id: string;
+    ownerUserId: string;
+    status: string;
+    categoryId: string;
+    submittedAt: ISODateTime | null;
+  };
 }
 
 export type ReviewQueueEvidenceStatus = "COMPLETE" | "PARTIAL" | "MISSING_REQUIRED";

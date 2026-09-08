@@ -106,6 +106,23 @@ const configSchema = z.object({
     .max(120_000)
     .default(45_000),
   XIMILAR_MAX_RETRIES: z.coerce.number().int().min(0).max(4).default(2),
+  PSA_CERTIFICATION_VERIFICATION_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false'),
+  PSA_CERTIFICATION_API_URL: z.string().url().optional(),
+  PSA_CERTIFICATION_API_KEY: z.string().min(1).optional(),
+  PSA_CERTIFICATION_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(500)
+    .max(30_000)
+    .default(6_000),
+  PSA_CERTIFICATION_MAX_RETRIES: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(3)
+    .default(1),
   DISCORD_OAUTH_CLIENT_ID: z.string().min(1).optional(),
   DISCORD_OAUTH_CLIENT_SECRET: z.string().min(16).optional(),
   DISCORD_OAUTH_REDIRECT_URI: z.string().url().optional(),
@@ -465,6 +482,11 @@ export type AppConfig = {
   ximilarCardGradingEnabled?: boolean;
   ximilarTimeoutMs?: number;
   ximilarMaxRetries?: number;
+  psaCertificationVerificationEnabled?: boolean;
+  psaCertificationApiUrl?: string;
+  psaCertificationApiKey?: string;
+  psaCertificationTimeoutMs?: number;
+  psaCertificationMaxRetries?: number;
   discordOauthClientId?: string;
   discordOauthClientSecret?: string;
   discordOauthRedirectUri?: string;
@@ -909,6 +931,12 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     ximilarCardGradingEnabled: parsed.XIMILAR_CARD_GRADING_ENABLED === 'true',
     ximilarTimeoutMs: parsed.XIMILAR_TIMEOUT_MS,
     ximilarMaxRetries: parsed.XIMILAR_MAX_RETRIES,
+    psaCertificationVerificationEnabled:
+      parsed.PSA_CERTIFICATION_VERIFICATION_ENABLED === 'true',
+    psaCertificationApiUrl: parsed.PSA_CERTIFICATION_API_URL,
+    psaCertificationApiKey: parsed.PSA_CERTIFICATION_API_KEY,
+    psaCertificationTimeoutMs: parsed.PSA_CERTIFICATION_TIMEOUT_MS,
+    psaCertificationMaxRetries: parsed.PSA_CERTIFICATION_MAX_RETRIES,
     discordOauthClientId: parsed.DISCORD_OAUTH_CLIENT_ID,
     discordOauthClientSecret: parsed.DISCORD_OAUTH_CLIENT_SECRET,
     discordOauthRedirectUri: parsed.DISCORD_OAUTH_REDIRECT_URI,

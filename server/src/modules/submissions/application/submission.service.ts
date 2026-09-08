@@ -53,12 +53,22 @@ import {
   compareCertificationIdentity,
   normalizeCertificationNumber,
 } from '../domain/grading-certification';
+import {
+  GRADING_CERTIFICATION_PROVIDER,
+  type GradingCertificationProvider,
+  type ProviderCertificationResult,
+} from './grading-certification.provider';
 
 type Db = Prisma.TransactionClient;
 const RESOLVED_CERTIFICATION_STATUSES = [
   'CLEAR',
   'VERIFIED',
   'MANUAL_REVIEW',
+  'MISMATCH',
+  'CERT_NOT_FOUND',
+  'TEMPORARILY_UNAVAILABLE',
+  'UNSUPPORTED',
+  'AMBIGUOUS',
 ] as const;
 
 export function certificationVerificationResolved(
@@ -192,7 +202,12 @@ export class SubmissionService {
     // Qualification is the submission handoff authority. Keep the fallback
     // for isolated legacy unit harnesses, but explicitly bind the Nest token so
     // production cannot silently resolve a different/undefined dependency.
-    @Optional() @Inject(QualificationService) private readonly qualification?: QualificationService,
+    @Optional()
+    @Inject(QualificationService)
+    private readonly qualification?: QualificationService,
+    @Optional()
+    @Inject(GRADING_CERTIFICATION_PROVIDER)
+    private readonly certificationProvider?: GradingCertificationProvider,
   ) {}
 
   async create(
@@ -1261,9 +1276,7 @@ export class SubmissionService {
               where: { submissionId: id },
               orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
             });
-          if (
-            !certificationVerificationResolved(verification?.status)
-          )
+          if (!certificationVerificationResolved(verification?.status))
             throw new UnprocessableEntityException({
               code: 'CERTIFICATION_VERIFICATION_REQUIRED',
               message:
@@ -1525,10 +1538,7 @@ export class SubmissionService {
     // Legacy rows without an automated decision remain visible so they can be
     // resolved through the existing staff workflow.
     const manualReviewEligible: Prisma.AssetSubmissionWhereInput = {
-      OR: [
-        { decisionCode: 'HUMAN_REVIEW_REQUIRED' },
-        { decisionCode: null },
-      ],
+      OR: [{ decisionCode: 'HUMAN_REVIEW_REQUIRED' }, { decisionCode: null }],
     };
     const requestedBase: Prisma.AssetSubmissionWhereInput[] = [
       isAdmin
@@ -2470,7 +2480,8 @@ export class SubmissionService {
               ? 'COMPLETE'
               : decisionEligible
                 ? 'NEEDS_REVIEW'
-                : submission!.status === 'CHANGES_REQUESTED' || selfReviewForbidden
+                : submission!.status === 'CHANGES_REQUESTED' ||
+                    selfReviewForbidden
                   ? 'BLOCKED'
                   : 'NEEDS_REVIEW',
             required: true,
@@ -3700,7 +3711,6 @@ export class SubmissionService {
             media: true,
             certificationVerifications: {
               orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-              take: 1,
             },
             asset: { select: { title: true } },
             owner: { select: { accountStatus: true } },
@@ -4248,6 +4258,25 @@ export class SubmissionService {
     }
   }
 
+  private async verifyProviderCertification(input: {
+    companyCode: string;
+    certificationNumber: string;
+  }): Promise<ProviderCertificationResult> {
+    if (this.certificationProvider)
+      return this.certificationProvider.verify(input);
+    return {
+      status: 'UNSUPPORTED',
+      certificationNumber: normalizeCertificationNumber(
+        input.certificationNumber,
+      ),
+      verifiedGrade: null,
+      verifiedLabel: null,
+      designation: null,
+      verifiedIdentity: null,
+      providerReference: null,
+    };
+  }
+
   private async ownerForUpdate(
     db: Db,
     ownerUserId: string,
@@ -4445,8 +4474,8 @@ export class SubmissionService {
         });
         const alreadyListed = Boolean(
           existingClaim &&
-            existingClaim.status !== 'RELEASED' &&
-            existingClaim.submissionId !== id,
+          existingClaim.status !== 'RELEASED' &&
+          existingClaim.submissionId !== id,
         );
         if (!alreadyListed) {
           await this.claimCertification(
@@ -4459,22 +4488,113 @@ export class SubmissionService {
         }
         const checkStatus = alreadyListed ? 'ALREADY_LISTED' : 'CLEAR';
         const checkMode = 'SLICE_DUPLICATE_CHECK';
-        const verification = await db.gradingCertificationVerification.create({
-          data: {
-            id: randomUUID(),
-            submissionId: id,
-            requestedByUserId: actor.userId,
-            companyCode: entry.company.code,
-            certificationNumber: input.certificationNumber.trim(),
-            normalizedCertificationNumber: normalized,
-            status: checkStatus,
-            verificationMode: checkMode,
-            officialVerificationUrl: null,
-          },
-        });
+        const duplicateVerification =
+          await db.gradingCertificationVerification.create({
+            data: {
+              id: randomUUID(),
+              submissionId: id,
+              requestedByUserId: actor.userId,
+              companyCode: entry.company.code,
+              certificationNumber: input.certificationNumber.trim(),
+              normalizedCertificationNumber: normalized,
+              status: checkStatus,
+              verificationMode: checkMode,
+              officialVerificationUrl: null,
+            },
+          });
         const metadata = isRecord(submission.declaredMetadata)
           ? submission.declaredMetadata
           : {};
+        if (alreadyListed) {
+          const updated = await db.assetSubmission.update({
+            where: { id },
+            data: {
+              normalizedCertificationNumber: normalized,
+              declaredMetadata: jsonMetadata({
+                ...metadata,
+                certificationNumber: input.certificationNumber.trim(),
+                certificationVerificationStatus: checkStatus,
+                certificationVerificationMode: checkMode,
+                officialVerificationUrl: '',
+              }),
+              version: { increment: 1 },
+            },
+            include: {
+              media: { orderBy: { slot: 'asc' } },
+              certificationVerifications: {
+                orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+              },
+            },
+          });
+          await audit('CERT_SLICE_DUPLICATE_CHECKED', 'submission', id, {
+            verificationId: duplicateVerification.id,
+            companyCode: entry.company.code,
+            verificationMode: checkMode,
+            status: duplicateVerification.status,
+          });
+          await audit('CERT_DUPLICATE_FOUND', 'submission', id, {
+            verificationId: duplicateVerification.id,
+            companyCode: entry.company.code,
+          });
+          return {
+            ...ownerProjection(updated),
+            certificationVerification: certificationVerificationProjection(
+              duplicateVerification,
+              checkStatus,
+            ),
+            canSubmit: false,
+          };
+        }
+        const providerResult = await this.verifyProviderCertification({
+          companyCode: entry.company.code,
+          certificationNumber: input.certificationNumber.trim(),
+        });
+        const providerComparison =
+          providerResult.status === 'VERIFIED' &&
+          providerResult.verifiedIdentity
+            ? compareCertificationIdentity(
+                {
+                  year: stringMetadata(metadata.year),
+                  set: stringMetadata(metadata.set),
+                  cardNumber: stringMetadata(metadata.cardNumber),
+                  name: stringMetadata(metadata.name),
+                  variant: stringMetadata(metadata.variant),
+                  language: stringMetadata(metadata.language),
+                  companyCode: entry.company.code,
+                  grade: entry.grade.toFixed(2),
+                },
+                providerResult.verifiedIdentity,
+              )
+            : null;
+        const providerStatus =
+          providerResult.status === 'VERIFIED' &&
+          providerComparison?.status === 'MISMATCH'
+            ? 'MISMATCH'
+            : providerResult.status;
+        const providerVerification =
+          await db.gradingCertificationVerification.create({
+            data: {
+              id: randomUUID(),
+              submissionId: id,
+              requestedByUserId: actor.userId,
+              companyCode: entry.company.code,
+              certificationNumber: input.certificationNumber.trim(),
+              normalizedCertificationNumber: normalized,
+              status: providerStatus,
+              verificationMode: 'OFFICIAL_API',
+              officialVerificationUrl: entry.company.officialVerificationUrl,
+              providerReference: providerResult.providerReference,
+              verifiedCard:
+                providerResult.verifiedIdentity as Prisma.InputJsonValue,
+              verifiedGrade: providerResult.verifiedGrade,
+              verifiedLabel: providerResult.verifiedLabel,
+              designation: providerResult.designation,
+              gradeEra: entry.gradeEra,
+              verifiedAt: ['VERIFIED', 'MISMATCH'].includes(providerStatus)
+                ? new Date()
+                : null,
+            },
+          });
         const updated = await db.assetSubmission.update({
           where: { id },
           data: {
@@ -4482,9 +4602,15 @@ export class SubmissionService {
             declaredMetadata: jsonMetadata({
               ...metadata,
               certificationNumber: input.certificationNumber.trim(),
-              certificationVerificationStatus: checkStatus,
-              certificationVerificationMode: checkMode,
-              officialVerificationUrl: '',
+              certificationVerificationStatus: providerStatus,
+              certificationVerificationMode: 'OFFICIAL_API',
+              officialVerificationUrl:
+                entry.company.officialVerificationUrl ?? '',
+              certificationVerifiedGrade: providerResult.verifiedGrade ?? '',
+              certificationVerifiedLabel: providerResult.verifiedLabel ?? '',
+              certificationDesignation: providerResult.designation ?? '',
+              certificationVerifiedAt:
+                providerVerification.verifiedAt?.toISOString() ?? '',
             }),
             version: { increment: 1 },
           },
@@ -4496,21 +4622,25 @@ export class SubmissionService {
           },
         });
         await audit('CERT_SLICE_DUPLICATE_CHECKED', 'submission', id, {
-          verificationId: verification.id,
+          verificationId: duplicateVerification.id,
           companyCode: entry.company.code,
           verificationMode: checkMode,
-          status: verification.status,
+          status: duplicateVerification.status,
         });
-        if (alreadyListed)
-          await audit('CERT_DUPLICATE_FOUND', 'submission', id, {
-            verificationId: verification.id,
-            companyCode: entry.company.code,
-          });
+        await audit('CERT_PROVIDER_VERIFICATION_RECORDED', 'submission', id, {
+          verificationId: providerVerification.id,
+          companyCode: entry.company.code,
+          status: providerVerification.status,
+          providerReference: providerVerification.providerReference,
+          mismatches: providerComparison?.mismatches ?? [],
+        });
         return {
           ...ownerProjection(updated),
-          certificationVerification:
-            certificationVerificationProjection(verification),
-          canSubmit: !alreadyListed,
+          certificationVerification: certificationVerificationProjection(
+            providerVerification,
+            checkStatus,
+          ),
+          canSubmit: certificationVerificationResolved(providerStatus),
         };
       },
     );
@@ -4564,12 +4694,17 @@ export class SubmissionService {
             message: 'Certification is not applicable.',
           });
         const latest = submission!.certificationVerifications[0];
-        if (!latest)
+        const duplicate = submission!.certificationVerifications.find(
+          (verification) =>
+            verification.verificationMode === 'SLICE_DUPLICATE_CHECK',
+        );
+        if (!latest || !duplicate)
           throw new ConflictException({
             code: 'CERTIFICATION_VERIFICATION_REQUIRED',
-            message: 'Run the Slice certificate check before staff confirmation.',
+            message:
+              'Run the Slice certificate check before staff confirmation.',
           });
-        if (latest.status === 'ALREADY_LISTED')
+        if (duplicate.status === 'ALREADY_LISTED')
           throw new ConflictException({
             code: 'CERT_DUPLICATE_BLOCKED',
             message:
@@ -4614,10 +4749,17 @@ export class SubmissionService {
           comparison.status === 'MATCH' && gradeMatches && designationMatches
             ? 'VERIFIED'
             : 'MISMATCH';
-        const verification = await db.gradingCertificationVerification.update({
-          where: { id: latest.id },
+        const verification = await db.gradingCertificationVerification.create({
           data: {
+            id: randomUUID(),
+            submissionId: id,
+            requestedByUserId: actor.userId,
+            companyCode: entry.company.code,
+            certificationNumber: latest.certificationNumber,
+            normalizedCertificationNumber: latest.normalizedCertificationNumber,
             status,
+            verificationMode: 'MANUAL_OFFICIAL_LOOKUP',
+            officialVerificationUrl: entry.company.officialVerificationUrl,
             verifiedCard: verifiedIdentity as Prisma.InputJsonValue,
             verifiedGrade: input.verifiedGrade,
             verifiedLabel: input.verifiedLabel ?? entry.label,
@@ -4625,7 +4767,7 @@ export class SubmissionService {
             subgrades: input.subgrades as Prisma.InputJsonValue | undefined,
             providerReference: input.providerReference?.trim() || null,
             gradeEra: entry.gradeEra,
-            verifiedAt: status === 'VERIFIED' ? new Date() : null,
+            verifiedAt: new Date(),
           },
         });
         await audit('CERT_MANUAL_VERIFICATION_RECORDED', 'submission', id, {
@@ -4657,8 +4799,10 @@ export class SubmissionService {
           });
           return {
             ...ownerProjection(mismatchUpdated),
-            certificationVerification:
-              certificationVerificationProjection(verification),
+            certificationVerification: certificationVerificationProjection(
+              verification,
+              duplicate.status,
+            ),
             canSubmit: false,
           };
         }
@@ -4689,8 +4833,10 @@ export class SubmissionService {
         });
         return {
           ...ownerProjection(updated),
-          certificationVerification:
-            certificationVerificationProjection(verification),
+          certificationVerification: certificationVerificationProjection(
+            verification,
+            duplicate.status,
+          ),
           canSubmit: true,
         };
       },
@@ -4756,7 +4902,11 @@ export class SubmissionService {
           ? { acceptingShipments: true }
           : { acceptingInPerson: true }),
       },
-      select: { id: true, acceptedCategories: true, maximumActiveIntakes: true },
+      select: {
+        id: true,
+        acceptedCategories: true,
+        maximumActiveIntakes: true,
+      },
     });
     if (!location)
       throw new UnprocessableEntityException({
@@ -4768,7 +4918,16 @@ export class SubmissionService {
       const activeIntakes = await db.submissionIntake.count({
         where: {
           vaultId: location.id,
-          status: { in: ['VAULT_SELECTED', 'SHIPPING_REQUIRED', 'IN_TRANSIT', 'DELIVERED', 'RECEIVED', 'VERIFICATION'] },
+          status: {
+            in: [
+              'VAULT_SELECTED',
+              'SHIPPING_REQUIRED',
+              'IN_TRANSIT',
+              'DELIVERED',
+              'RECEIVED',
+              'VERIFICATION',
+            ],
+          },
         },
       });
       if (activeIntakes >= location.maximumActiveIntakes)
@@ -4947,27 +5106,31 @@ function mediaProjection(media: {
     updatedAt: media.updatedAt.toISOString(),
   };
 }
-function certificationVerificationProjection(verification: {
-  id: string;
-  companyCode: string;
-  certificationNumber: string;
-  normalizedCertificationNumber: string;
-  status: string;
-  verificationMode: string;
-  officialVerificationUrl: string | null;
-  verifiedGrade: string | null;
-  verifiedLabel: string | null;
-  designation: string | null;
-  gradeEra: string | null;
-  verifiedAt: Date | null;
-  createdAt: Date;
-}) {
+function certificationVerificationProjection(
+  verification: {
+    id: string;
+    companyCode: string;
+    certificationNumber: string;
+    normalizedCertificationNumber: string;
+    status: string;
+    verificationMode: string;
+    officialVerificationUrl: string | null;
+    verifiedGrade: string | null;
+    verifiedLabel: string | null;
+    designation: string | null;
+    gradeEra: string | null;
+    verifiedAt: Date | null;
+    createdAt: Date;
+  },
+  duplicateCheckStatus: string | null = null,
+) {
   return {
     id: verification.id,
     companyCode: verification.companyCode,
     certificationNumber: verification.certificationNumber,
     normalizedCertificationNumber: verification.normalizedCertificationNumber,
     status: verification.status,
+    duplicateCheckStatus,
     verificationMode: verification.verificationMode,
     officialVerificationUrl: verification.officialVerificationUrl,
     verifiedGrade: verification.verifiedGrade,
@@ -5045,6 +5208,9 @@ function ownerProjection(submission: {
     certificationVerification: submission.certificationVerifications?.[0]
       ? certificationVerificationProjection(
           submission.certificationVerifications[0],
+          submission.certificationVerifications.find(
+            (item) => item.verificationMode === 'SLICE_DUPLICATE_CHECK',
+          )?.status ?? null,
         )
       : null,
   };

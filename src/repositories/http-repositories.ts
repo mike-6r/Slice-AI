@@ -1570,6 +1570,10 @@ const mapCertificationVerification = (raw: unknown): CertificationVerification =
       "certificationVerification.normalizedCertificationNumber",
     ),
     status: stringField(value.status, "certificationVerification.status"),
+    duplicateCheckStatus: nullableString(
+      value.duplicateCheckStatus,
+      "certificationVerification.duplicateCheckStatus",
+    ),
     verificationMode: stringField(
       value.verificationMode,
       "certificationVerification.verificationMode",

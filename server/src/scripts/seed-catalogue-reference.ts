@@ -16,28 +16,32 @@ export async function seedCatalogueReference(prisma: PrismaClient) {
       slug: 'sports-cards',
       name: 'Sports Cards',
       iconKey: 'sports',
-      description: 'Baseball, basketball, football, hockey, soccer, and other sports cards.',
+      description:
+        'Baseball, basketball, football, hockey, soccer, and other sports cards.',
       sortOrder: 20,
     },
     {
       slug: 'trading-card-games',
       name: 'Trading Card Games',
       iconKey: 'tcg',
-      description: 'Collectible card games not yet assigned to a dedicated game category.',
+      description:
+        'Collectible card games not yet assigned to a dedicated game category.',
       sortOrder: 30,
     },
     {
       slug: 'magic-the-gathering',
       name: 'Magic: The Gathering',
       iconKey: 'magic',
-      description: 'Magic: The Gathering cards across sets, formats, and treatments.',
+      description:
+        'Magic: The Gathering cards across sets, formats, and treatments.',
       sortOrder: 40,
     },
     {
       slug: 'yu-gi-oh-tcg',
       name: 'Yu-Gi-Oh! TCG',
       iconKey: 'yu-gi-oh',
-      description: 'Yu-Gi-Oh! trading cards, rarities, and tournament releases.',
+      description:
+        'Yu-Gi-Oh! trading cards, rarities, and tournament releases.',
       sortOrder: 50,
     },
     {
@@ -58,7 +62,8 @@ export async function seedCatalogueReference(prisma: PrismaClient) {
       slug: 'digimon-card-game',
       name: 'Digimon Card Game',
       iconKey: 'digimon',
-      description: 'Digimon Card Game sets, alternate arts, and tournament promos.',
+      description:
+        'Digimon Card Game sets, alternate arts, and tournament promos.',
       sortOrder: 80,
     },
     {
@@ -79,7 +84,8 @@ export async function seedCatalogueReference(prisma: PrismaClient) {
       slug: 'non-sport-entertainment',
       name: 'Non-Sport & Entertainment Cards',
       iconKey: 'non-sport',
-      description: 'Film, television, music, gaming, and other entertainment cards.',
+      description:
+        'Film, television, music, gaming, and other entertainment cards.',
       sortOrder: 110,
     },
     {
@@ -111,75 +117,156 @@ export async function seedCatalogueReference(prisma: PrismaClient) {
     data: { status: 'ARCHIVED' },
   });
   const companies = [
-    ['PSA', 'Professional Sports Authenticator', 'PSA', 'https://www.psacard.com/cert', 'PSA cert number'],
-    ['BGS', 'Beckett Grading Services', 'Beckett (BGS)', 'https://www.beckett.com/grading/card-lookup', 'Beckett cert number'],
-    ['BVG', 'Beckett Vintage Grading', 'Beckett (BVG)', 'https://www.beckett.com/grading/card-lookup', 'Beckett cert number'],
-    ["BCCG", "Beckett Collector's Club Grading", 'Beckett (BCCG)', 'https://www.beckett.com/grading/card-lookup', 'Beckett cert number'],
-    ['CGC', 'CGC Cards', 'CGC Cards', 'https://www.cgccards.com/certlookup/', 'CGC cert number'],
-    ['SGC', 'Sportscard Guaranty', 'SGC', 'https://www.gosgc.com/certlookup', 'SGC cert number'],
+    [
+      'PSA',
+      'Professional Sports Authenticator',
+      'PSA',
+      'https://www.psacard.com/cert',
+      'PSA cert number',
+    ],
+    [
+      'BGS',
+      'Beckett Grading Services',
+      'Beckett (BGS)',
+      'https://www.beckett.com/grading/card-lookup',
+      'Beckett cert number',
+    ],
+    [
+      'BVG',
+      'Beckett Vintage Grading',
+      'Beckett (BVG)',
+      'https://www.beckett.com/grading/card-lookup',
+      'Beckett cert number',
+    ],
+    [
+      'BCCG',
+      "Beckett Collector's Club Grading",
+      'Beckett (BCCG)',
+      'https://www.beckett.com/grading/card-lookup',
+      'Beckett cert number',
+    ],
+    [
+      'CGC',
+      'CGC Cards',
+      'CGC Cards',
+      'https://www.cgccards.com/certlookup/',
+      'CGC cert number',
+    ],
+    [
+      'SGC',
+      'Sportscard Guaranty',
+      'SGC',
+      'https://www.gosgc.com/certlookup',
+      'SGC cert number',
+    ],
     ['TAG', 'TAG Grading', 'TAG', 'https://taggrading.com/', 'TAG cert number'],
     ['ACE', 'ACE Grading', 'ACE', 'https://acegrading.com/', 'ACE cert number'],
   ] as const;
-  const registry = new Map<string, Awaited<ReturnType<typeof prisma.gradingCompany.upsert>>>();
-  for (const [code, name, displayName, officialVerificationUrl, certificationFormat] of companies) {
+  const registry = new Map<
+    string,
+    Awaited<ReturnType<typeof prisma.gradingCompany.upsert>>
+  >();
+  for (const [
+    code,
+    name,
+    displayName,
+    officialVerificationUrl,
+    certificationFormat,
+  ] of companies) {
     const company = await prisma.gradingCompany.upsert({
       where: { code },
       update: {
         name,
         displayName,
-        verificationMode: 'MANUAL_OFFICIAL_LOOKUP',
+        verificationMode:
+          code === 'PSA' ? 'OFFICIAL_API' : 'MANUAL_OFFICIAL_LOOKUP',
         supportsCertVerification: true,
-        supportsAutomatedVerification: false,
+        supportsAutomatedVerification: code === 'PSA',
         officialVerificationUrl,
         certificationFormat,
-        gradeScaleVersion: code === 'PSA' || code === 'BGS' ? 'maintained-v1' : 'pending-official-confirmation',
+        gradeScaleVersion:
+          code === 'PSA' || code === 'BGS'
+            ? 'maintained-v1'
+            : 'pending-official-confirmation',
         status: 'ACTIVE',
       },
       create: {
         code,
         name,
         displayName,
-        verificationMode: 'MANUAL_OFFICIAL_LOOKUP',
+        verificationMode:
+          code === 'PSA' ? 'OFFICIAL_API' : 'MANUAL_OFFICIAL_LOOKUP',
         supportsCertVerification: true,
-        supportsAutomatedVerification: false,
+        supportsAutomatedVerification: code === 'PSA',
         officialVerificationUrl,
         certificationFormat,
-        gradeScaleVersion: code === 'PSA' || code === 'BGS' ? 'maintained-v1' : 'pending-official-confirmation',
+        gradeScaleVersion:
+          code === 'PSA' || code === 'BGS'
+            ? 'maintained-v1'
+            : 'pending-official-confirmation',
       },
     });
     registry.set(code, company);
   }
 
-  const scales: Record<string, Array<[string, string, string | null, number, boolean, string | null]>> = {
+  const scales: Record<
+    string,
+    Array<[string, string, string | null, number, boolean, string | null]>
+  > = {
     PSA: [
-      ['10.00', 'GEM-MT', 'Gem Mint', 10, false, null], ['9.00', 'MINT', 'Mint', 20, false, null],
-      ['8.50', 'NM-MT+', 'Near Mint-Mint Plus', 30, false, null], ['8.00', 'NM-MT', 'Near Mint-Mint', 40, false, null],
-      ['7.50', 'NM+', 'Near Mint Plus', 50, false, null], ['7.00', 'NM', 'Near Mint', 60, false, null],
-      ['6.50', 'EX-MT+', 'Excellent-Mint Plus', 70, false, null], ['6.00', 'EX-MT', 'Excellent-Mint', 80, false, null],
-      ['5.50', 'EX+', 'Excellent Plus', 90, false, null], ['5.00', 'EX', 'Excellent', 100, false, null],
-      ['4.50', 'VG-EX+', 'Very Good-Excellent Plus', 110, false, null], ['4.00', 'VG-EX', 'Very Good-Excellent', 120, false, null],
-      ['3.50', 'VG+', 'Very Good Plus', 130, false, null], ['3.00', 'VG', 'Very Good', 140, false, null],
-      ['2.50', 'GOOD+', 'Good Plus', 150, false, null], ['2.00', 'GOOD', 'Good', 160, false, null],
-      ['1.50', 'FAIR', 'Fair', 170, false, null], ['1.00', 'POOR', 'Poor', 180, false, null],
+      ['10.00', 'GEM-MT', 'Gem Mint', 10, false, null],
+      ['9.00', 'MINT', 'Mint', 20, false, null],
+      ['8.50', 'NM-MT+', 'Near Mint-Mint Plus', 30, false, null],
+      ['8.00', 'NM-MT', 'Near Mint-Mint', 40, false, null],
+      ['7.50', 'NM+', 'Near Mint Plus', 50, false, null],
+      ['7.00', 'NM', 'Near Mint', 60, false, null],
+      ['6.50', 'EX-MT+', 'Excellent-Mint Plus', 70, false, null],
+      ['6.00', 'EX-MT', 'Excellent-Mint', 80, false, null],
+      ['5.50', 'EX+', 'Excellent Plus', 90, false, null],
+      ['5.00', 'EX', 'Excellent', 100, false, null],
+      ['4.50', 'VG-EX+', 'Very Good-Excellent Plus', 110, false, null],
+      ['4.00', 'VG-EX', 'Very Good-Excellent', 120, false, null],
+      ['3.50', 'VG+', 'Very Good Plus', 130, false, null],
+      ['3.00', 'VG', 'Very Good', 140, false, null],
+      ['2.50', 'GOOD+', 'Good Plus', 150, false, null],
+      ['2.00', 'GOOD', 'Good', 160, false, null],
+      ['1.50', 'FAIR', 'Fair', 170, false, null],
+      ['1.00', 'POOR', 'Poor', 180, false, null],
     ],
     BGS: [
-      ['10.00', 'Pristine', 'Pristine', 10, false, 'PRISTINE'], ['9.50', 'Gem Mint', 'Gem Mint', 20, false, null],
-      ['9.00', 'Mint', 'Mint', 30, false, null], ['8.50', 'NM-MT+', 'Near Mint-Mint Plus', 40, false, null],
-      ['8.00', 'NM-MT', 'Near Mint-Mint', 50, false, null], ['7.50', 'NM+', 'Near Mint Plus', 60, false, null],
-      ['7.00', 'NM', 'Near Mint', 70, false, null], ['6.50', 'EX-MT+', 'Excellent-Mint Plus', 80, false, null],
-      ['6.00', 'EX-MT', 'Excellent-Mint', 90, false, null], ['5.50', 'EX+', 'Excellent Plus', 100, false, null],
-      ['5.00', 'EX', 'Excellent', 110, false, null], ['4.50', 'VG-EX+', 'Very Good-Excellent Plus', 120, false, null],
-      ['4.00', 'VG-EX', 'Very Good-Excellent', 130, false, null], ['3.50', 'VG+', 'Very Good Plus', 140, false, null],
-      ['3.00', 'VG', 'Very Good', 150, false, null], ['2.50', 'GOOD+', 'Good Plus', 160, false, null],
-      ['2.00', 'GOOD', 'Good', 170, false, null], ['1.50', 'FAIR', 'Fair', 180, false, null], ['1.00', 'POOR', 'Poor', 190, false, null],
+      ['10.00', 'Pristine', 'Pristine', 10, false, 'PRISTINE'],
+      ['9.50', 'Gem Mint', 'Gem Mint', 20, false, null],
+      ['9.00', 'Mint', 'Mint', 30, false, null],
+      ['8.50', 'NM-MT+', 'Near Mint-Mint Plus', 40, false, null],
+      ['8.00', 'NM-MT', 'Near Mint-Mint', 50, false, null],
+      ['7.50', 'NM+', 'Near Mint Plus', 60, false, null],
+      ['7.00', 'NM', 'Near Mint', 70, false, null],
+      ['6.50', 'EX-MT+', 'Excellent-Mint Plus', 80, false, null],
+      ['6.00', 'EX-MT', 'Excellent-Mint', 90, false, null],
+      ['5.50', 'EX+', 'Excellent Plus', 100, false, null],
+      ['5.00', 'EX', 'Excellent', 110, false, null],
+      ['4.50', 'VG-EX+', 'Very Good-Excellent Plus', 120, false, null],
+      ['4.00', 'VG-EX', 'Very Good-Excellent', 130, false, null],
+      ['3.50', 'VG+', 'Very Good Plus', 140, false, null],
+      ['3.00', 'VG', 'Very Good', 150, false, null],
+      ['2.50', 'GOOD+', 'Good Plus', 160, false, null],
+      ['2.00', 'GOOD', 'Good', 170, false, null],
+      ['1.50', 'FAIR', 'Fair', 180, false, null],
+      ['1.00', 'POOR', 'Poor', 190, false, null],
     ],
     CGC: [
-      ['10.00', 'Pristine', 'Pristine', 10, false, 'PRISTINE'], ['10.00', 'Gem Mint', 'Gem Mint', 20, false, 'GEM_MINT'],
-      ['9.50', 'Mint+', 'Mint Plus', 30, false, null], ['9.00', 'Mint', 'Mint', 40, false, null],
-      ['8.50', 'NM/Mint+', 'Near Mint-Mint Plus', 50, false, null], ['8.00', 'NM/Mint', 'Near Mint-Mint', 60, false, null],
-      ['7.50', 'Near Mint+', 'Near Mint Plus', 70, false, null], ['7.00', 'Near Mint', 'Near Mint', 80, false, null],
-      ['6.00', 'Excellent', 'Excellent', 90, false, null], ['5.00', 'Very Good', 'Very Good', 100, false, null],
-      ['9.50', 'Mint+', 'Mint Plus', 110, true, 'LEGACY'], ['10.00', 'Perfect', 'Perfect', 120, true, 'LEGACY'],
+      ['10.00', 'Pristine', 'Pristine', 10, false, 'PRISTINE'],
+      ['10.00', 'Gem Mint', 'Gem Mint', 20, false, 'GEM_MINT'],
+      ['9.50', 'Mint+', 'Mint Plus', 30, false, null],
+      ['9.00', 'Mint', 'Mint', 40, false, null],
+      ['8.50', 'NM/Mint+', 'Near Mint-Mint Plus', 50, false, null],
+      ['8.00', 'NM/Mint', 'Near Mint-Mint', 60, false, null],
+      ['7.50', 'Near Mint+', 'Near Mint Plus', 70, false, null],
+      ['7.00', 'Near Mint', 'Near Mint', 80, false, null],
+      ['6.00', 'Excellent', 'Excellent', 90, false, null],
+      ['5.00', 'Very Good', 'Very Good', 100, false, null],
+      ['9.50', 'Mint+', 'Mint Plus', 110, true, 'LEGACY'],
+      ['10.00', 'Perfect', 'Perfect', 120, true, 'LEGACY'],
     ],
   };
   for (const [code, entries] of Object.entries(scales)) {
@@ -192,13 +279,37 @@ export async function seedCatalogueReference(prisma: PrismaClient) {
         data: { active: false },
       });
     }
-    for (const [grade, label, conditionLabel, sortOrder, legacy, designation] of entries) {
+    for (const [
+      grade,
+      label,
+      conditionLabel,
+      sortOrder,
+      legacy,
+      designation,
+    ] of entries) {
       const existing = await prisma.gradeScaleEntry.findFirst({
         where: { companyId: company.id, grade, designation: designation ?? '' },
       });
-      const data = { grade, label, conditionLabel, designation: designation ?? '', legacy, gradeEra: legacy ? 'LEGACY' : 'CURRENT', scaleVersion: company.gradeScaleVersion, sortOrder, active: true };
-      if (existing) await prisma.gradeScaleEntry.update({ where: { id: existing.id }, data });
-      else await prisma.gradeScaleEntry.create({ data: { companyId: company.id, ...data } });
+      const data = {
+        grade,
+        label,
+        conditionLabel,
+        designation: designation ?? '',
+        legacy,
+        gradeEra: legacy ? 'LEGACY' : 'CURRENT',
+        scaleVersion: company.gradeScaleVersion,
+        sortOrder,
+        active: true,
+      };
+      if (existing)
+        await prisma.gradeScaleEntry.update({
+          where: { id: existing.id },
+          data,
+        });
+      else
+        await prisma.gradeScaleEntry.create({
+          data: { companyId: company.id, ...data },
+        });
     }
   }
 }

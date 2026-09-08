@@ -184,7 +184,15 @@ export class QualificationService {
       metadata.grader ?? submission.gradeScaleEntry?.company.code ?? '',
     ).trim();
     const certNumber = String(metadata.certificationNumber ?? '').trim();
-    const cert = submission.certificationVerifications[0] ?? null;
+    // Duplicate protection and grader evidence are independent facts. A Slice
+    // CLEAR record proves only that our own claim table has no conflict; it
+    // must never be mistaken for a provider-verified certificate or grade.
+    const duplicateCertification = submission.certificationVerifications.find(
+      (item) => item.verificationMode === 'SLICE_DUPLICATE_CHECK',
+    );
+    const providerCertification = submission.certificationVerifications.find(
+      (item) => item.verificationMode !== 'SLICE_DUPLICATE_CHECK',
+    );
     const claim =
       certNumber && grader
         ? await db.gradingCertificationClaim.findUnique({
@@ -247,7 +255,11 @@ export class QualificationService {
             policy,
             accountStatus: submission.owner.accountStatus,
             identity: metadata,
-            certification: cert,
+            certification: {
+              duplicateStatus: duplicateCertification?.status ?? null,
+              providerStatus: providerCertification?.status ?? null,
+              verifiedGrade: providerCertification?.verifiedGrade ?? null,
+            },
             certificationClaimedByOther: Boolean(
               claim?.submissionId && claim.submissionId !== submissionId,
             ),

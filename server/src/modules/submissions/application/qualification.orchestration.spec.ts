@@ -51,7 +51,18 @@ function harness(
       },
     ],
     gradeScaleEntry: { company: { code: 'PSA' } },
-    certificationVerifications: [{ status: 'CLEAR', verifiedGrade: '10.00' }],
+    certificationVerifications: [
+      {
+        status: 'VERIFIED',
+        verificationMode: 'OFFICIAL_API',
+        verifiedGrade: '10.00',
+      },
+      {
+        status: 'CLEAR',
+        verificationMode: 'SLICE_DUPLICATE_CHECK',
+        verifiedGrade: null,
+      },
+    ],
     preferredIntakeLocation: {
       id: 'vault-1',
       active: true,
@@ -100,13 +111,11 @@ function harness(
     },
     assetSubmission: {
       findUniqueOrThrow: jest.fn().mockResolvedValue(submission),
-      findUnique: jest
-        .fn()
-        .mockResolvedValue({
-          status: 'SUBMITTED',
-          reviewerId: null,
-          decisionCode: null,
-        }),
+      findUnique: jest.fn().mockResolvedValue({
+        status: 'SUBMITTED',
+        reviewerId: null,
+        decisionCode: null,
+      }),
       update: jest.fn().mockImplementation(async ({ data }: any) => {
         if (data.assetId) submission.assetId = data.assetId;
         return {};
@@ -183,25 +192,21 @@ function harness(
     }),
     assetSubmission: {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-      findMany: jest
-        .fn()
-        .mockResolvedValue([
-          {
-            id: 'submission-1',
-            qualificationRuns: [{ outcome: 'AUTO_QUALIFIED' }],
-          },
-        ]),
+      findMany: jest.fn().mockResolvedValue([
+        {
+          id: 'submission-1',
+          qualificationRuns: [{ outcome: 'AUTO_QUALIFIED' }],
+        },
+      ]),
     },
     autoReviewPolicy: {
       findUnique: jest.fn().mockResolvedValue(policy),
     },
     qualificationRun: {
-      create: jest
-        .fn()
-        .mockImplementation(async ({ data }: any) => ({
-          id: `failed-${++runSequence}`,
-          ...data,
-        })),
+      create: jest.fn().mockImplementation(async ({ data }: any) => ({
+        id: `failed-${++runSequence}`,
+        ...data,
+      })),
     },
     auditEvent: { create: jest.fn().mockResolvedValue({}) },
   };
