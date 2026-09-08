@@ -81,66 +81,70 @@ export function CollectorAssetPreview({
     <Link
       to="/asset/$id"
       params={{ id: listing.slug }}
-      className={compact ? "collector-mini-holding" : "featured-holding-card"}
+      className={
+        compact
+          ? `collector-mini-holding ${listing.preSale ? "is-presale" : "is-live"}`
+          : "featured-holding-card"
+      }
       aria-label={`View ${listing.title}`}
     >
       {compact ? (
         <>
-          <span className="collector-mini-holding__media">
+          <div className="collector-mini-holding__media">
             <AssetMedia listing={listing} compact />
             <span
               className={`collector-mini-holding__status is-${listing.preSale ? "presale" : "live"}`}
             >
               {listing.preSale ? "Pre-Sale" : "Market Live"}
             </span>
-          </span>
-          <span className="collector-mini-holding__copy">
-            <span className="collector-mini-holding__identity">
+          </div>
+          <div className="collector-mini-holding__copy">
+            <div className="collector-mini-holding__identity">
               <strong>{listing.title}</strong>
               <small>{identity || collectorCategoryLabel(listing.category)}</small>
-            </span>
+            </div>
             {listing.preSale ? (
               <>
-                <span className="collector-mini-holding__metrics">
-                  <span>
+                <div className="collector-mini-holding__metrics">
+                  <div>
                     <small>Price per Slice</small>
                     <strong>{price ?? "Unavailable"}</strong>
-                  </span>
+                  </div>
                   {ownership !== undefined ? (
-                    <span>
+                    <div>
                       <small>Ownership</small>
                       <strong>{(ownership / 100).toFixed(2)}%</strong>
-                    </span>
+                    </div>
                   ) : null}
-                </span>
-                <span className="collector-mini-holding__availability">
+                </div>
+                <div className="collector-mini-holding__availability">
                   <strong>{listing.preSale.availableUnits} available</strong>
                   <small>{listing.preSale.reservedUnits} reserved</small>
-                </span>
+                </div>
                 {listing.preSale.deadlineAt ? (
-                  <span className="collector-mini-holding__deadline">
+                  <div className="collector-mini-holding__deadline">
                     <Clock3 aria-hidden="true" />{" "}
                     {formatPreSaleCountdown(listing.preSale.deadlineAt)}
-                  </span>
+                  </div>
                 ) : null}
                 {preSaleStatus ? (
-                  <span className="collector-mini-holding__state">{preSaleStatus}</span>
+                  <div className="collector-mini-holding__state">{preSaleStatus}</div>
                 ) : null}
               </>
             ) : (
               <>
                 {price ? (
-                  <span className="collector-mini-holding__metrics is-live">
-                    <span>
+                  <div className="collector-mini-holding__metrics is-live">
+                    <div>
                       <small>Market reference</small>
                       <strong>{price}</strong>
-                    </span>
-                  </span>
+                    </div>
+                  </div>
                 ) : null}
-                <span className="collector-mini-holding__state">Live on market</span>
+                <div className="collector-mini-holding__state">Live on market</div>
               </>
             )}
-          </span>
+          </div>
         </>
       ) : (
         <>

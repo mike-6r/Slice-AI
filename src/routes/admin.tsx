@@ -5535,56 +5535,69 @@ function ReviewQueue({
       <div className="admin-review-queue-heading admin-list-workspace__heading">
         <div>
           <p className="admin-breadcrumb">
-            Admin Console <span>/</span> Review Queue
+            Operations <span>/</span> Submission reviews
           </p>
-          <h2>Review Queue</h2>
-          <p>Review submissions, verify evidence, and approve for canonicalization.</p>
+          <h2>Submission desk</h2>
+          <p>Triage evidence, claim high-conviction work, and keep every decision auditable.</p>
         </div>
-        <button type="button" className="admin-review-refresh" onClick={retry}>
-          <RefreshCw aria-hidden="true" /> Refresh
-        </button>
+        <div className="admin-review-heading-actions">
+          <div className="admin-review-heading-meta" aria-label="Current queue focus">
+            <span className="admin-review-live-indicator">
+              <i aria-hidden="true" /> Live queue
+            </span>
+            <span>
+              <strong>{counts.readyToReview}</strong> ready to decide
+            </span>
+            <span>
+              <strong>{counts.highPriority}</strong> high priority
+            </span>
+          </div>
+          <button type="button" className="admin-review-refresh" onClick={retry}>
+            <RefreshCw aria-hidden="true" /> Refresh
+          </button>
+        </div>
       </div>
       <div className="admin-review-kpis" aria-label="Review queue summary">
         <ReviewKpi
-          icon={Inbox}
-          label="Awaiting Review"
-          value={counts.all}
-          detail="Submissions in queue"
-        />
-        <ReviewKpi
           icon={CheckCircle2}
-          label="Ready for Decision"
+          label="Ready to decide"
           value={counts.readyToReview}
-          detail="Required checks complete"
+          detail="Evidence checks complete"
           tone="positive"
         />
         <ReviewKpi
+          icon={AlertTriangle}
+          label="High priority"
+          value={counts.highPriority}
+          detail="Blocked or aged 48+ hours"
+          tone="danger"
+        />
+        <ReviewKpi
+          icon={Inbox}
+          label="Awaiting review"
+          value={counts.all}
+          detail="Total active submissions"
+        />
+        <ReviewKpi
           icon={FileClock}
-          label="Needs Evidence"
+          label="Needs evidence"
           value={counts.awaitingEvidence}
           detail="Missing required items"
           tone="warning"
         />
         <ReviewKpi
           icon={Search}
-          label="Research Pending"
+          label="Research pending"
           value={counts.researchPending}
           detail="Reference research outstanding"
           tone="purple"
         />
         <ReviewKpi
           icon={Users}
-          label="Claimed by Staff"
+          label="Claimed by staff"
           value={counts.claimed}
           detail="Reviews in progress"
           tone="blue"
-        />
-        <ReviewKpi
-          icon={AlertTriangle}
-          label="High Priority"
-          value={counts.highPriority}
-          detail="Blocked or aged 48+ hours"
-          tone="danger"
         />
       </div>
       <QualificationExceptionPanel
@@ -5596,17 +5609,23 @@ function ReviewQueue({
         rerunning={rerun.isPending}
       />
       {qualificationPolicy.data ? (
-        <section className="admin-panel" aria-label="Automated qualification policy">
-          <div className="admin-review-queue-heading">
+        <section
+          className="admin-panel admin-review-policy-panel"
+          aria-label="Automated qualification policy"
+        >
+          <div className="admin-review-policy-header">
             <div>
               <p className="admin-console-eyebrow">Policy controls</p>
               <h3>Automated review guardrails</h3>
-              <p>Emergency disable and launch controls are audited server-side.</p>
+              <p>Every change is audited server-side before it reaches the queue.</p>
             </div>
           </div>
-          <div className="admin-form-grid">
-            <label className="admin-form-field">
-              <span>Automation enabled</span>
+          <div className="admin-review-policy-grid">
+            <label className="admin-review-policy-control">
+              <span>
+                <strong>Automation</strong>
+                <small>Run eligible qualification checks.</small>
+              </span>
               <input
                 type="checkbox"
                 checked={qualificationPolicy.data.enabled}
@@ -5615,8 +5634,11 @@ function ReviewQueue({
                 }
               />
             </label>
-            <label className="admin-form-field">
-              <span>Auto-launch conditional Pre-Sale</span>
+            <label className="admin-review-policy-control">
+              <span>
+                <strong>Conditional Pre-Sale</strong>
+                <small>Launch approved conditional listings.</small>
+              </span>
               <input
                 type="checkbox"
                 checked={qualificationPolicy.data.autoPreSaleLaunch}
@@ -5625,8 +5647,11 @@ function ReviewQueue({
                 }
               />
             </label>
-            <label className="admin-form-field">
-              <span>Emergency disable</span>
+            <label className="admin-review-policy-control admin-review-policy-control--danger">
+              <span>
+                <strong>Emergency stop</strong>
+                <small>Pause all automated decisions.</small>
+              </span>
               <input
                 type="checkbox"
                 checked={qualificationPolicy.data.emergencyDisabled}
@@ -5635,9 +5660,10 @@ function ReviewQueue({
                 }
               />
             </label>
-            <div className="admin-form-field">
+            <div className="admin-review-policy-sample">
               <span>QA sample</span>
               <strong>{(qualificationPolicy.data.qaSamplingBps / 100).toFixed(2)}%</strong>
+              <small>Audited sample rate</small>
             </div>
           </div>
         </section>
@@ -5813,15 +5839,10 @@ function ReviewQueue({
             <table className="admin-review-table">
               <thead>
                 <tr>
-                  <th scope="col">
-                    <span className="sr-only">Row selection</span>
-                  </th>
                   <th>Submission</th>
                   <th>Collector</th>
-                  <th>Readiness</th>
-                  <th>Evidence</th>
-                  <th>Research</th>
-                  <th>Reviewer</th>
+                  <th>Review state</th>
+                  <th>Verification</th>
                   <th>Priority</th>
                   <th>Submitted</th>
                   <th>Actions</th>
@@ -5831,9 +5852,6 @@ function ReviewQueue({
                 {items.length ? (
                   items.map((item) => (
                     <tr key={item.id}>
-                      <td>
-                        <input type="checkbox" aria-label={`Select ${item.collectible.title}`} />
-                      </td>
                       <td>
                         <div className="admin-review-submission-cell">
                           <span className="admin-review-thumb">
@@ -5880,45 +5898,45 @@ function ReviewQueue({
                         </div>
                       </td>
                       <td>
-                        <div
-                          className={`admin-review-readiness admin-review-readiness--${item.readinessState.toLowerCase()}`}
-                        >
-                          <strong>{reviewReadinessLabel(item.readinessState)}</strong>
-                          <small>{item.readinessReason}</small>
+                        <div className="admin-review-decision-cell">
+                          <div
+                            className={`admin-review-readiness admin-review-readiness--${item.readinessState.toLowerCase()}`}
+                          >
+                            <strong>{reviewReadinessLabel(item.readinessState)}</strong>
+                            <small>{item.readinessReason}</small>
+                          </div>
+                          <div
+                            className={`admin-review-reviewer admin-review-reviewer--${item.reviewer.state.toLowerCase()}`}
+                          >
+                            <strong>{reviewerLabel(item.reviewer)}</strong>
+                            <small>{reviewerDetail(item.reviewer)}</small>
+                          </div>
                         </div>
                       </td>
                       <td>
-                        <div
-                          className={`admin-review-evidence admin-review-evidence--${item.evidence.status.toLowerCase()}`}
-                        >
-                          <strong>
-                            {item.evidence.presentRequired} / {item.evidence.required} required
-                          </strong>
-                          <small>
-                            {item.evidence.status === "COMPLETE"
-                              ? "Complete"
-                              : item.evidence.missingRequired === 1
-                                ? "1 required item missing"
-                                : `${item.evidence.missingRequired} required items missing`}
-                          </small>
-                        </div>
-                      </td>
-                      <td>
-                        <div
-                          className={`admin-review-research admin-review-research--${item.research.status.toLowerCase()}`}
-                        >
-                          <strong>{reviewResearchLabel(item.research.status)}</strong>
-                          <small>
-                            {item.research.observedAt ? date(item.research.observedAt) : "—"}
-                          </small>
-                        </div>
-                      </td>
-                      <td>
-                        <div
-                          className={`admin-review-reviewer admin-review-reviewer--${item.reviewer.state.toLowerCase()}`}
-                        >
-                          <strong>{reviewerLabel(item.reviewer)}</strong>
-                          <small>{reviewerDetail(item.reviewer)}</small>
+                        <div className="admin-review-verification-cell">
+                          <div
+                            className={`admin-review-evidence admin-review-evidence--${item.evidence.status.toLowerCase()}`}
+                          >
+                            <strong>
+                              {item.evidence.presentRequired} / {item.evidence.required} required
+                            </strong>
+                            <small>
+                              {item.evidence.status === "COMPLETE"
+                                ? "Complete"
+                                : item.evidence.missingRequired === 1
+                                  ? "1 required item missing"
+                                  : `${item.evidence.missingRequired} required items missing`}
+                            </small>
+                          </div>
+                          <div
+                            className={`admin-review-research admin-review-research--${item.research.status.toLowerCase()}`}
+                          >
+                            <strong>{reviewResearchLabel(item.research.status)}</strong>
+                            <small>
+                              {item.research.observedAt ? date(item.research.observedAt) : "—"}
+                            </small>
+                          </div>
                         </div>
                       </td>
                       <td>
@@ -5946,7 +5964,7 @@ function ReviewQueue({
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={10}>
+                    <td colSpan={7}>
                       <AdminEmpty
                         detail={
                           searchInput ||
@@ -6178,15 +6196,22 @@ function QualificationExceptionPanel({
     ["BLOCKED", "Blocked"],
   ] as const;
   return (
-    <section className="admin-panel" aria-label="Automated qualification queue">
-      <div className="admin-review-queue-heading">
+    <section
+      className="admin-panel admin-review-automation-panel"
+      aria-label="Automated qualification queue"
+    >
+      <div className="admin-review-automation-header">
         <div>
           <p className="admin-console-eyebrow">Automated qualification</p>
-          <h3>Exception queue</h3>
-          <p>Every automated decision is explainable, auditable, and safe to rerun.</p>
+          <h3>Automation exceptions</h3>
+          <p>Inspect the decision trail, then rerun only when new evidence changes the outcome.</p>
         </div>
       </div>
-      <div className="admin-review-tabs" role="tablist" aria-label="Qualification outcomes">
+      <div
+        className="admin-review-tabs admin-review-qualification-tabs"
+        role="tablist"
+        aria-label="Qualification outcomes"
+      >
         {tabs.map(([value, label]) => (
           <button
             key={value}
@@ -6207,7 +6232,8 @@ function QualificationExceptionPanel({
           {items.slice(0, 8).map((item) => (
             <article key={item.runId} className="admin-review-qualification-row">
               <div>
-                <strong>{item.submission.id}</strong>
+                <small>Submission</small>
+                <strong title={item.submission.id}>{shortId(item.submission.id)}</strong>
                 <p>
                   {item.reasons[0] ??
                     (item.outcome === "AUTO_QUALIFIED"
