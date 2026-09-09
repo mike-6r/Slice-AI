@@ -4,7 +4,6 @@ import { FinancialLedgerService } from './financial-ledger.service';
 import { formatOwnershipPercent } from '../../ownership/domain/ownership-percent';
 import { selectAuthoritativeSliceValuation } from '../../valuation/valuation-projection';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
-import { publicBetaAssetWhere } from '../../../config/beta-policy';
 import { OBJECT_STORAGE, type ObjectStoragePort } from '../../submissions/ports/submission-storage.ports';
 
 @Injectable()
@@ -96,18 +95,20 @@ export class PortfolioQueryService {
         orderBy: { assetId: 'asc' },
       }),
       this.db.portfolioLot.findMany({
-        where: { userId, asset: { status: 'PUBLISHED' } },
+        // A customer's cost basis remains theirs even if a collectible is later
+        // removed from the public catalogue. Do not make settled ownership
+        // disappear from the financial projection.
+        where: { userId },
         include: { disposals: { select: { allocatedCostMinor: true } } },
       }),
     ]);
     const assets = await this.db.asset.findMany({
       where: {
         id: { in: positions.map((position) => position.assetId) },
-        status: 'PUBLISHED',
-        ...publicBetaAssetWhere(this.config?.isBeta === true),
       },
       select: {
         id: true,
+        status: true,
         slug: true,
         title: true,
         category: { select: { name: true } },
@@ -176,9 +177,8 @@ export class PortfolioQueryService {
     const assetsById = new Map(assets.map((asset) => [asset.id, asset]));
     const projections = await Promise.all(positions.map(async (position) => {
       const asset = assetsById.get(position.assetId);
-      // Retired staging assets remain archived for audit purposes, but are not
-      // investable portfolio positions. Exclude them from every portfolio
-      // projection so the demo stays aligned with the published catalogue.
+      // Retired assets are not publicly investable, but settled customer
+      // ownership must remain visible alongside the cash ledger.
       if (!asset) return null;
       const supply = asset.ownershipSupply?.totalUnits;
       const mark = asset.marketSnapshots[0];
@@ -224,7 +224,10 @@ export class PortfolioQueryService {
           : null;
       return {
         assetId: position.assetId,
-        slug: asset.slug,
+        // Do not offer a public-market link for a retired asset. Its financial
+        // record remains visible, while the unavailable action is rendered by
+        // the client from a null slug.
+        slug: asset.status === 'PUBLISHED' ? asset.slug : null,
         title: asset.title,
         category: asset.category.name,
         setName: asset.collectibleSet?.name ?? null,
@@ -334,13 +337,7 @@ export class PortfolioQueryService {
 
   async lotsForUser(userId: string) {
     const lots = await this.db.portfolioLot.findMany({
-      where: {
-        userId,
-        asset: {
-          status: 'PUBLISHED',
-          ...publicBetaAssetWhere(this.config?.isBeta === true),
-        },
-      },
+      where: { userId },
       include: { asset: { select: { slug: true, title: true } } },
       orderBy: [{ acquiredAt: 'asc' }, { id: 'asc' }],
     });

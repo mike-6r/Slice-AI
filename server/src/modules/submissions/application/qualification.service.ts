@@ -144,13 +144,20 @@ export class QualificationService {
       include: {
         owner: { select: { accountStatus: true } },
         category: { select: { slug: true } },
+        collectibleSet: { select: { slug: true } },
         media: true,
-        gradeScaleEntry: { select: { company: { select: { code: true } } } },
+        gradeScaleEntry: {
+          select: { grade: true, company: { select: { code: true } } },
+        },
         certificationVerifications: {
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         },
         preferredIntakeLocation: true,
-        marketResearch: { orderBy: { collectedAt: 'desc' }, take: 1 },
+        marketResearch: {
+          orderBy: { collectedAt: 'desc' },
+          take: 1,
+          include: { observations: { orderBy: { observedAt: 'desc' } } },
+        },
       },
     });
     const existing = await db.qualificationRun.findFirst({
@@ -432,6 +439,11 @@ export class QualificationService {
       },
       update: {},
     });
+    const promotedMarketReference = await this.promoteMarketResearch(
+      db,
+      asset,
+      submission,
+    );
     const qaSampled =
       policy.qaSamplingBps > 0 &&
       Number.parseInt(
@@ -516,6 +528,22 @@ export class QualificationService {
         sale.id,
         { runId: run.id, preSaleId: sale.id },
       ],
+      ...(promotedMarketReference
+        ? [
+            [
+              'MARKET_REFERENCE_PROMOTED_TO_CANONICAL_ASSET',
+              'asset',
+              asset.id,
+              {
+                runId: run.id,
+                assetId: asset.id,
+                provider: promotedMarketReference.provider,
+                externalReference: promotedMarketReference.externalReference,
+                researchId: promotedMarketReference.researchId,
+              },
+            ],
+          ]
+        : []),
       ...(policy.autoPreSaleLaunch
         ? [
             [
@@ -545,6 +573,15 @@ export class QualificationService {
       { type: 'CANONICAL_ASSET_CREATED', assetId: asset.id },
       { type: 'PHYSICAL_INTAKE_CREATED', intakeId: intake.id },
       { type: 'PRE_SALE_TERMS_AUTO_CONFIGURED', preSaleId: sale.id },
+      ...(promotedMarketReference
+        ? [
+            {
+              type: 'MARKET_REFERENCE_PROMOTED',
+              provider: promotedMarketReference.provider,
+              externalReference: promotedMarketReference.externalReference,
+            },
+          ]
+        : []),
       {
         type: policy.autoPreSaleLaunch
           ? 'PRE_SALE_LAUNCHED'
@@ -585,6 +622,157 @@ export class QualificationService {
       },
       completedAt,
     );
+  }
+
+  /**
+   * Submission research is captured before a canonical asset exists. Once an
+   * asset is created, carry forward a strong PriceCharting result so public
+   * Pre-Sale cards do not lose the collector's already-verified reference.
+   *
+   * This only promotes provider research. It deliberately does not create a
+   * Slice valuation or alter the collector's provisional offering basis.
+   */
+  private async promoteMarketResearch(db: Db, asset: any, submission: any) {
+    const research = submission.marketResearch?.[0];
+    const current = research?.observations?.find(
+      (observation: any) =>
+        observation.providerCode === 'PRICECHARTING' &&
+        observation.observationType === 'PRICE_GUIDE' &&
+        observation.includedInSnapshot === true &&
+        ['EXACT', 'STRONG'].includes(observation.matchQuality) &&
+        observation.amountMinor > 0n,
+    );
+    if (!research || !current) return null;
+
+    // A provider product is globally owned by one canonical asset. A stale
+    // duplicate research result must never steal an established mapping or
+    // cause the otherwise-valid automated listing to fail.
+    // Qualification only fills an empty canonical record. It must never
+    // replace a reference already linked by a later refresh or an operator.
+    const existingAssetMapping = await db.marketProviderMapping.findUnique({
+      where: {
+        assetId_providerCode: {
+          assetId: asset.id,
+          providerCode: 'PRICECHARTING',
+        },
+      },
+      select: { id: true },
+    });
+    if (existingAssetMapping) return null;
+    const existingReference = await db.marketProviderMapping.findUnique({
+      where: {
+        providerCode_providerExternalId: {
+          providerCode: 'PRICECHARTING',
+          providerExternalId: current.externalReferenceId,
+        },
+      },
+      select: { assetId: true },
+    });
+    if (existingReference && existingReference.assetId !== asset.id) return null;
+
+    const identityHash = createHash('sha256')
+      .update(
+        JSON.stringify({
+          category: submission.category.slug,
+          year: asset.year,
+          manufacturer: asset.manufacturer,
+          set: submission.collectibleSet?.slug ?? null,
+          cardNumber: asset.cardNumber,
+          title: asset.title,
+          variant: asset.edition,
+          grader: submission.gradeScaleEntry?.company?.code ?? null,
+          grade: submission.gradeScaleEntry?.grade?.toString?.() ?? null,
+        }),
+      )
+      .digest('hex');
+    const now = new Date();
+    const mapping = await db.marketProviderMapping.upsert({
+      where: {
+        assetId_providerCode: {
+          assetId: asset.id,
+          providerCode: 'PRICECHARTING',
+        },
+      },
+      create: {
+        id: randomUUID(),
+        assetId: asset.id,
+        providerCode: 'PRICECHARTING',
+        providerExternalId: current.externalReferenceId,
+        providerUrl: current.externalUrl ?? null,
+        identityHash,
+        status: 'AUTO_MATCHED',
+        matchQuality: current.matchQuality,
+        lastVerifiedAt: research.collectedAt,
+        lastSuccessAt: research.collectedAt,
+        nextRefreshAt: now,
+        currentPriceMinor: current.amountMinor,
+        currentCurrency: current.currency,
+        currentObservedAt: current.observedAt,
+        referenceHistoryStartedAt: current.observedAt,
+      },
+      update: {
+        providerExternalId: current.externalReferenceId,
+        providerUrl: current.externalUrl ?? null,
+        identityHash,
+        status: 'AUTO_MATCHED',
+        matchQuality: current.matchQuality,
+        lastVerifiedAt: research.collectedAt,
+        lastSuccessAt: research.collectedAt,
+        lastFailureAt: null,
+        lastFailureCode: null,
+        cooldownUntil: null,
+        nextRefreshAt: now,
+        currentPriceMinor: current.amountMinor,
+        currentCurrency: current.currency,
+        currentObservedAt: current.observedAt,
+        referenceHistoryStartedAt: current.observedAt,
+      },
+    });
+    const observations = research.observations.filter(
+      (observation: any) =>
+        observation.providerCode === 'PRICECHARTING' &&
+        observation.observationType === 'PRICE_GUIDE' &&
+        observation.amountMinor > 0n,
+    );
+    if (observations.length) {
+      await db.marketObservation.createMany({
+        data: observations.map((observation: any) => ({
+          id: randomUUID(),
+          assetId: asset.id,
+          mappingId: mapping.id,
+          providerCode: 'PRICECHARTING',
+          providerExternalId: observation.externalReferenceId,
+          observationType: observation.observationType,
+          priceMinor: observation.amountMinor,
+          currency: observation.currency,
+          grader: observation.grader ?? null,
+          grade: observation.grade ?? null,
+          title: observation.originalTitle,
+          externalUrl: observation.externalUrl ?? null,
+          occurredAt: observation.soldAt ?? null,
+          observedAt: observation.observedAt,
+          matchQuality: observation.matchQuality,
+          included:
+            observation.includedInSnapshot === true &&
+            ['EXACT', 'STRONG'].includes(observation.matchQuality),
+          exclusionReason: observation.exclusionReason ?? null,
+          sourceFingerprint: createHash('sha256')
+            .update(`submission-market-research|${research.id}|${observation.id}`)
+            .digest('hex'),
+          provenance: json({
+            source: 'SUBMISSION_MARKET_RESEARCH',
+            researchId: research.id,
+            sourceObservationId: observation.id,
+          }),
+        })),
+        skipDuplicates: true,
+      });
+    }
+    return {
+      provider: 'PRICECHARTING',
+      externalReference: current.externalReferenceId,
+      researchId: research.id,
+    };
   }
 
   async ownerLatest(actor: Actor, submissionId: string) {

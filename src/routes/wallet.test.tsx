@@ -8,6 +8,7 @@ import type {
   BankConnection,
   ComplianceSummary,
   PortfolioSummary,
+  PortfolioTransactionPage,
   WalletMovementPage,
 } from "@/domain";
 import { mockRepositories } from "@/mocks/repositories";
@@ -80,20 +81,27 @@ function renderWallet({
   compliance = approvedCompliance,
   banks = connectedBanks,
   movements = settledMovement,
+  transactions = { items: [], nextCursor: null },
 }: {
   summary?: PortfolioSummary;
   compliance?: ComplianceSummary;
   banks?: BankConnection[];
   movements?: WalletMovementPage;
+  transactions?: PortfolioTransactionPage;
 } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
   client.setQueryData(queryKeys.portfolio.summary, summary);
   client.setQueryData(queryKeys.providers.compliance, compliance);
   client.setQueryData(queryKeys.providers.bankConnections, banks);
   client.setQueryData(queryKeys.providers.movements(), movements);
+  client.setQueryData(queryKeys.portfolio.transactions(), transactions);
   const repositories: AppRepositories = {
     ...mockRepositories,
-    portfolio: { ...mockRepositories.portfolio, getPortfolio: async () => summary },
+    portfolio: {
+      ...mockRepositories.portfolio,
+      getPortfolio: async () => summary,
+      getTransactions: async () => transactions,
+    },
     providers: {
       ...mockRepositories.providers,
       getCompliance: async () => compliance,
@@ -154,10 +162,33 @@ describe("Document 016 wallet UI", () => {
     expect(html).toContain("£0.00");
     expect(html).toContain("No UK bank method connected");
     expect(html).toContain("Set up a UK bank");
-    expect(html).toContain("No movements yet");
+    expect(html).toContain("No provider movements yet");
     expect(html).toContain("Wallet insights");
     expect(html).toContain("Not Started");
     expect(html).not.toMatch(/operational|certified|insured|your funds protected/i);
+  });
+
+  it("labels internal demo funding without representing it as a provider deposit", () => {
+    const html = renderWallet({
+      movements: { items: [], nextCursor: null },
+      transactions: {
+        items: [
+          {
+            type: "DEMO_FUNDING",
+            side: "CREDIT",
+            amountMinor: "100000",
+            effectiveAt: "2026-09-09T00:00:00.000Z" as never,
+            status: "POSTED",
+            reference: "demo-funding-1",
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+
+    expect(html).toContain("No provider movements yet");
+    expect(html).toContain("1 internal demo funding credit is shown in Portfolio activity.");
+    expect(html).toContain("View portfolio activity");
   });
 
   it("derives display-only settled insights and filters only the documented movement types", () => {

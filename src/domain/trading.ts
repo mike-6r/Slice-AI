@@ -202,7 +202,8 @@ export interface TradingOrderPage {
 }
 export interface TradingExecution {
   executionId: string;
-  assetSlug: string;
+  /** Null when the linked collectible is no longer publicly listed. */
+  assetSlug: string | null;
   assetSummary?: PortfolioAssetSummary | null;
   side: TradingOrderSide;
   units: string;

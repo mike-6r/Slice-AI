@@ -3924,21 +3924,23 @@ function buildPortfolioActivityEvents(
   );
   const events: ActivityEvent[] = [];
   for (const execution of executions) {
+    const executionSlug = execution.assetSlug;
     const order =
       orders.find(
         (candidate) =>
-          candidate.assetSlug === execution.assetSlug &&
+          executionSlug !== null &&
+          candidate.assetSlug === executionSlug &&
           candidate.side === execution.side &&
           new Date(candidate.createdAt).getTime() <= new Date(execution.executedAt).getTime() &&
           (!candidate.closedAt ||
             new Date(candidate.closedAt).getTime() >= new Date(execution.executedAt).getTime()),
       ) ?? null;
     const asset = activityAsset(
-      assetBySlug.get(execution.assetSlug),
-      holdingBySlug.get(execution.assetSlug),
+      executionSlug ? assetBySlug.get(executionSlug) : undefined,
+      executionSlug ? holdingBySlug.get(executionSlug) : undefined,
       execution.assetSummary ?? order?.assetSummary,
     );
-    const totalUnits = holdingBySlug.get(execution.assetSlug)?.totalUnits ?? null;
+    const totalUnits = executionSlug ? (holdingBySlug.get(executionSlug)?.totalUnits ?? null) : null;
     const ownership = totalUnits ? ownershipPercent(execution.units, totalUnits) : null;
     const gross = (
       BigInt(execution.priceMinor) * BigInt(execution.units) +
@@ -4014,12 +4016,15 @@ function buildPortfolioActivityEvents(
   }
   for (const item of transactions) {
     const type = item.type.toUpperCase();
-    const isDeposit = type === "EXTERNAL_DEPOSIT" || type === "DEMO_FUNDING";
+    const isDemoFunding = type === "DEMO_FUNDING";
+    const isDeposit = type === "EXTERNAL_DEPOSIT" || isDemoFunding;
     const isWithdrawal = type === "EXTERNAL_WITHDRAWAL";
     const isDistribution = type === "DISTRIBUTION";
     if (!isDeposit && !isWithdrawal && !isDistribution) continue;
     const title = isDistribution
       ? "Distribution received"
+      : isDemoFunding
+        ? "Demo funding added"
       : isDeposit
         ? "Funds added"
         : "Cash withdrawal";
@@ -4030,16 +4035,20 @@ function buildPortfolioActivityEvents(
       title,
       description: isDistribution
         ? "A distribution was credited to your account."
+        : isDemoFunding
+          ? "Internal demo funds were credited to your Slice wallet. This is not a bank deposit."
         : isDeposit
           ? "Money was added to your Slice wallet."
           : "Money was withdrawn from your Slice wallet.",
       occurredAt: item.effectiveAt,
-      typeLabel: isDistribution ? "Distribution" : "Cash",
+      typeLabel: isDistribution ? "Distribution" : isDemoFunding ? "Demo funding" : "Cash",
       tone: isWithdrawal ? "debit" : "credit",
       primary: `${direction}${formatPortfolioMoney(item.amountMinor).replace(/^-/, "")}`,
       secondary: [
         isDistribution
           ? "Distribution credited"
+          : isDemoFunding
+            ? "Internal demo funding"
           : isDeposit
             ? "Added to wallet"
             : "Withdrawn from wallet",

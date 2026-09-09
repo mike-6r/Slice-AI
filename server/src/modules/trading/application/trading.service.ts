@@ -1158,7 +1158,7 @@ export class TradingService {
     } = {},
   ) {
     const query = input.q?.trim();
-    const assetFilters: Prisma.AssetWhereInput[] = [{ status: 'PUBLISHED' }];
+    const assetFilters: Prisma.AssetWhereInput[] = [];
     if (query) {
       assetFilters.push({
         OR: [
@@ -1175,7 +1175,7 @@ export class TradingService {
     }
     const where: Prisma.TradingOrderWhereInput = {
       userId,
-      asset: { AND: assetFilters },
+      ...(assetFilters.length ? { asset: { AND: assetFilters } } : {}),
       ...(input.side ? { side: input.side } : {}),
       ...(input.status
         ? input.status === 'OPEN'
@@ -1192,13 +1192,15 @@ export class TradingService {
     const paged = Boolean(input.page);
     const pageSize = Math.min(Math.max(input.pageSize ?? limit, 1), 50);
     const rows = await this.db.tradingOrder.findMany({
-      // Archived assets remain in the audit ledger, but are no longer part of
-      // a customer's active catalogue or current Orders workspace.
+      // Orders remain visible to their owner even after an asset is removed
+      // from the public catalogue; otherwise a cash reservation can outlive
+      // every customer-facing explanation of it.
       where,
       include: {
         asset: {
           select: {
             slug: true,
+            status: true,
             title: true,
             category: { select: { name: true } },
             collectibleSet: { select: { name: true } },
@@ -1231,7 +1233,9 @@ export class TradingService {
         page.map(async (row) =>
           this.publicOrder(
             row,
-            this.publicAssetSlug(row.asset.slug),
+            row.asset.status === 'PUBLISHED'
+              ? this.publicAssetSlug(row.asset.slug)
+              : undefined,
             row.asset.ownershipSupply?.totalUnits,
             await this.publicAssetSummary(row.asset),
           ),
@@ -1259,7 +1263,6 @@ export class TradingService {
     const where = {
       userId,
       status: { in: [...activeStatuses] },
-      asset: { status: 'PUBLISHED' as const },
     };
     const [openCount, rows] = await Promise.all([
       this.db.tradingOrder.count({ where }),
@@ -1267,9 +1270,8 @@ export class TradingService {
         where: {
           userId,
           status: { in: [...activeStatuses] },
-          asset: { status: 'PUBLISHED' },
         },
-        include: { asset: { select: { slug: true, title: true } } },
+        include: { asset: { select: { slug: true, status: true, title: true } } },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: 3,
       }),
@@ -1278,7 +1280,10 @@ export class TradingService {
       openCount,
       recent: rows.map((row) => ({
         assetTitle: row.asset.title,
-        assetSlug: this.publicAssetSlug(row.asset.slug),
+        assetSlug:
+          row.asset.status === 'PUBLISHED'
+            ? this.publicAssetSlug(row.asset.slug)
+            : null,
         side: row.side,
         status: row.status,
         remainingUnits: row.remainingUnits.toString(),
@@ -1297,7 +1302,6 @@ export class TradingService {
           {
             OR: [{ buyOrder: { userId } }, { sellOrder: { userId } }],
           },
-          { asset: { status: 'PUBLISHED' } },
           ...(before
             ? [
                 {
@@ -1314,6 +1318,7 @@ export class TradingService {
         asset: {
           select: {
             slug: true,
+            status: true,
             title: true,
             category: { select: { name: true } },
             collectibleSet: { select: { name: true } },
@@ -1342,7 +1347,10 @@ export class TradingService {
       items: await Promise.all(
         page.map(async (row) => ({
           executionId: row.id,
-          assetSlug: this.publicAssetSlug(row.asset.slug),
+          assetSlug:
+            row.asset.status === 'PUBLISHED'
+              ? this.publicAssetSlug(row.asset.slug)
+              : null,
           assetSummary: await this.publicAssetSummary(row.asset),
           side: row.buyOrder.userId === userId ? 'BUY' : 'SELL',
           units: row.units.toString(),
@@ -2622,6 +2630,7 @@ export class TradingService {
 
   private async publicAssetSummary(asset: {
     slug: string;
+    status: string;
     title: string;
     category: { name: string };
     collectibleSet: { name: string } | null;
@@ -2641,7 +2650,10 @@ export class TradingService {
             .catch(() => null)
         : null;
     return {
-      slug: this.publicAssetSlug(asset.slug) ?? null,
+      slug:
+        asset.status === 'PUBLISHED'
+          ? (this.publicAssetSlug(asset.slug) ?? null)
+          : null,
       title: asset.title,
       category: asset.category.name,
       setName: asset.collectibleSet?.name ?? null,

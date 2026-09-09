@@ -1,6 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Check, CircleAlert, FileUp, ImagePlus, Trash2, UploadCloud } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  CheckCircle2,
+  CircleAlert,
+  Clock3,
+  FileUp,
+  ImagePlus,
+  PackageCheck,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+  UploadCloud,
+} from "lucide-react";
 import {
   useEffect,
   useRef,
@@ -207,6 +220,21 @@ function SubmissionDetailPage() {
   const detailsReady = Boolean(metadataValue(item.declaredMetadata, "name") && item.categoryId);
   const termsReady = metadataBoolean(item.declaredMetadata, "termsAcknowledged");
 
+  if (!editable)
+    return (
+      <SubmittedAssetExperience
+        submission={item}
+        categoryName={categoryName}
+        canCancel={cancellable}
+        confirmingCancel={confirmCancel}
+        cancelling={cancel.isPending}
+        errorMessage={localError ?? (actionError ? friendlyError(actionError) : null)}
+        onCancel={() => cancel.mutate()}
+        onStartCancel={() => setConfirmCancel(true)}
+        onKeepSubmission={() => setConfirmCancel(false)}
+      />
+    );
+
   const beginUpload = (slot: string, file: File, existing?: SubmissionMedia) => {
     const error = fileValidationError(file);
     if (error) {
@@ -240,27 +268,6 @@ function SubmissionDetailPage() {
       {notice ? <Notice>{notice}</Notice> : null}
       {localError ? <ErrorNotice>{localError}</ErrorNotice> : null}
       {actionError ? <ErrorNotice>{friendlyError(actionError)}</ErrorNotice> : null}
-
-      {item.status === "SUBMITTED" ? (
-        <section className="rounded-2xl border border-positive/30 bg-positive/10 p-6">
-          <p className="page-kicker">Submission received</p>
-          <h2 className="mt-2 text-xl font-semibold">{submissionName(item.declaredMetadata)}</h2>
-          <p className="mt-2 text-sm text-subtle">
-            Reference {item.id}. Your asset is in review; it is not published or market live.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <Link to="/submissions/$id" params={{ id }} className="button-primary">
-              View submission
-            </Link>
-            <Link to="/list" search={{ draft: undefined }} className="button-secondary">
-              Submit another asset
-            </Link>
-            <Link to="/portfolio" className="button-secondary">
-              Back to portfolio
-            </Link>
-          </div>
-        </section>
-      ) : null}
 
       <SubmissionSteps
         step={step}
@@ -620,6 +627,324 @@ function SubmissionSteps({
       </ol>
     </nav>
   );
+}
+
+function submissionExperience(submission: SubmissionDetail) {
+  const customerStatus = submission.qualification?.customerStatus;
+  if (submission.status === "CANCELLED")
+    return {
+      tone: "withdrawn" as const,
+      eyebrow: "Submission withdrawn",
+      title: "This submission is no longer active",
+      summary:
+        "No further action will be taken on this record. You can begin a new private submission whenever you are ready.",
+      stage: 0,
+      qualificationLabel: "Withdrawn",
+      fallbackAction: "Start a new submission when you are ready.",
+    };
+  if (customerStatus === "PRE_SALE_QUALIFIED" || submission.status === "APPROVED")
+    return {
+      tone: "approved" as const,
+      eyebrow: "Approved for the next stage",
+      title: "Your collectible is moving into intake",
+      summary:
+        "Qualification is complete. Slice now coordinates the physical handoff and verifies the collectible before final marketplace eligibility.",
+      stage: 2,
+      qualificationLabel: "Qualification complete",
+      fallbackAction:
+        "Keep the collectible secure. Customer-safe delivery guidance will appear when the physical handoff is ready.",
+    };
+  if (customerStatus === "NEEDS_YOUR_ACTION" || submission.status === "CHANGES_REQUESTED")
+    return {
+      tone: "attention" as const,
+      eyebrow: "Action required",
+      title: "A quick update will keep this moving",
+      summary:
+        "Slice needs one more detail before this submission can continue through qualification.",
+      stage: 1,
+      qualificationLabel: "Your update needed",
+      fallbackAction: "Review the requested update and resubmit when it is complete.",
+    };
+  if (customerStatus === "BLOCKED_CONTACT_SUPPORT" || submission.status === "REJECTED")
+    return {
+      tone: "blocked" as const,
+      eyebrow: "Submission needs support",
+      title: "This submission cannot progress automatically",
+      summary:
+        "A protected review rule stopped the automated handoff. Slice Support can explain the available next step.",
+      stage: 1,
+      qualificationLabel: "Support review required",
+      fallbackAction: "Contact Slice Support with your submission reference.",
+    };
+  return {
+    tone: "pending" as const,
+    eyebrow: customerStatus === "SYSTEM_RETRYING" ? "Processing safely" : "Submission received",
+    title:
+      customerStatus === "SYSTEM_RETRYING"
+        ? "Slice is completing the handoff"
+        : "Your collectible is in qualification",
+    summary:
+      customerStatus === "SYSTEM_RETRYING"
+        ? "No action is needed. Slice is safely retrying the automated handoff and will continue when it succeeds."
+        : "Your details and evidence are saved. Slice is checking the submission and will only involve a specialist when a human decision is needed.",
+    stage: 1,
+    qualificationLabel:
+      customerStatus === "SYSTEM_RETRYING" ? "Handoff retrying" : "Qualification in progress",
+    fallbackAction:
+      "No action is needed right now. We will update you when this stage is complete.",
+  };
+}
+
+function SubmittedAssetExperience({
+  submission,
+  categoryName,
+  canCancel,
+  confirmingCancel,
+  cancelling,
+  errorMessage,
+  onCancel,
+  onStartCancel,
+  onKeepSubmission,
+}: {
+  submission: SubmissionDetail;
+  categoryName: string;
+  canCancel: boolean;
+  confirmingCancel: boolean;
+  cancelling: boolean;
+  errorMessage: string | null;
+  onCancel: () => void;
+  onStartCancel: () => void;
+  onKeepSubmission: () => void;
+}) {
+  const experience = submissionExperience(submission);
+  const nextAction = submission.qualification?.nextAction;
+  const safeEvidence = submission.media.filter((entry) => entry.status === "SAFE");
+  const frontEvidence = findActiveMedia(submission.media, "front");
+  const metadata = submission.declaredMetadata;
+  const grader = metadataValue(metadata, "grader");
+  const grade = metadataValue(metadata, "grade");
+  const gradeLabel = grader ? `${grader}${grade ? ` ${grade}` : ""}` : "Ungraded collectible";
+  const reference =
+    metadataValue(metadata, "certificationNumber") ||
+    metadataValue(metadata, "cardNumber") ||
+    "Not recorded";
+  const workflow = [
+    {
+      label: "Submitted",
+      detail: `Saved ${formatSubmissionDate(submission.submittedAt ?? submission.createdAt)}`,
+      icon: CheckCircle2,
+    },
+    { label: "Qualification", detail: experience.qualificationLabel, icon: ShieldCheck },
+    { label: "Physical handoff", detail: "Intake & verification", icon: PackageCheck },
+    { label: "Marketplace", detail: "Eligibility confirmed later", icon: Sparkles },
+  ];
+
+  return (
+    <main className="submission-experience-page">
+      <div className="submission-experience-shell">
+        <header className="submission-experience-topbar">
+          <Link to="/list" search={{ draft: undefined }} className="submission-experience-back">
+            <ArrowRight aria-hidden="true" /> All submissions
+          </Link>
+          <span>Private record · {shortSubmissionId(submission.id)}</span>
+        </header>
+
+        <section className={`submission-experience-hero is-${experience.tone}`}>
+          <div className="submission-experience-hero__glow" aria-hidden="true" />
+          <div className="submission-experience-hero__copy">
+            <p className="page-kicker">{experience.eyebrow}</p>
+            <h1>{submissionName(metadata)}</h1>
+            <p>{experience.summary}</p>
+            <div className="submission-experience-hero__meta">
+              <span className="submission-experience-status">
+                <CheckCircle2 aria-hidden="true" /> {submissionStatusLabel(submission.status)}
+              </span>
+              <span>{categoryName}</span>
+              <span>{gradeLabel}</span>
+            </div>
+          </div>
+          <aside className="submission-experience-next-action">
+            <span className="submission-experience-next-action__icon">
+              {experience.tone === "pending" ? (
+                <Clock3 aria-hidden="true" />
+              ) : (
+                <PackageCheck aria-hidden="true" />
+              )}
+            </span>
+            <p>Next action</p>
+            <strong>{nextAction?.action ?? experience.fallbackAction}</strong>
+            <small>
+              {nextAction?.deadlineAt
+                ? `Target date: ${formatSubmissionDate(nextAction.deadlineAt)}`
+                : nextAction?.owner === "COLLECTOR"
+                  ? "Your input is needed to continue."
+                  : "Slice will keep you updated here."}
+            </small>
+          </aside>
+        </section>
+
+        {errorMessage ? <ErrorNotice>{errorMessage}</ErrorNotice> : null}
+
+        <section className="submission-experience-journey" aria-label="Submission journey">
+          {workflow.map((item, index) => {
+            const Icon = item.icon;
+            const state =
+              index < experience.stage
+                ? "complete"
+                : index === experience.stage
+                  ? "current"
+                  : "upcoming";
+            return (
+              <div key={item.label} className={`submission-experience-journey__step is-${state}`}>
+                <span>
+                  <Icon aria-hidden="true" />
+                </span>
+                <div>
+                  <strong>{item.label}</strong>
+                  <small>{item.detail}</small>
+                </div>
+              </div>
+            );
+          })}
+        </section>
+
+        <div className="submission-experience-grid">
+          <section className="submission-experience-dossier">
+            <header>
+              <div>
+                <p className="page-kicker">Submission dossier</p>
+                <h2>The collectible at a glance</h2>
+              </div>
+              <span>
+                {safeEvidence.length} verified image{safeEvidence.length === 1 ? "" : "s"}
+              </span>
+            </header>
+            <div className="submission-experience-dossier__content">
+              {frontEvidence?.previewUrl ? (
+                <figure>
+                  <img
+                    src={frontEvidence.previewUrl}
+                    alt={`Front of ${submissionName(metadata)}`}
+                  />
+                  <figcaption>Collector-provided front image</figcaption>
+                </figure>
+              ) : (
+                <div className="submission-experience-dossier__placeholder">
+                  <PackageCheck aria-hidden="true" />
+                  <span>Private evidence on file</span>
+                </div>
+              )}
+              <dl>
+                <div>
+                  <dt>Category</dt>
+                  <dd>{categoryName}</dd>
+                </div>
+                <div>
+                  <dt>Set / year</dt>
+                  <dd>
+                    {[metadataValue(metadata, "set"), metadataValue(metadata, "year")]
+                      .filter(Boolean)
+                      .join(" · ") || "Not recorded"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Grade</dt>
+                  <dd>{grader ? `${grader}${grade ? ` ${grade}` : ""}` : "Not graded"}</dd>
+                </div>
+                <div>
+                  <dt>Reference</dt>
+                  <dd>{reference}</dd>
+                </div>
+                <div>
+                  <dt>Submitted</dt>
+                  <dd>{formatSubmissionDate(submission.submittedAt ?? submission.createdAt)}</dd>
+                </div>
+                <div>
+                  <dt>Evidence</dt>
+                  <dd>
+                    {safeEvidence.length} safe file{safeEvidence.length === 1 ? "" : "s"}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </section>
+
+          <aside className="submission-experience-sidecar">
+            <section className="submission-experience-reference">
+              <p>Submission reference</p>
+              <strong>{shortSubmissionId(submission.id)}</strong>
+              <span>Keep this reference for any conversation with Slice Support.</span>
+            </section>
+            <section className="submission-experience-assurance">
+              <ShieldCheck aria-hidden="true" />
+              <div>
+                <strong>Your evidence stays private</strong>
+                <p>
+                  Images and listing details are visible only within your authorized Slice workflow.
+                </p>
+              </div>
+            </section>
+          </aside>
+        </div>
+
+        {canCancel && confirmingCancel ? (
+          <section className="submission-experience-cancel" role="alert">
+            <div>
+              <strong>Withdraw this submission?</strong>
+              <p>
+                This removes it from the active review workflow. You can start a fresh submission
+                later.
+              </p>
+            </div>
+            <div>
+              <button type="button" className="button-secondary" onClick={onKeepSubmission}>
+                Keep submission
+              </button>
+              <button
+                type="button"
+                className="button-secondary submission-experience-cancel__confirm"
+                disabled={cancelling}
+                onClick={onCancel}
+              >
+                {cancelling ? "Withdrawing…" : "Confirm withdrawal"}
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        <footer className="submission-experience-actions">
+          <Link to="/portfolio" className="button-primary">
+            View portfolio <ArrowRight aria-hidden="true" />
+          </Link>
+          <Link to="/list" search={{ draft: undefined }} className="button-secondary">
+            List another asset
+          </Link>
+          {canCancel && !confirmingCancel ? (
+            <button
+              type="button"
+              className="submission-experience-withdraw"
+              onClick={onStartCancel}
+            >
+              Withdraw submission
+            </button>
+          ) : null}
+        </footer>
+      </div>
+    </main>
+  );
+}
+
+function shortSubmissionId(id: string) {
+  return id.length > 16 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id;
+}
+
+function formatSubmissionDate(value: string) {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(value));
 }
 
 function TermsStep({

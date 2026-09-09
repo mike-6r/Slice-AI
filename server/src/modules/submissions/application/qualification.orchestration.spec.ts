@@ -83,7 +83,7 @@ function harness(
       inPersonInstructions: null,
     },
     preferredDeliveryMethod: 'SHIPMENT',
-    marketResearch: [{ state: 'FOUND' }],
+    marketResearch: [{ state: 'FOUND', observations: [] }],
     declaredMetadata: {
       name: 'Example PSA 10',
       year: '2026',
@@ -150,10 +150,30 @@ function harness(
     asset: {
       create: jest.fn().mockImplementation(async () => {
         downstream.assets += 1;
-        return { id: 'asset-1', deadlineAt: null };
+        return {
+          id: 'asset-1',
+          title: 'Example PSA 10',
+          year: 2026,
+          manufacturer: null,
+          edition: null,
+          cardNumber: '1',
+          deadlineAt: null,
+        };
       }),
-      findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'asset-1' }),
+      findUniqueOrThrow: jest.fn().mockResolvedValue({
+        id: 'asset-1',
+        title: 'Example PSA 10',
+        year: 2026,
+        manufacturer: null,
+        edition: null,
+        cardNumber: '1',
+      }),
     },
+    marketProviderMapping: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      upsert: jest.fn().mockResolvedValue({ id: 'market-mapping-1' }),
+    },
+    marketObservation: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
     submissionIntake: {
       upsert: jest.fn().mockImplementation(async () => {
         downstream.intakes += 1;
@@ -439,6 +459,66 @@ describe('automated qualification orchestration', () => {
 
     expect(result).toMatchObject({ outcome: 'AUTO_QUALIFIED' });
     expect(h.downstream.assets).toBe(1);
+  });
+
+  it('promotes the exact submission market research onto the canonical asset', async () => {
+    const collectedAt = new Date('2026-09-09T12:00:00.000Z');
+    const h = harness({
+      marketResearch: [
+        {
+          id: 'research-1',
+          state: 'LIMITED',
+          collectedAt,
+          observations: [
+            {
+              id: 'research-observation-1',
+              providerCode: 'PRICECHARTING',
+              externalReferenceId: '11012108',
+              externalUrl:
+                'https://www.pricecharting.com/game/one-piece-carrying-on-his-will/monkeydluffy-red-manga-op13-118',
+              observationType: 'PRICE_GUIDE',
+              originalTitle: 'Monkey.D.Luffy [Red Manga] OP13-118',
+              amountMinor: 4599n,
+              currency: 'USD',
+              observedAt: collectedAt,
+              soldAt: null,
+              grader: 'PSA',
+              grade: '10',
+              matchQuality: 'EXACT',
+              includedInSnapshot: true,
+              exclusionReason: null,
+            },
+          ],
+        },
+      ],
+    });
+
+    await h.service.runForSubmission('submission-1');
+
+    expect(h.tx.marketProviderMapping.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          assetId: 'asset-1',
+          providerCode: 'PRICECHARTING',
+          providerExternalId: '11012108',
+          currentPriceMinor: 4599n,
+          currentCurrency: 'USD',
+        }),
+      }),
+    );
+    expect(h.tx.marketObservation.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: [
+          expect.objectContaining({
+            assetId: 'asset-1',
+            mappingId: 'market-mapping-1',
+            providerExternalId: '11012108',
+            included: true,
+          }),
+        ],
+        skipDuplicates: true,
+      }),
+    );
   });
 
   it('is idempotent when the submission trigger is repeated', async () => {

@@ -2,6 +2,57 @@ import { describe, expect, it, jest } from '@jest/globals';
 import { PortfolioQueryService } from './portfolio-query.service';
 
 describe('PortfolioQueryService holdings page projection', () => {
+  it('keeps an archived customer position visible while withholding its public link', async () => {
+    const db = {
+      ownershipAccount: {
+        findUnique: jest
+          .fn<() => Promise<unknown>>()
+          .mockResolvedValue({ id: 'ownership-account-1' }),
+      },
+      ownershipPosition: {
+        findMany: jest.fn<() => Promise<unknown>>().mockResolvedValue([
+          { assetId: 'archived-asset', settledUnits: 5n, reservedUnits: 0n },
+        ]),
+      },
+      portfolioLot: {
+        findMany: jest.fn<() => Promise<unknown>>().mockResolvedValue([]),
+      },
+      asset: {
+        findMany: jest.fn<() => Promise<unknown>>().mockResolvedValue([
+          {
+            id: 'archived-asset',
+            status: 'ARCHIVED',
+            slug: 'retired-collectible',
+            title: 'Retired collectible',
+            category: { name: 'Sports Cards' },
+            collectibleSet: null,
+            submissions: [],
+            gradeScaleEntry: null,
+            ownershipSupply: { totalUnits: 100n, issuedUnits: 100n },
+            marketSnapshots: [],
+            valuationDecisions: [],
+            tradingOrders: [],
+          },
+        ]),
+      },
+    };
+    const service = new PortfolioQueryService(
+      db as never,
+      {} as never,
+    );
+
+    const holdings = await service.holdingsForUser('user-1');
+
+    expect(holdings).toEqual([
+      expect.objectContaining({
+        assetId: 'archived-asset',
+        title: 'Retired collectible',
+        slug: null,
+        ownedUnits: '5',
+      }),
+    ]);
+  });
+
   it('reconciles total account value from ledger cash plus marked holdings once', async () => {
     type PortfolioQueryHarness = {
       ledger: {

@@ -103,6 +103,11 @@ export function Wallet() {
     queryFn: () => services.providers.movements({ limit: 20 }),
     enabled: isAuthenticated,
   });
+  const portfolioTransactions = useQuery({
+    queryKey: queryKeys.portfolio.transactions(),
+    queryFn: () => services.portfolio.transactions({ limit: 20 }),
+    enabled: isAuthenticated,
+  });
   const banks = useQuery({
     queryKey: queryKeys.providers.bankConnections,
     queryFn: services.providers.bankConnections,
@@ -145,6 +150,7 @@ export function Wallet() {
   const refreshWallet = () => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.portfolio.summary });
     void queryClient.invalidateQueries({ queryKey: queryKeys.portfolio.insights });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.portfolio.transactions() });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.compliance });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.movements() });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.bankConnections });
@@ -289,6 +295,9 @@ export function Wallet() {
         >
           <MovementsPanel
             query={movements}
+            demoFundingCount={(portfolioTransactions.data?.items ?? []).filter(
+              (item) => item.type.toUpperCase() === "DEMO_FUNDING" && item.side === "CREDIT",
+            ).length}
             filter={movementFilter}
             setFilter={setMovementFilter}
             onTimelineSelect={setTimelineMovement}
@@ -1894,11 +1903,13 @@ function StatusRow({
 
 function MovementsPanel({
   query,
+  demoFundingCount,
   filter,
   setFilter,
   onTimelineSelect,
 }: {
   query: UseQueryResult<WalletMovementPage>;
+  demoFundingCount: number;
   filter: WalletMovementFilter;
   setFilter: (value: WalletMovementFilter) => void;
   onTimelineSelect: (item: WalletMovementView) => void;
@@ -1973,11 +1984,15 @@ function MovementsPanel({
         {!query.isLoading && !query.isError && !items.length ? (
           <PanelEmpty
             icon={<Clock3 />}
-            title="No movements yet"
-            detail="Your deposits and withdrawals will appear here."
+            title="No provider movements yet"
+            detail={
+              demoFundingCount
+                ? `No bank or card deposits or withdrawals have been made. ${demoFundingCount} internal demo funding ${demoFundingCount === 1 ? "credit is" : "credits are"} shown in Portfolio activity.`
+                : "Your bank and card deposits and withdrawals will appear here."
+            }
             action={
-              <Link to="/how-it-works">
-                Learn how it works <ArrowRight aria-hidden="true" />
+              <Link to={demoFundingCount ? "/portfolio" : "/how-it-works"}>
+                {demoFundingCount ? "View portfolio activity" : "Learn how it works"} <ArrowRight aria-hidden="true" />
               </Link>
             }
           />

@@ -1007,7 +1007,10 @@ const mapExecutionPage = (raw: unknown): TradingExecutionPage => {
       throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid execution side from service.");
     return {
       executionId: stringField(item.executionId, "execution.id"),
-      assetSlug: stringField(item.assetSlug, "execution.assetSlug"),
+      assetSlug:
+        item.assetSlug === undefined
+          ? null
+          : nullableString(item.assetSlug, "execution.assetSlug"),
       assetSummary:
         item.assetSummary && typeof item.assetSummary === "object"
           ? (() => {
