@@ -15,7 +15,6 @@ import {
   Globe2,
   Home,
   Image,
-  Landmark,
   LayoutGrid,
   ListFilter,
   LogOut,
@@ -23,7 +22,6 @@ import {
   PackageCheck,
   Search,
   Settings,
-  ShieldCheck,
   SlidersHorizontal,
   Upload,
   Vault,
@@ -152,7 +150,7 @@ function CollectorWorkspace() {
   const subscription = useQuery({
     queryKey: ["collector-workspace", "subscription"],
     queryFn: repositories.collectorWorkspace.getSubscription,
-    enabled: active === "subscription" || active === "overview",
+    enabled: active === "subscription",
     staleTime: 60_000,
   });
   const subscriptionAction = useMutation({
@@ -292,12 +290,7 @@ function CollectorWorkspace() {
           onOverview={() => open("overview")}
         />
         {active === "overview" ? (
-          <Overview
-            data={data}
-            assets={matchingAssets}
-            open={open}
-            subscription={subscription.data}
-          />
+          <Overview data={data} assets={matchingAssets} open={open} />
         ) : active === "collectibles" ? (
           <Collectibles data={data} assets={matchingAssets} open={open} />
         ) : active === "submissions" ? (
@@ -337,7 +330,6 @@ function CollectorWorkspace() {
           <AssetManagement
             asset={selected}
             detail={collectibleDetail.data}
-            membership={subscription.data}
             initialSection={detailSection}
             detailFailed={collectibleDetail.isError}
             deleting={deleteDraft.isPending}
@@ -430,106 +422,122 @@ function Overview({
   data,
   assets,
   open,
-  subscription,
 }: {
   data: CollectorWorkspaceOverview;
   assets: CollectorWorkspaceAsset[];
   open: Open;
-  subscription?: import("@/data/repositories").CollectorSubscriptionProjection;
 }) {
+  const attentionIds = new Set(data.attention.map((item) => item.id));
+  const queue = [...data.attention, ...assets.filter((asset) => !attentionIds.has(asset.id))].slice(
+    0,
+    6,
+  );
+  const waitingOnYou = data.actionSummary.waitingOnYou;
+
   return (
-    <div className="collector-workspace-content">
-      <div className="collector-workspace-overview-actions">
-        <Link
-          className="collector-button collector-button--primary"
-          to="/list"
-          search={{ draft: undefined }}
-        >
-          List an Asset <ArrowRight aria-hidden="true" />
-        </Link>
-      </div>
-      <section className="collector-kpis">
-        <Kpi
-          icon={PackageCheck}
-          label="Total Collectibles"
-          value={String(data.kpis.totalCollectibles)}
-          detail="Associated submissions"
-        />
-        <Kpi
-          icon={Landmark}
-          label="Catalogue Value"
-          value={money(data.kpis.referenceValue)}
-          detail="Supported valuation / reference"
-        />
-        <Kpi
-          icon={BarChart3}
-          label="Market Live"
-          value={String(data.kpis.marketLive)}
-          detail="Published catalogue"
-        />
-        <Kpi
-          icon={ClipboardList}
-          label="In Review"
-          value={String(data.kpis.inReview)}
-          detail="Submitted, review or valuation"
-        />
-        <Kpi
-          icon={Bell}
-          label="Needs Attention"
-          value={String(data.kpis.needsAttention)}
-          detail="Collector actions required"
-          attention
-        />
-      </section>
-      {subscription ? (
-        <section className="collector-membership-strip" aria-label="Collector membership">
-          <div>
-            <span className="collector-advanced-card__eyebrow">Membership</span>
-            <strong>{subscription.current?.displayName ?? "No active Collector plan"}</strong>
-            <small>
-              {subscription.current
-                ? `${subscription.usage.activeCollectibles} / ${subscription.usage.maxActiveCollectibles ?? "No limit"} collectibles`
-                : "Choose a plan to unlock Collector workspace capacity."}
-            </small>
+    <div className="collector-workspace-content collector-workspace-content--overview">
+      <section className="collector-command-hero">
+        <div className="collector-command-hero__copy">
+          <span className="collector-command-eyebrow">
+            <span aria-hidden="true" /> Collection command centre
+          </span>
+          <h2>Keep your collection moving.</h2>
+          <p>
+            Focus on the decisions that unlock your next listing, while keeping every submitted
+            collectible in view.
+          </p>
+          <div className="collector-command-hero__actions">
+            <Link
+              className="collector-button collector-button--primary"
+              to="/list"
+              search={{ draft: undefined }}
+            >
+              List an asset <ArrowRight aria-hidden="true" />
+            </Link>
+            <button className="collector-button" type="button" onClick={() => open("collectibles")}>
+              Browse collection
+            </button>
           </div>
-          <button type="button" onClick={() => open("subscription")}>
-            Manage plan <ArrowRight aria-hidden="true" />
-          </button>
+        </div>
+        <div className="collector-command-briefing">
+          <span>Today&apos;s briefing</span>
+          <strong>
+            {waitingOnYou
+              ? `${waitingOnYou} ${waitingOnYou === 1 ? "item needs" : "items need"} you`
+              : "You&apos;re clear to keep listing"}
+          </strong>
+          <p>
+            {waitingOnYou
+              ? "Resolve the open requests below to move your collection forward."
+              : "No open collector requests are holding up your workflow."}
+          </p>
+          <dl>
+            <div>
+              <dt>In progress</dt>
+              <dd>{data.actionSummary.inProgress}</dd>
+            </div>
+            <div>
+              <dt>Recently cleared</dt>
+              <dd>{data.actionSummary.completedRecently}</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <div className="collector-command-overview-grid">
+        <section className="collector-panel collector-command-priorities">
+          <header className="collector-command-panel-heading">
+            <div>
+              <span className="collector-command-eyebrow">Priority queue</span>
+              <h2>Your next moves</h2>
+            </div>
+            <button type="button" onClick={() => open("requests")}>
+              View all <ArrowRight aria-hidden="true" />
+            </button>
+          </header>
+          {data.attention.length ? (
+            <ul>
+              {data.attention.slice(0, 4).map((item) => (
+                <AttentionRow key={item.id} item={item} open={open} />
+              ))}
+            </ul>
+          ) : (
+            <Empty detail="You're all caught up. There are no collector actions waiting for you." />
+          )}
         </section>
-      ) : null}
-      <div className="collector-workspace-dashboard-grid">
-        <div className="collector-workspace-dashboard-grid__main">
-          <Pipeline data={data} open={open} />
-          <section className="collector-panel">
-            <PanelHeader
-              title="Your Collectibles"
-              action="View all collectibles"
-              onClick={() => open("collectibles")}
-            />
-            <AssetGrid assets={assets.slice(0, 5)} open={open} />
-          </section>
-        </div>
-        <div className="collector-workspace-dashboard-grid__side">
-          <NeedsAttention data={data} open={open} />
-          <RecentActivity data={data} open={open} />
-        </div>
+        <Pipeline data={data} open={open} />
       </div>
-      <div className="collector-workspace-analytics-grid">
-        <Performance data={data} compact />
-        <MarketSnapshot data={data} />
-      </div>
+
+      <section className="collector-panel collector-command-collection">
+        <header className="collector-command-panel-heading">
+          <div>
+            <span className="collector-command-eyebrow">Collection queue</span>
+            <h2>What&apos;s moving through Slice</h2>
+          </div>
+          <button type="button" onClick={() => open("collectibles")}>
+            View collection <ArrowRight aria-hidden="true" />
+          </button>
+        </header>
+        <CommandCollectionQueue assets={queue} open={open} />
+      </section>
+
+      <RecentActivity data={data} open={open} />
     </div>
   );
 }
 
 function Pipeline({ data, open }: { data: CollectorWorkspaceOverview; open: Open }) {
   return (
-    <section className="collector-panel collector-pipeline">
-      <PanelHeader
-        title="Pipeline Overview"
-        action="View all submissions"
-        onClick={() => open("submissions")}
-      />
+    <section className="collector-panel collector-pipeline collector-command-pipeline">
+      <header className="collector-command-panel-heading">
+        <div>
+          <span className="collector-command-eyebrow">Workflow</span>
+          <h2>Collection progress</h2>
+        </div>
+        <button type="button" onClick={() => open("submissions")}>
+          Submissions <ArrowRight aria-hidden="true" />
+        </button>
+      </header>
       <div className="collector-pipeline__stages">
         {data.pipeline.map((item) => {
           const state = stageCopy(item.stage);
@@ -600,25 +608,96 @@ function Collectibles({
 }) {
   const [filter, setFilter] = useState<"ALL" | CollectorWorkspaceStage>("ALL");
   const filtered = filter === "ALL" ? assets : assets.filter((item) => item.stage === filter);
+  const attentionIds = new Set(data.attention.map((item) => item.id));
+  const marketLive = assets.filter((item) => item.market.isLive).length;
+  const stageOptions = data.pipeline.filter((item) => item.count > 0 || item.stage === filter);
   return (
-    <WorkspacePage
-      title="My Collectibles"
-      detail="Manage the customer-safe details, evidence and progress for your submitted collectibles."
-    >
-      <div className="collector-filterbar">
-        <ListFilter aria-hidden="true" />
-        {["ALL", ...data.pipeline.map((item) => item.stage)].map((stage) => (
-          <button
-            key={stage}
-            className={filter === stage ? "is-active" : ""}
-            onClick={() => setFilter(stage as typeof filter)}
+    <div className="collector-workspace-content collector-workspace-content--page collector-inventory-page">
+      <header className="collector-page-heading collector-inventory-heading">
+        <p>Collector workspace / inventory</p>
+        <div>
+          <div>
+            <h2>My Collection</h2>
+            <span>
+              Your working inventory—built around the next decision, not a gallery of empty boxes.
+            </span>
+          </div>
+          <Link
+            className="collector-button collector-button--primary"
+            to="/list"
+            search={{ draft: undefined }}
           >
-            {stage === "ALL" ? "All" : stageCopy(stage as CollectorWorkspaceStage).label}
+            List an asset <ArrowRight aria-hidden="true" />
+          </Link>
+        </div>
+      </header>
+
+      <section className="collector-inventory-signal" aria-label="Collection status">
+        <div className="collector-inventory-signal__total">
+          <span>Collection in progress</span>
+          <strong>{assets.length}</strong>
+          <small>{assets.length === 1 ? "collectible tracked" : "collectibles tracked"}</small>
+        </div>
+        <div>
+          <span>Needs your action</span>
+          <strong>{data.attention.length}</strong>
+          <small>
+            {data.attention.length ? "Open the priority queue" : "You are all caught up"}
+          </small>
+        </div>
+        <div>
+          <span>In the workflow</span>
+          <strong>{data.kpis.inReview}</strong>
+          <small>Review, valuation or custody</small>
+        </div>
+        <div>
+          <span>Market live</span>
+          <strong>{marketLive}</strong>
+          <small>Published to the marketplace</small>
+        </div>
+      </section>
+
+      <section className="collector-panel collector-inventory-library">
+        <header className="collector-inventory-library__header">
+          <div>
+            <span className="collector-command-eyebrow">Inventory view</span>
+            <h3>{filter === "ALL" ? "Everything in motion" : stageCopy(filter).label}</h3>
+          </div>
+          <span>
+            {filtered.length} {filtered.length === 1 ? "collectible" : "collectibles"}
+          </span>
+        </header>
+        <div
+          className="collector-inventory-filters"
+          role="tablist"
+          aria-label="Filter collection by stage"
+        >
+          <ListFilter aria-hidden="true" />
+          <button
+            type="button"
+            role="tab"
+            aria-selected={filter === "ALL"}
+            className={filter === "ALL" ? "is-active" : ""}
+            onClick={() => setFilter("ALL")}
+          >
+            All <small>{assets.length}</small>
           </button>
-        ))}
-      </div>
-      <AssetGrid assets={filtered} open={open} full />
-    </WorkspacePage>
+          {stageOptions.map((item) => (
+            <button
+              key={item.stage}
+              type="button"
+              role="tab"
+              aria-selected={filter === item.stage}
+              className={filter === item.stage ? "is-active" : ""}
+              onClick={() => setFilter(item.stage)}
+            >
+              {stageCopy(item.stage).label} <small>{item.count}</small>
+            </button>
+          ))}
+        </div>
+        <CollectionInventoryGrid assets={filtered} attentionIds={attentionIds} open={open} />
+      </section>
+    </div>
   );
 }
 
@@ -762,25 +841,170 @@ function MarketListings({ assets, open }: { assets: CollectorWorkspaceAsset[]; o
 }
 
 function SubmissionRecords({ assets, open }: { assets: CollectorWorkspaceAsset[]; open: Open }) {
-  return (
-    <WorkspacePage
-      title="Submissions"
-      detail="These records use the existing submission authority. Resume or edit only when the current status permits it."
-    >
-      <section className="collector-panel collector-record-list">
-        {assets.map((asset) => (
-          <WorkspaceRecordRow
-            key={asset.id}
-            asset={asset}
-            label="Submission"
-            detail={`${asset.category ?? "Collectible"} · Updated ${date(asset.updatedAt)}`}
-            meta={submissionNextStep(asset)}
-            onClick={() => open("asset", asset.id)}
-          />
-        ))}
-      </section>
-    </WorkspacePage>
+  const [filter, setFilter] = useState<"ALL" | "ACTION" | "DRAFT" | "REVIEW" | "INTAKE">("ALL");
+  const actionNeeded = assets.filter(
+    (asset) => asset.submissionStatus === "DRAFT" || asset.submissionStatus === "CHANGES_REQUESTED",
   );
+  const inReview = assets.filter((asset) =>
+    ["SUBMITTED", "IN_REVIEW"].includes(asset.submissionStatus),
+  );
+  const readyForIntake = assets.filter(
+    (asset) => asset.submissionStatus === "APPROVED" && !asset.intake,
+  );
+  const filtered = assets.filter((asset) => {
+    if (filter === "ACTION") return actionNeeded.some((item) => item.id === asset.id);
+    if (filter === "DRAFT") return asset.submissionStatus === "DRAFT";
+    if (filter === "REVIEW") return inReview.some((item) => item.id === asset.id);
+    if (filter === "INTAKE") return readyForIntake.some((item) => item.id === asset.id);
+    return true;
+  });
+
+  return (
+    <div className="collector-workspace-content collector-workspace-content--page collector-submissions-page">
+      <header className="collector-submissions-heading">
+        <div>
+          <span className="collector-command-eyebrow">Collector workspace / submissions</span>
+          <h2>Keep every handoff moving.</h2>
+          <p>
+            From first draft to physical intake, this is the clean view of what Slice is waiting
+            on—and what happens next.
+          </p>
+        </div>
+        <Link
+          className="collector-button collector-button--primary"
+          to="/list"
+          search={{ draft: undefined }}
+        >
+          New submission <ArrowRight aria-hidden="true" />
+        </Link>
+      </header>
+
+      <section className="collector-submissions-signal" aria-label="Submission workflow status">
+        <div>
+          <span>All records</span>
+          <strong>{assets.length}</strong>
+          <small>Tracked submissions</small>
+        </div>
+        <div className={actionNeeded.length ? "is-alert" : ""}>
+          <span>Needs you</span>
+          <strong>{actionNeeded.length}</strong>
+          <small>
+            {actionNeeded.length ? "Finish or update a submission" : "Nothing is waiting on you"}
+          </small>
+        </div>
+        <div>
+          <span>With Slice</span>
+          <strong>{inReview.length}</strong>
+          <small>Currently in staff review</small>
+        </div>
+        <div>
+          <span>Ready for intake</span>
+          <strong>{readyForIntake.length}</strong>
+          <small>Choose shipping when ready</small>
+        </div>
+      </section>
+
+      {actionNeeded.length ? (
+        <section className="collector-submissions-priority">
+          <div>
+            <span className="collector-command-eyebrow">Your move</span>
+            <strong>
+              {actionNeeded.length === 1
+                ? "One submission needs attention"
+                : `${actionNeeded.length} submissions need attention`}
+            </strong>
+          </div>
+          <button type="button" onClick={() => setFilter("ACTION")}>
+            Review now <ArrowRight aria-hidden="true" />
+          </button>
+        </section>
+      ) : null}
+
+      <section className="collector-panel collector-submissions-board">
+        <header>
+          <div>
+            <span className="collector-command-eyebrow">Submission board</span>
+            <h3>{filter === "ALL" ? "Everything in motion" : submissionFilterLabel(filter)}</h3>
+          </div>
+          <span>{filtered.length} shown</span>
+        </header>
+        <div
+          className="collector-submissions-filters"
+          role="tablist"
+          aria-label="Filter submissions"
+        >
+          {[
+            ["ALL", "All", assets.length],
+            ["ACTION", "Needs you", actionNeeded.length],
+            [
+              "DRAFT",
+              "Drafts",
+              actionNeeded.filter((asset) => asset.submissionStatus === "DRAFT").length,
+            ],
+            ["REVIEW", "In review", inReview.length],
+            ["INTAKE", "Ready for intake", readyForIntake.length],
+          ].map(([id, label, count]) => (
+            <button
+              key={String(id)}
+              type="button"
+              role="tab"
+              aria-selected={filter === id}
+              className={filter === id ? "is-active" : ""}
+              onClick={() => setFilter(id as typeof filter)}
+            >
+              {label} <small>{count}</small>
+            </button>
+          ))}
+        </div>
+        {filtered.length ? (
+          <div className="collector-submissions-list">
+            {filtered.map((asset) => (
+              <SubmissionBoardCard key={asset.id} asset={asset} open={open} />
+            ))}
+          </div>
+        ) : (
+          <Empty detail="No submissions match this view." />
+        )}
+      </section>
+    </div>
+  );
+}
+
+function SubmissionBoardCard({ asset, open }: { asset: CollectorWorkspaceAsset; open: Open }) {
+  const needsYou =
+    asset.submissionStatus === "DRAFT" || asset.submissionStatus === "CHANGES_REQUESTED";
+  const readyForIntake = asset.submissionStatus === "APPROVED" && !asset.intake;
+  const state = needsYou ? "Action needed" : readyForIntake ? "Ready for intake" : "With Slice";
+  return (
+    <button
+      type="button"
+      className={`collector-submission-card ${needsYou ? "needs-attention" : ""}`}
+      onClick={() => open("asset", asset.id)}
+    >
+      <AssetThumbnail asset={asset} className="collector-submission-card__image" />
+      <div className="collector-submission-card__identity">
+        <span>{state}</span>
+        <strong>{asset.title}</strong>
+        <small>{assetMetadata(asset)}</small>
+      </div>
+      <div className="collector-submission-card__progress">
+        <span>Next step</span>
+        <strong>{submissionNextStep(asset)}</strong>
+        <small>Updated {date(asset.updatedAt)}</small>
+      </div>
+      <StatusBadge stage={asset.stage} submissionStatus={asset.submissionStatus} />
+      <ArrowRight aria-hidden="true" />
+    </button>
+  );
+}
+
+function submissionFilterLabel(filter: "ACTION" | "DRAFT" | "REVIEW" | "INTAKE") {
+  return {
+    ACTION: "Needs your attention",
+    DRAFT: "Draft submissions",
+    REVIEW: "Currently with Slice",
+    INTAKE: "Ready for physical intake",
+  }[filter];
 }
 
 function ValuationRecords({ assets, open }: { assets: CollectorWorkspaceAsset[]; open: Open }) {
@@ -1104,94 +1328,147 @@ function Requests({ data, open }: { data: CollectorWorkspaceOverview; open: Open
   const required = actions.filter((item) => item.priority !== "REMINDER");
   const reminders = actions.filter((item) => item.priority === "REMINDER");
   return (
-    <WorkspacePage
-      title="Your Actions"
-      detail="Complete these steps to keep your collectibles moving."
-    >
-      <div className="collector-actions-count">
-        {data.actionSummary.waitingOnYou} items need your attention
-      </div>
-      <div className="collector-actions-layout">
-        <div className="collector-actions-main">
-          <div className="collector-actions-filterbar" role="tablist" aria-label="Filter actions">
-            {(
-              [
-                ["ALL", "All"],
-                ["SUBMISSION", "Submission"],
-                ["SHIPPING", "Shipping"],
-                ["INFORMATION", "Information"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                role="tab"
-                aria-selected={filter === value}
-                className={filter === value ? "is-active" : ""}
-                onClick={() => setFilter(value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <ActionSection
-            title="Required now"
-            count={required.length}
-            actions={required}
-            open={open}
-            empty="You're all caught up. None of your collectibles need anything from you right now."
-          />
-          {reminders.length ? (
-            <ActionSection
-              title="Draft reminders"
-              count={reminders.length}
-              actions={reminders}
-              open={open}
-            />
-          ) : null}
+    <div className="collector-workspace-content collector-workspace-content--page collector-actions-page">
+      <header className="collector-actions-heading">
+        <div>
+          <span className="collector-command-eyebrow">Collector workspace / your actions</span>
+          <h2>Make the next move count.</h2>
+          <p>
+            Everything Slice needs from you, ordered by what will move a collectible forward first.
+          </p>
         </div>
-        <aside className="collector-actions-rail">
-          <ActionSummary summary={data.actionSummary} />
-          <RecentActions activity={data.activity.slice(0, 5)} open={() => open("activity")} />
-        </aside>
-      </div>
-    </WorkspacePage>
-  );
-}
+        <Link
+          className="collector-button collector-button--primary"
+          to="/list"
+          search={{ draft: undefined }}
+        >
+          List an asset <ArrowRight aria-hidden="true" />
+        </Link>
+      </header>
 
-function ActionSection({
-  title,
-  count,
-  actions,
-  open,
-  empty,
-}: {
-  title: string;
-  count: number;
-  actions: CollectorWorkspaceOverview["attention"];
-  open: Open;
-  empty?: string;
-}) {
-  return (
-    <section className="collector-actions-section">
-      <div className="collector-actions-section__heading">
-        <h2>{title}</h2>
-        <span>{count}</span>
-      </div>
-      {actions.length ? (
-        <div className="collector-actions-list">
-          {actions.map((item) => (
-            <ActionRow key={item.requestId} item={item} open={open} />
+      <section className="collector-actions-signal" aria-label="Action workflow status">
+        <div className={data.actionSummary.waitingOnYou ? "is-alert" : ""}>
+          <span>Waiting on you</span>
+          <strong>{data.actionSummary.waitingOnYou}</strong>
+          <small>
+            {data.actionSummary.waitingOnYou
+              ? "Complete these to keep moving"
+              : "Nothing needs a response"}
+          </small>
+        </div>
+        <div>
+          <span>In motion</span>
+          <strong>{data.actionSummary.inProgress}</strong>
+          <small>Progressing through Slice</small>
+        </div>
+        <div>
+          <span>Cleared recently</span>
+          <strong>{data.actionSummary.completedRecently}</strong>
+          <small>Meaningful milestones reached</small>
+        </div>
+      </section>
+
+      {required.length ? (
+        <section className="collector-actions-priority">
+          <div>
+            <span className="collector-command-eyebrow">Priority queue</span>
+            <strong>
+              {required.length === 1
+                ? "One step is holding a collectible in place"
+                : `${required.length} steps are holding collectibles in place`}
+            </strong>
+          </div>
+          <button type="button" onClick={() => setFilter("ALL")}>
+            View priority queue <ArrowRight aria-hidden="true" />
+          </button>
+        </section>
+      ) : null}
+
+      <section className="collector-panel collector-actions-board">
+        <header>
+          <div>
+            <span className="collector-command-eyebrow">Action queue</span>
+            <h3>
+              {filter === "ALL"
+                ? "Everything needing a response"
+                : `${actionCategoryLabel(filter)} actions`}
+            </h3>
+          </div>
+          <span>{actions.length} shown</span>
+        </header>
+        <div className="collector-actions-filters" role="tablist" aria-label="Filter actions">
+          {(
+            [
+              ["ALL", "All", data.attention.length],
+              [
+                "SUBMISSION",
+                "Submission",
+                data.attention.filter((item) => item.category === "SUBMISSION").length,
+              ],
+              [
+                "SHIPPING",
+                "Shipping",
+                data.attention.filter((item) => item.category === "SHIPPING").length,
+              ],
+              [
+                "INFORMATION",
+                "Information",
+                data.attention.filter((item) => item.category === "INFORMATION").length,
+              ],
+            ] as const
+          ).map(([value, label, count]) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={filter === value}
+              className={filter === value ? "is-active" : ""}
+              onClick={() => setFilter(value)}
+            >
+              {label} <small>{count}</small>
+            </button>
           ))}
         </div>
-      ) : empty ? (
-        <div className="collector-actions-empty">{empty}</div>
-      ) : null}
-    </section>
+        {required.length ? (
+          <div className="collector-actions-queue">
+            <div className="collector-actions-queue__label">
+              <span>Do next</span>
+              <small>
+                {required.length} action{required.length === 1 ? "" : "s"}
+              </small>
+            </div>
+            {required.map((item) => (
+              <ActionQueueCard key={item.requestId} item={item} open={open} />
+            ))}
+          </div>
+        ) : (
+          <div className="collector-actions-caught-up">
+            <BadgeCheck aria-hidden="true" />
+            <div>
+              <strong>You&apos;re clear for now.</strong>
+              <span>No active steps are waiting for you in this view.</span>
+            </div>
+          </div>
+        )}
+        {reminders.length ? (
+          <div className="collector-actions-queue collector-actions-queue--reminders">
+            <div className="collector-actions-queue__label">
+              <span>Keep in view</span>
+              <small>
+                {reminders.length} draft reminder{reminders.length === 1 ? "" : "s"}
+              </small>
+            </div>
+            {reminders.map((item) => (
+              <ActionQueueCard key={item.requestId} item={item} open={open} />
+            ))}
+          </div>
+        ) : null}
+      </section>
+    </div>
   );
 }
 
-function ActionRow({
+function ActionQueueCard({
   item,
   open,
 }: {
@@ -1205,86 +1482,26 @@ function ActionRow({
         ? "custody"
         : "submission";
   return (
-    <article className="collector-action-row">
-      <AssetThumbnail asset={item} className="collector-action-row__image" />
-      <div className="collector-action-row__identity">
+    <button
+      type="button"
+      className={`collector-action-queue-card ${item.priority === "BLOCKING" ? "is-blocking" : ""}`}
+      onClick={() => open("asset", item.id, tab)}
+    >
+      <AssetThumbnail asset={item} className="collector-action-queue-card__image" />
+      <div className="collector-action-queue-card__identity">
         <span>{actionCategoryLabel(item.category)}</span>
-        <h3>{item.title}</h3>
-        <p>{assetMetadata(item)}</p>
-        <small>Submission #{item.id.slice(-6).toUpperCase()}</small>
+        <strong>{item.title}</strong>
+        <small>{assetMetadata(item)}</small>
       </div>
-      <div className="collector-action-row__message">
-        <strong>{item.badge}</strong>
-        <p>{item.reason}</p>
+      <div className="collector-action-queue-card__reason">
+        <span>{item.badge}</span>
+        <strong>{item.reason}</strong>
+        <small>Updated {date(item.updatedAt)}</small>
       </div>
-      <div className="collector-action-row__cta">
-        <time dateTime={item.updatedAt}>Updated {date(item.updatedAt)}</time>
-        <button
-          type="button"
-          className={
-            item.priority === "BLOCKING"
-              ? "collector-button collector-button--primary"
-              : "collector-button"
-          }
-          onClick={() => open("asset", item.id, tab)}
-        >
-          {item.actionLabel} <ArrowRight aria-hidden="true" />
-        </button>
-      </div>
-    </article>
-  );
-}
-
-function ActionSummary({ summary }: { summary: CollectorWorkspaceOverview["actionSummary"] }) {
-  return (
-    <section className="collector-panel collector-actions-summary">
-      <PanelHeader title="Action summary" />
-      <div>
-        <strong>Waiting on you</strong>
-        <span>{summary.waitingOnYou}</span>
-        <small>Items that need your action</small>
-      </div>
-      <div>
-        <strong>In progress</strong>
-        <span>{summary.inProgress}</span>
-        <small>Moving through the pipeline</small>
-      </div>
-      <div>
-        <strong>Completed recently</strong>
-        <span>{summary.completedRecently}</span>
-        <small>Meaningful milestones</small>
-      </div>
-    </section>
-  );
-}
-
-function RecentActions({
-  activity,
-  open,
-}: {
-  activity: CollectorWorkspaceOverview["activity"];
-  open: () => void;
-}) {
-  return (
-    <section className="collector-panel collector-recent-actions">
-      <PanelHeader title="Recent activity" />
-      {activity.length ? (
-        <ul>
-          {activity.map((item) => (
-            <li key={item.id}>
-              <strong>{item.title}</strong>
-              <span>{item.detail}</span>
-              <small>{date(item.occurredAt)}</small>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <Empty detail="Your recent workflow milestones will appear here." />
-      )}
-      <button className="collector-button" onClick={open}>
-        View all activity <ArrowRight aria-hidden="true" />
-      </button>
-    </section>
+      <span className="collector-action-queue-card__action">
+        {item.actionLabel} <ArrowRight aria-hidden="true" />
+      </span>
+    </button>
   );
 }
 
@@ -1629,57 +1846,75 @@ function SubscriptionPage({
   const activePlan = current
     ? (data.plans.find((plan) => plan.code === current.code) ?? null)
     : null;
-  const firstAvailablePlan = data.plans.find((plan) => plan.availability === "AVAILABLE") ?? null;
+  const recommendedPlan =
+    data.plans.find((plan) => plan.recommended && plan.availability === "AVAILABLE") ??
+    data.plans.find((plan) => plan.availability === "AVAILABLE") ??
+    null;
   return (
-    <WorkspacePage
-      title="Collector Membership"
-      detail="Choose the capacity and tools that fit your collection."
-    >
+    <div className="collector-workspace-content collector-workspace-content--page collector-membership-page">
+      <header className="collector-membership-heading">
+        <div>
+          <span className="collector-command-eyebrow">Collector workspace / membership</span>
+          <h2>Build room for the collection.</h2>
+          <p>
+            Choose the capacity that fits how you collect today—and where you want to take it next.
+          </p>
+        </div>
+        <span className="collector-membership-heading__status">
+          {current
+            ? subscriptionStatus(current.status, current.cancelAtPeriodEnd)
+            : "Choose a plan"}
+        </span>
+      </header>
       {actionFailed ? (
         <div className="collector-membership-notice" role="status">
           Membership billing is temporarily unavailable. Your current plan and collection remain
           safe.
         </div>
       ) : null}
-      <section className="collector-subscription-layout">
-        <article className="collector-panel collector-subscription-current">
-          <div className="collector-membership-plan-summary">
-            <span className="collector-advanced-card__eyebrow">
-              {activePlan?.recommended ? "Most popular" : "Collector workspace"}
+      <section className="collector-membership-current">
+        <article className="collector-membership-current__plan">
+          <div className="collector-membership-current__intro">
+            <span className="collector-command-eyebrow">
+              {current ? "Your membership" : "Start your membership"}
             </span>
-            <div className="collector-membership-plan-heading">
-              <h2>{current?.displayName ?? "No active Collector plan"}</h2>
-              {current ? (
-                <span className="collector-membership-status">
-                  {subscriptionStatus(current.status, current.cancelAtPeriodEnd)}
-                </span>
-              ) : null}
-            </div>
-            {activePlan ? (
-              <strong className="collector-membership-price">
-                {formatPlanPrice(activePlan.monthlyPriceMinor, activePlan.currency)}{" "}
-                <small>/ month</small>
-              </strong>
-            ) : null}
+            <h3>{current?.displayName ?? "Create your collector runway."}</h3>
             <p>
               {current
-                ? `${current.cancelAtPeriodEnd ? "Cancels" : "Renews"} ${current.currentPeriodEnd ? date(current.currentPeriodEnd) : "with your billing cycle"}`
-                : "Choose a plan to unlock Collector workspace capacity and new submissions."}
+                ? `${current.cancelAtPeriodEnd ? "Your plan ends" : "Your next renewal is"} ${current.currentPeriodEnd ? date(current.currentPeriodEnd) : "managed with your billing cycle"}.`
+                : "Choose a tier to unlock active catalogue capacity and submit your next collectible."}
             </p>
-            {!current ? (
-              <button
-                className="collector-button collector-button--primary"
-                onClick={() =>
-                  firstAvailablePlan &&
-                  action({ action: "CHECKOUT", planCode: firstAvailablePlan.code })
-                }
-                disabled={actionPending || !firstAvailablePlan || !data.billing.configured}
-              >
-                Choose a plan <ArrowRight aria-hidden="true" />
-              </button>
-            ) : null}
           </div>
-          <div className="collector-subscription-usage collector-subscription-usage--meters">
+          {activePlan ? (
+            <strong className="collector-membership-current__price">
+              {formatPlanPrice(activePlan.monthlyPriceMinor, activePlan.currency)}{" "}
+              <small>/ month</small>
+            </strong>
+          ) : null}
+          {!current ? (
+            <button
+              className="collector-button collector-button--primary"
+              onClick={() =>
+                recommendedPlan && action({ action: "CHECKOUT", planCode: recommendedPlan.code })
+              }
+              disabled={actionPending || !recommendedPlan || !data.billing.configured}
+            >
+              Start with {recommendedPlan?.displayName.replace("Collector ", "") ?? "a plan"}{" "}
+              <ArrowRight aria-hidden="true" />
+            </button>
+          ) : null}
+        </article>
+        <article className="collector-membership-current__capacity">
+          <div>
+            <span className="collector-command-eyebrow">Capacity now</span>
+            <strong>
+              {data.usage.remainingCatalogueCapacity === null
+                ? "Plan required"
+                : `${data.usage.remainingCatalogueCapacity} slots open`}
+            </strong>
+            <small>Availability in your live catalogue</small>
+          </div>
+          <div className="collector-membership-current__usage">
             <UsageMeter
               icon={PackageCheck}
               label="Active collectibles"
@@ -1699,15 +1934,23 @@ function SubscriptionPage({
               limit={data.usage.maxMonthlySubmissions}
             />
           </div>
-          <div className="collector-membership-capacity">
-            {data.usage.remainingCatalogueCapacity === null
-              ? "Catalogue capacity follows your membership"
-              : `${data.usage.remainingCatalogueCapacity} catalogue slots remaining`}
-          </div>
         </article>
-        <BillingDetails data={data} action={action} actionPending={actionPending} />
       </section>
-      <section className="collector-plan-grid">
+      {current ? (
+        <BillingDetails data={data} action={action} actionPending={actionPending} />
+      ) : null}
+      <section className="collector-membership-plan-heading-block">
+        <div>
+          <span className="collector-command-eyebrow">Choose your capacity</span>
+          <h3>
+            {current
+              ? "Change the shape of your workspace."
+              : "Pick the pace that suits your collection."}
+          </h3>
+        </div>
+        <p>Every tier includes the same review, custody and publication standards.</p>
+      </section>
+      <section className="collector-membership-plan-deck">
         {data.plans.map((plan) => (
           <PlanCard
             key={plan.code}
@@ -1718,44 +1961,7 @@ function SubscriptionPage({
           />
         ))}
       </section>
-      <section className="collector-panel collector-plan-compare">
-        <PanelHeader title="Compare features" />
-        <ComparisonTable plans={data.plans} />
-      </section>
-      <section className="collector-membership-bottom-grid">
-        <article className="collector-panel collector-membership-info-card">
-          <ShieldCheck aria-hidden="true" />
-          <div>
-            <h3>Included on every plan</h3>
-            <p>Core infrastructure and workflows are always included.</p>
-            <ul>
-              {[
-                "Secure submission workflow",
-                "Staff review",
-                "Vault intake tracking",
-                "Shipment tracking",
-                "Collector profile",
-                "Market research",
-                "Custody status",
-              ].map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </div>
-        </article>
-        <article className="collector-panel collector-membership-info-card">
-          <BadgeCheck aria-hidden="true" />
-          <div>
-            <h3>Membership standards</h3>
-            <p>Your membership tier never changes our commitment to quality.</p>
-            <p>
-              Every submission and collectible is subject to the same Slice review, verification,
-              custody and publication standards - regardless of your plan.
-            </p>
-          </div>
-        </article>
-      </section>
-    </WorkspacePage>
+    </div>
   );
 }
 
@@ -1860,7 +2066,9 @@ function PlanCard({
   const unavailable = plan.availability !== "AVAILABLE";
   const changePlan = Boolean(current && !isCurrent);
   return (
-    <article className={`collector-plan-card ${isCurrent ? "is-current" : ""}`}>
+    <article
+      className={`collector-membership-plan-card ${isCurrent ? "is-current" : ""} ${plan.recommended ? "is-recommended" : ""}`}
+    >
       <div className="collector-plan-card__heading">
         <span className="collector-advanced-card__eyebrow">{plan.displayName}</span>
         {plan.recommended ? <em>Recommended</em> : null}
@@ -1868,10 +2076,23 @@ function PlanCard({
       <strong className="collector-plan-card__price">
         {formatPlanPrice(plan.monthlyPriceMinor, plan.currency)} <small>/ month</small>
       </strong>
+      <p className="collector-membership-plan-card__description">{plan.description}</p>
+      <dl className="collector-membership-plan-card__limits">
+        <div>
+          <dt>Catalogue</dt>
+          <dd>{numberEntitlement(plan.entitlements.maxActiveCollectibles) ?? "—"} assets</dd>
+        </div>
+        <div>
+          <dt>Monthly flow</dt>
+          <dd>{numberEntitlement(plan.entitlements.monthlySubmissionLimit) ?? "—"} submissions</dd>
+        </div>
+      </dl>
       <ul className="collector-subscription-features">
-        {featureLabels(plan.entitlements).map((feature) => (
-          <li key={feature}>{feature}</li>
-        ))}
+        {featureLabels(plan.entitlements)
+          .slice(1, 5)
+          .map((feature) => (
+            <li key={feature}>{feature}</li>
+          ))}
       </ul>
       <button
         className={`collector-button ${isCurrent ? "collector-button--primary" : ""}`}
@@ -1895,65 +2116,6 @@ function PlanCard({
         <ArrowRight aria-hidden="true" />
       </button>
     </article>
-  );
-}
-
-function ComparisonTable({
-  plans,
-}: {
-  plans: import("@/data/repositories").CollectorSubscriptionProjection["plans"];
-}) {
-  const rows: Array<{ label: string; key: string; format?: (value: unknown) => string }> = [
-    { label: "Active collectibles", key: "maxActiveCollectibles" },
-    { label: "Monthly submissions", key: "monthlySubmissionLimit" },
-    { label: "Concurrent intake", key: "maxConcurrentIntake" },
-    {
-      label: "Market research",
-      key: "marketResearchTier",
-      format: (value) =>
-        typeof value === "string" ? value[0] + value.slice(1).toLowerCase() : "-",
-    },
-    {
-      label: "Bulk import",
-      key: "bulkImportEnabled",
-      format: (value) => (value ? "Included" : "-"),
-    },
-    {
-      label: "Analytics",
-      key: "advancedAnalyticsEnabled",
-      format: (value) => (value ? "Advanced" : "Standard"),
-    },
-    {
-      label: "Catalogue export",
-      key: "exportEnabled",
-      format: (value) => (value ? "Included" : "-"),
-    },
-    {
-      label: "Priority support",
-      key: "prioritySupport",
-      format: (value) => (value ? "Priority" : "Standard"),
-    },
-  ];
-  return (
-    <div className="collector-comparison-table" role="table">
-      <div className="collector-comparison-row collector-comparison-row--header" role="row">
-        <span>Feature</span>
-        {plans.map((plan) => (
-          <strong key={plan.code}>{plan.displayName}</strong>
-        ))}
-      </div>
-      {rows.map((row) => (
-        <div className="collector-comparison-row" role="row" key={row.key}>
-          <span>{row.label}</span>
-          {plans.map((plan) => {
-            const value = plan.entitlements[row.key];
-            return (
-              <span key={plan.code}>{row.format ? row.format(value) : String(value ?? "-")}</span>
-            );
-          })}
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -2126,7 +2288,6 @@ function formatPlanPrice(value: string, currency: string) {
 function AssetManagement({
   asset,
   detail,
-  membership,
   initialSection,
   detailFailed,
   deleting,
@@ -2136,7 +2297,6 @@ function AssetManagement({
 }: {
   asset: CollectorWorkspaceAsset;
   detail?: CollectorAssetDetail;
-  membership?: CollectorSubscriptionProjection;
   initialSection: AssetDetailSection;
   detailFailed: boolean;
   deleting: boolean;
@@ -2148,7 +2308,6 @@ function AssetManagement({
     <AssetManagementView
       asset={asset}
       detail={detail}
-      membership={membership}
       initialSection={initialSection}
       detailFailed={detailFailed}
       deleting={deleting}
@@ -2309,7 +2468,6 @@ function SettingsCards({ open }: { open: Open }) {
 function AssetManagementView({
   asset,
   detail,
-  membership,
   initialSection,
   detailFailed,
   deleting,
@@ -2319,7 +2477,6 @@ function AssetManagementView({
 }: {
   asset: CollectorWorkspaceAsset;
   detail?: CollectorAssetDetail;
-  membership?: CollectorSubscriptionProjection;
   initialSection: AssetDetailSection;
   detailFailed: boolean;
   deleting: boolean;
@@ -2351,13 +2508,7 @@ function AssetManagementView({
     onSectionChange(target);
   };
   const content: Record<AssetDetailSection, ReactNode> = {
-    overview: (
-      <DetailOverview
-        asset={asset}
-        lifecycle={lifecycle}
-        onAction={() => openAction(lifecycle.action?.targetRoute)}
-      />
-    ),
+    overview: <DetailOverview lifecycle={lifecycle} />,
     details: <DetailsTab asset={asset} openSubmission={openSubmission} />,
     submission: <DetailsTab asset={asset} openSubmission={openSubmission} />,
     "market-data": <MarketTab asset={asset} market={market} />,
@@ -2370,138 +2521,111 @@ function AssetManagementView({
     history: <HistoryTab asset={asset} activity={detail?.activity ?? []} />,
   };
   return (
-    <WorkspacePage
-      title="My Collectibles"
-      detail="A customer-safe view of your collectible and its Slice journey."
-    >
-      <div className="collector-detail-layout">
-        <div className="collector-detail-main">
-          <button type="button" className="collector-detail-back" onClick={onBack}>
-            <ChevronLeft aria-hidden="true" /> My Collectibles
-          </button>
-          <header className="collector-detail-heading">
-            <div>
-              <h1>{asset.title}</h1>
-              <p>
-                {[asset.category, asset.grader && normalizeGrade(asset.grader, asset.grade)]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-              <div className="collector-detail-heading__badges">
-                <StatusBadge stage={asset.stage} submissionStatus={asset.submissionStatus} />
-                <span className="collector-detail-owned">Owned</span>
-              </div>
-            </div>
-            <div className="collector-detail-heading__actions">
-              {detailAction(asset)}
-              <details className="collector-detail-actions-menu">
-                <summary
-                  className="collector-button collector-button--icon"
-                  aria-label="More collectible actions"
-                >
-                  ···
-                </summary>
-                <div role="menu" aria-label="More collectible actions">
-                  <button type="button" role="menuitem" onClick={() => selectSection("details")}>
-                    View details
-                  </button>
-                  <button type="button" role="menuitem" onClick={() => selectSection("media")}>
-                    View submitted images
-                  </button>
-                  {asset.slug && asset.market.isLive ? (
-                    <Link to="/asset/$id" params={{ id: asset.slug }} role="menuitem">
-                      Open public market
-                    </Link>
-                  ) : null}
-                </div>
-              </details>
-            </div>
-          </header>
-          <section className="collector-detail-summary-card">
-            <AssetThumbnail asset={asset} className="collector-detail-summary-card__image" />
-            <div className="collector-detail-summary-card__values">
-              <DetailValue
-                label="Slice-supported valuation"
-                value={money(asset.valuation.supportedValue)}
-              />
-              <small>
-                {asset.valuation.supportedValue
-                  ? `Updated ${date(asset.valuation.supportedValue.asOf)}`
-                  : "No supported valuation yet"}
-              </small>
-              <div className="collector-detail-summary-card__divider" />
-              <DetailValue
-                label="External reference"
-                value={money(asset.valuation.externalReference)}
-              />
-              <small>
-                {asset.valuation.externalReference
-                  ? `Updated ${date(asset.valuation.externalReference.asOf)}`
-                  : "No external reference available"}
-              </small>
-            </div>
-            <dl className="collector-detail-identity-grid">
-              {[
-                ["Brand", asset.manufacturer],
-                ["Year", asset.year?.toString()],
-                ["Set", asset.set],
-                ["Card number", asset.cardNumber ? `#${asset.cardNumber}` : null],
-                ["Variant", asset.edition],
-                ["Grader", asset.grader],
-                ["Grade", normalizeGrade(asset.grader, asset.grade)],
-                ["Certification", asset.certificationNumber],
-              ].map(([label, value]) =>
-                value ? (
-                  <Detail key={String(label)} label={String(label)} value={String(value)} />
-                ) : null,
-              )}
-            </dl>
-          </section>
-          <div className="collector-detail-tabs" role="tablist" aria-label="Collectible details">
-            {sections.map(({ id, label }) => (
-              <button
-                key={id}
-                role="tab"
-                aria-selected={section === id}
-                className={section === id ? "is-active" : ""}
-                onClick={() => selectSection(id)}
-              >
-                {label}
-              </button>
-            ))}
+    <div className="collector-workspace-content collector-workspace-content--page collector-asset-command">
+      <button type="button" className="collector-detail-back" onClick={onBack}>
+        <ChevronLeft aria-hidden="true" /> My Collection
+      </button>
+      <section className="collector-asset-command__hero">
+        <AssetThumbnail asset={asset} className="collector-asset-command__image" />
+        <div className="collector-asset-command__identity">
+          <span className="collector-command-eyebrow">Collection record</span>
+          <h1>{asset.title}</h1>
+          <p>
+            {[asset.category, asset.year, asset.set, normalizeGrade(asset.grader, asset.grade)]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+          <div className="collector-asset-command__badges">
+            <StatusBadge stage={asset.stage} submissionStatus={asset.submissionStatus} />
+            {asset.certificationNumber ? <span>Cert. {asset.certificationNumber}</span> : null}
           </div>
-          <DetailPanel title={sections.find((item) => item.id === section)?.label ?? "Details"}>
-            {detailFailed ? (
-              <p className="collector-form-error" role="alert">
-                We couldn&apos;t load the latest detail update. Showing the current workspace
-                summary.
-              </p>
-            ) : null}
-            {content[section]}
-            {asset.submissionStatus === "DRAFT" ? (
-              <div className="collector-detail-danger-zone">
-                <button
-                  className="collector-button collector-button--danger"
-                  disabled={deleting}
-                  onClick={() => {
-                    if (window.confirm("Delete this editable draft? This cannot be undone."))
-                      onDeleteDraft(asset.id, asset.version);
-                  }}
-                >
-                  <Trash2 aria-hidden="true" /> {deleting ? "Deleting draft…" : "Delete draft"}
-                </button>
-              </div>
-            ) : null}
-          </DetailPanel>
         </div>
-        <aside className="collector-detail-rail">
-          <DetailMarketRail asset={asset} />
-          <DetailMilestone lifecycle={lifecycle} />
-          <RelatedActions actions={detail?.requests ?? []} onAction={openAction} />
-          <MembershipRail membership={membership} />
-        </aside>
+        <div className="collector-asset-command__state">
+          <span>Current position</span>
+          <strong>{lifecycle.currentLabel}</strong>
+          <p>{lifecycle.currentDetail}</p>
+          {lifecycle.action ? (
+            <button
+              className="collector-button collector-button--primary"
+              onClick={() => openAction(lifecycle.action?.targetRoute)}
+            >
+              {lifecycle.action.label} <ArrowRight aria-hidden="true" />
+            </button>
+          ) : asset.slug && asset.market.isLive ? (
+            <Link
+              className="collector-button collector-button--primary"
+              to="/asset/$id"
+              params={{ id: asset.slug }}
+            >
+              View market <ArrowRight aria-hidden="true" />
+            </Link>
+          ) : (
+            <span className="collector-asset-command__clear">No action needed right now</span>
+          )}
+        </div>
+      </section>
+
+      <section className="collector-asset-command__snapshot" aria-label="Collectible snapshot">
+        <DetailValue label="Slice reference" value={money(asset.valuation.supportedValue)} />
+        <DetailValue
+          label="Custody"
+          value={asset.custody ? custodyLabel(asset.custody.status) : "Not in custody"}
+        />
+        <DetailValue
+          label="Marketplace"
+          value={asset.market.isLive ? "Market live" : "Not published"}
+        />
+        <DetailValue label="Shares available" value={availability(asset)} />
+        <DetailValue label="Last update" value={date(asset.updatedAt)} />
+      </section>
+
+      <div
+        className="collector-asset-command__tabs"
+        role="tablist"
+        aria-label="Collectible details"
+      >
+        {sections.map(({ id, label }) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={section === id}
+            className={section === id ? "is-active" : ""}
+            onClick={() => selectSection(id)}
+          >
+            {label}
+          </button>
+        ))}
       </div>
-    </WorkspacePage>
+
+      <section className="collector-panel collector-asset-command__content">
+        <header>
+          <span className="collector-command-eyebrow">
+            {sections.find((item) => item.id === section)?.label}
+          </span>
+          <h2>{section === "overview" ? "The Slice journey" : "Collectible detail"}</h2>
+        </header>
+        {detailFailed ? (
+          <p className="collector-form-error" role="alert">
+            We couldn&apos;t load the latest detail update. Showing the current workspace summary.
+          </p>
+        ) : null}
+        {content[section]}
+        {asset.submissionStatus === "DRAFT" ? (
+          <div className="collector-detail-danger-zone">
+            <button
+              className="collector-button collector-button--danger"
+              disabled={deleting}
+              onClick={() => {
+                if (window.confirm("Delete this editable draft? This cannot be undone."))
+                  onDeleteDraft(asset.id, asset.version);
+              }}
+            >
+              <Trash2 aria-hidden="true" /> {deleting ? "Deleting draft…" : "Delete draft"}
+            </button>
+          </div>
+        ) : null}
+      </section>
+    </div>
   );
 }
 
@@ -2514,15 +2638,7 @@ function DetailValue({ label, value }: { label: string; value: string }) {
   );
 }
 
-function DetailOverview({
-  asset,
-  lifecycle,
-  onAction,
-}: {
-  asset: CollectorWorkspaceAsset;
-  lifecycle: CollectorWorkspaceLifecycle;
-  onAction: () => void;
-}) {
+function DetailOverview({ lifecycle }: { lifecycle: CollectorWorkspaceLifecycle }) {
   return (
     <div className="collector-detail-overview">
       <section className="collector-detail-journey">
@@ -2541,56 +2657,6 @@ function DetailOverview({
             </li>
           ))}
         </ol>
-        <div
-          className={`collector-detail-current collector-detail-current--${lifecycle.currentStatus.toLowerCase()}`}
-        >
-          <span>
-            {lifecycle.currentStatus === "ACTION_REQUIRED"
-              ? "Action required"
-              : lifecycle.currentStatus === "CURRENT"
-                ? "Current status"
-                : "Status"}
-          </span>
-          <strong>{lifecycle.currentLabel}</strong>
-          <p>{lifecycle.currentDetail}</p>
-          {lifecycle.action ? (
-            <button className="collector-button collector-button--primary" onClick={onAction}>
-              {lifecycle.action.label} <ArrowRight aria-hidden="true" />
-            </button>
-          ) : null}
-        </div>
-      </section>
-      <section className="collector-detail-glance">
-        <div className="collector-detail-section-heading">
-          <h3>At a glance</h3>
-        </div>
-        <div className="collector-detail-glance__grid">
-          <DetailValue
-            label="Slice-supported valuation"
-            value={money(asset.valuation.supportedValue)}
-          />
-          <DetailValue
-            label="Custody status"
-            value={asset.custody ? custodyLabel(asset.custody.status) : "Not yet in custody"}
-          />
-          <DetailValue
-            label="Marketplace status"
-            value={asset.market.isLive ? "Market live" : "Not market live"}
-          />
-          <DetailValue label="Shares available" value={availability(asset)} />
-        </div>
-      </section>
-      <section className="collector-detail-next">
-        <div className="collector-detail-section-heading">
-          <h3>What happens next?</h3>
-        </div>
-        <strong>{lifecycle.nextMilestone.label}</strong>
-        <p>{lifecycle.nextMilestone.detail}</p>
-        {asset.market.isLive && asset.slug ? (
-          <Link className="collector-button" to="/asset/$id" params={{ id: asset.slug }}>
-            View market <ArrowRight aria-hidden="true" />
-          </Link>
-        ) : null}
       </section>
     </div>
   );
@@ -2812,10 +2878,7 @@ function RelatedActions({
           <div className="collector-detail-related-action" key={action.id}>
             <strong>{action.actionLabel}</strong>
             <p>{action.reason}</p>
-            <button
-              className="collector-button"
-              onClick={() => onAction(action.targetRoute)}
-            >
+            <button className="collector-button" onClick={() => onAction(action.targetRoute)}>
               {action.actionLabel} <ArrowRight aria-hidden="true" />
             </button>
           </div>
@@ -3032,21 +3095,21 @@ function ShipmentForm({
       ) : null}
       <label>
         Carrier
-      <input
-        value={carrier}
-        onChange={(event) => setCarrier(event.target.value)}
-        placeholder="e.g. Royal Mail"
-        required
-      />
+        <input
+          value={carrier}
+          onChange={(event) => setCarrier(event.target.value)}
+          placeholder="e.g. Royal Mail"
+          required
+        />
       </label>
       <label>
         Tracking number
-      <input
-        value={trackingNumber}
-        onChange={(event) => setTrackingNumber(event.target.value)}
-        placeholder="Enter tracking number"
-        required
-      />
+        <input
+          value={trackingNumber}
+          onChange={(event) => setTrackingNumber(event.target.value)}
+          placeholder="Enter tracking number"
+          required
+        />
       </label>
       <button className="collector-button collector-button--primary" disabled={submitting}>
         {submitting ? "Saving…" : "Mark as shipped"}
@@ -3130,11 +3193,7 @@ function MediaDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
             onClick={() => setSelected(index)}
             aria-label={`View ${friendlyMediaLabel(item.slot)}`}
           >
-            <AssetThumbnail
-              asset={asset}
-              media={item}
-              className="collector-media-tile__preview"
-            />
+            <AssetThumbnail asset={asset} media={item} className="collector-media-tile__preview" />
             <strong>{friendlyMediaLabel(item.slot)}</strong>
             <small>
               {sentence(item.status)} · Uploaded {date(item.updatedAt)}
@@ -3170,7 +3229,11 @@ function MediaDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
           >
             <ChevronLeft aria-hidden="true" />
           </button>
-          <AssetThumbnail asset={asset} media={current} className="collector-media-lightbox__image" />
+          <AssetThumbnail
+            asset={asset}
+            media={current}
+            className="collector-media-lightbox__image"
+          />
           <div className="collector-media-lightbox__label">
             {friendlyMediaLabel(current.slot)} · {sentence(current.status)}
           </div>
@@ -3450,6 +3513,89 @@ function AssetGrid({
     <Empty detail="No collectibles match your current search or filter." />
   );
 }
+
+function CollectionInventoryGrid({
+  assets,
+  attentionIds,
+  open,
+}: {
+  assets: CollectorWorkspaceAsset[];
+  attentionIds: Set<string>;
+  open: Open;
+}) {
+  return assets.length ? (
+    <div className="collector-inventory-grid">
+      {assets.map((asset) => (
+        <button
+          key={asset.id}
+          type="button"
+          className={`collector-inventory-card ${attentionIds.has(asset.id) ? "has-attention" : ""}`}
+          onClick={() => open("asset", asset.id)}
+        >
+          <AssetThumbnail asset={asset} className="collector-inventory-card__image" />
+          <div className="collector-inventory-card__topline">
+            <StatusBadge stage={asset.stage} submissionStatus={asset.submissionStatus} />
+            {attentionIds.has(asset.id) ? (
+              <span className="collector-inventory-card__attention">Action needed</span>
+            ) : null}
+          </div>
+          <div className="collector-inventory-card__copy">
+            <span>{[asset.year, asset.category].filter(Boolean).join(" · ") || "Collectible"}</span>
+            <strong>{asset.title}</strong>
+            <small>{asset.grade ?? "Grade pending"}</small>
+          </div>
+          <dl>
+            <div>
+              <dt>Reference</dt>
+              <dd>{money(asset.referenceValue)}</dd>
+            </div>
+            <div>
+              <dt>Next</dt>
+              <dd>{asset.nextAction || "No action required"}</dd>
+            </div>
+          </dl>
+          <footer>
+            <span>Open collectible</span>
+            <ArrowRight aria-hidden="true" />
+          </footer>
+        </button>
+      ))}
+    </div>
+  ) : (
+    <Empty detail="No collectibles match this workflow stage." />
+  );
+}
+
+function CommandCollectionQueue({
+  assets,
+  open,
+}: {
+  assets: Array<CollectorWorkspaceAsset | CollectorWorkspaceOverview["attention"][number]>;
+  open: Open;
+}) {
+  return assets.length ? (
+    <div className="collector-command-queue">
+      {assets.map((asset) => {
+        const attention = "reason" in asset ? asset : null;
+        return (
+          <button key={asset.id} type="button" onClick={() => open("asset", asset.id)}>
+            <AssetThumbnail asset={asset} className="collector-command-queue__image" />
+            <span className="collector-command-queue__copy">
+              <small>{attention ? "Action required" : stageCopy(asset.stage).label}</small>
+              <strong>{asset.title}</strong>
+              <em>{attention?.reason ?? asset.nextAction}</em>
+            </span>
+            <StatusBadge stage={asset.stage} submissionStatus={asset.submissionStatus} />
+            <ArrowRight aria-hidden="true" />
+          </button>
+        );
+      })}
+    </div>
+  ) : (
+    <Empty detail="Your collection will appear here once you start a listing." />
+  );
+}
+
 function AssetCard({ asset, open }: { asset: CollectorWorkspaceAsset; open: Open }) {
   return (
     <button className="collector-asset-card" onClick={() => open("asset", asset.id)}>
@@ -3561,32 +3707,6 @@ function ActivityRow({ item }: { item: CollectorWorkspaceOverview["activity"][nu
       </span>
       <time>{dateTime(item.occurredAt)}</time>
     </li>
-  );
-}
-function Kpi({
-  icon: Icon,
-  label,
-  value,
-  detail,
-  attention = false,
-}: {
-  icon: typeof PackageCheck;
-  label: string;
-  value: string;
-  detail: string;
-  attention?: boolean;
-}) {
-  return (
-    <section className={`collector-kpi ${attention ? "is-attention" : ""}`}>
-      <span>
-        <Icon aria-hidden="true" />
-      </span>
-      <div>
-        <small>{label}</small>
-        <strong>{value}</strong>
-        <em>{detail}</em>
-      </div>
-    </section>
   );
 }
 function Metric({ label, value, detail }: { label: string; value: string; detail: string }) {
