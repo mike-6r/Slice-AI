@@ -323,7 +323,7 @@ describe('Document 010 reviewer HTTP E2E', () => {
     ).toBe(1);
   });
 
-  it('runs qualification from the Collector submit endpoint and keeps non-review outcomes out of the staff queue', async () => {
+  it('auto-qualifies a Slice-clear listing with pending provider verification and keeps it out of the staff queue', async () => {
     const company = await h.db.gradingCompany.create({
       data: {
         code: 'PSA',
@@ -402,17 +402,27 @@ describe('Document 010 reviewer HTTP E2E', () => {
     });
     await h.db.gradingCertificationVerification.create({
       data: {
-        id: `${h.runId}-qualified-certification`,
+        id: `${h.runId}-qualified-duplicate-check`,
         submissionId,
         requestedByUserId: owner.id,
         companyCode: 'PSA',
         certificationNumber: metadata.certificationNumber,
         normalizedCertificationNumber: metadata.certificationNumber,
-        status: 'VERIFIED',
+        status: 'CLEAR',
+        verificationMode: 'SLICE_DUPLICATE_CHECK',
+      },
+    });
+    await h.db.gradingCertificationVerification.create({
+      data: {
+        id: `${h.runId}-qualified-provider-pending`,
+        submissionId,
+        requestedByUserId: owner.id,
+        companyCode: 'PSA',
+        certificationNumber: metadata.certificationNumber,
+        normalizedCertificationNumber: metadata.certificationNumber,
+        status: 'PENDING',
         verificationMode: 'TEST_PROVIDER',
-        verifiedGrade: '10.00',
-        verifiedCard: { name: metadata.name, cardNumber: metadata.cardNumber },
-        verifiedAt: new Date(),
+        createdAt: new Date(Date.now() + 1_000),
       },
     });
     const submitted = await request(h.app.getHttpServer())
@@ -449,6 +459,16 @@ describe('Document 010 reviewer HTTP E2E', () => {
         (check) => check.code === 'POSSESSION_CONFIRMED',
       ),
     ).toMatchObject({ result: 'PASS' });
+    expect(
+      qualificationRuns[0]?.checks.find(
+        (check) => check.code === 'CERTIFICATION_PROVIDER',
+      ),
+    ).toMatchObject({
+      result: 'PASS',
+      mandatory: false,
+      reason:
+        'Certificate verification is pending. Listing can continue; verification is required before finalization.',
+    });
     expect(
       await h.db.verificationReview.count({
         where: { submissionId },

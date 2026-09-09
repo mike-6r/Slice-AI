@@ -401,7 +401,7 @@ describe("Document 010 list asset UI", () => {
     expect(html).not.toContain("Not applicable for raw cards");
   });
 
-  it("checks graded certificates against Slice listings only", () => {
+  it("shows a Slice-clear certificate as nonblocking while provider verification is pending", () => {
     const html = renderToStaticMarkup(
       <DetailsStep
         form={{
@@ -438,9 +438,49 @@ describe("Document 010 list asset UI", () => {
     expect(html).toContain("Verify certificate");
     expect(html).toContain("Certificate number available");
     expect(html).toContain(
-      "Slice duplicate check passed. A provider grade has not yet been confirmed.",
+      "Slice duplicate check passed. Certificate verification is pending; listing can continue and verification is required before finalization.",
     );
     expect(html).toContain("grading-provider certificate record");
+  });
+
+  it("keeps a temporarily unavailable provider result nonblocking", () => {
+    const html = renderToStaticMarkup(
+      <DetailsStep
+        form={{
+          ...detailsForm,
+          grader: "PSA",
+          grade: "10.00",
+          gradeScaleEntryId: "psa-10",
+          certificationNumber: "163184852",
+        }}
+        onChange={() => undefined}
+        gradingCompanies={[{ code: "PSA", name: "PSA" }]}
+        grades={[{ id: "psa-10", grade: "10.00", label: "10", conditionLabel: null }]}
+        gradesLoading={false}
+        verification={{
+          id: "verification-pending",
+          companyCode: "PSA",
+          certificationNumber: "163184852",
+          normalizedCertificationNumber: "163184852",
+          status: "TEMPORARILY_UNAVAILABLE",
+          duplicateCheckStatus: "CLEAR",
+          verificationMode: "OFFICIAL_API",
+          officialVerificationUrl: null,
+          verifiedGrade: null,
+          verifiedLabel: null,
+          designation: null,
+          gradeEra: null,
+          verifiedAt: null,
+          createdAt: "2026-09-02T00:00:00.000Z" as ISODateTime,
+        }}
+        verifyPending={false}
+        onVerifyCertification={() => undefined}
+      />,
+    );
+    expect(html).toContain("Certificate verification pending");
+    expect(html).toContain(
+      "Certificate verification is pending. Listing can continue; verification is required before finalization.",
+    );
   });
 
   it("renders a truthful matched market reference and offer intent without converting provider currency", () => {

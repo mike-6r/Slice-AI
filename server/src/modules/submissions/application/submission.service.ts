@@ -1276,7 +1276,21 @@ export class SubmissionService {
               where: { submissionId: id },
               orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
             });
-          if (!certificationVerificationResolved(verification?.status))
+          const duplicateVerification =
+            await db.gradingCertificationVerification.findFirst({
+              where: {
+                submissionId: id,
+                verificationMode: 'SLICE_DUPLICATE_CHECK',
+              },
+              orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            });
+          const providerVerificationPending =
+            duplicateVerification?.status === 'CLEAR' &&
+            ['PENDING', 'UNVERIFIED'].includes(verification?.status ?? '');
+          if (
+            !certificationVerificationResolved(verification?.status) &&
+            !providerVerificationPending
+          )
             throw new UnprocessableEntityException({
               code: 'CERTIFICATION_VERIFICATION_REQUIRED',
               message:

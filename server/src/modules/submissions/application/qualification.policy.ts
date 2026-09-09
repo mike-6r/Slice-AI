@@ -119,7 +119,9 @@ export function qualificationCustomerStatus(outcome: QualificationOutcome) {
 }
 
 export function normalizeGrade(value: unknown) {
-  const numeric = Number(String(value ?? '').trim());
+  const normalized = String(value ?? '').trim();
+  if (!normalized) return null;
+  const numeric = Number(normalized);
   return Number.isFinite(numeric) && numeric >= 0 ? numeric.toFixed(2) : null;
 }
 
@@ -291,17 +293,24 @@ export function evaluateQualification(input: {
         'UNCERTAIN',
         'The grading provider could not find this certification number.',
       );
-    else if (cert?.providerStatus === 'TEMPORARILY_UNAVAILABLE')
+    else if (
+      cert?.providerStatus === null ||
+      cert?.providerStatus === 'PENDING' ||
+      cert?.providerStatus === 'TEMPORARILY_UNAVAILABLE' ||
+      cert?.providerStatus === 'UNSUPPORTED' ||
+      cert?.providerStatus === 'UNVERIFIED'
+    )
       add(
         'CERTIFICATION_PROVIDER',
-        'UNCERTAIN',
-        'The grading provider is temporarily unavailable. This listing needs staff review.',
+        'PASS',
+        'Certificate verification is pending. Listing can continue; verification is required before finalization.',
+        false,
       );
-    else if (cert?.providerStatus === 'UNSUPPORTED')
+    else if (cert?.providerStatus === 'AMBIGUOUS')
       add(
         'CERTIFICATION_PROVIDER',
         'UNCERTAIN',
-        'Automated grading-provider verification is not available for this listing.',
+        'The grading provider returned an ambiguous certification result.',
       );
     else
       add(

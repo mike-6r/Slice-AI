@@ -505,8 +505,14 @@ export function SubmissionPage() {
             ? "Certificate and grade verified by the grading provider."
             : updated.certificationVerification?.status === "MISMATCH"
               ? "The provider found this certificate, but its grade or card details do not match your listing."
-              : updated.certificationVerification?.status === "TEMPORARILY_UNAVAILABLE"
-                ? "Certificate verification is temporarily unavailable. You can try again later; this listing will not be auto-qualified without provider evidence."
+              : [
+                    "CLEAR",
+                    "PENDING",
+                    "TEMPORARILY_UNAVAILABLE",
+                    "UNSUPPORTED",
+                    "UNVERIFIED",
+                  ].includes(updated.certificationVerification?.status ?? "")
+                ? "Certificate verification is pending. Listing can continue; verification is required before finalization."
                 : "Certificate provider verification needs staff review before this listing can be auto-qualified.",
       );
       await detail.refetch();
@@ -1665,11 +1671,15 @@ export function DetailsStep({
                       ? "This number is already attached to another Slice listing. Use a different certificate number."
                       : verification?.status === "CERT_NOT_FOUND"
                         ? "The grading provider could not find this certificate number. Check the slab label or continue for staff review."
-                        : verification?.status === "TEMPORARILY_UNAVAILABLE"
-                          ? "The grading provider is temporarily unavailable. You can try again later; this listing cannot be auto-qualified without the result."
-                          : verification?.status === "CLEAR"
-                            ? "The number is not currently claimed by another Slice listing. Provider grade verification is still required for automatic qualification."
-                            : "Provider verification is not available for this certificate. This listing can continue to staff review."}
+                        : [
+                              "CLEAR",
+                              "PENDING",
+                              "TEMPORARILY_UNAVAILABLE",
+                              "UNSUPPORTED",
+                              "UNVERIFIED",
+                            ].includes(verification?.status ?? "")
+                          ? "Certificate verification is pending. Listing can continue; verification is required before finalization."
+                          : "Provider verification is not available for this certificate. This listing can continue to staff review."}
               </small>
             </label>
             {verification ? (
@@ -1688,8 +1698,13 @@ export function DetailsStep({
                           ? "Certificate number available"
                           : verification.status === "ALREADY_LISTED"
                             ? "Certificate number already listed"
-                            : verification.status === "TEMPORARILY_UNAVAILABLE"
-                              ? "Provider temporarily unavailable"
+                            : [
+                                  "PENDING",
+                                  "TEMPORARILY_UNAVAILABLE",
+                                  "UNSUPPORTED",
+                                  "UNVERIFIED",
+                                ].includes(verification.status)
+                              ? "Certificate verification pending"
                               : verification.status === "CERT_NOT_FOUND"
                                 ? "Certificate not found by provider"
                                 : "Certificate check needs attention"}
@@ -1700,11 +1715,16 @@ export function DetailsStep({
                       : verification.status === "MISMATCH"
                         ? `The provider reported ${verification.verifiedGrade ?? "a different card or grade"}; your listing was not changed.`
                         : verification.status === "CLEAR"
-                          ? "Slice duplicate check passed. A provider grade has not yet been confirmed."
+                          ? "Slice duplicate check passed. Certificate verification is pending; listing can continue and verification is required before finalization."
                           : verification.status === "ALREADY_LISTED"
                             ? "A certificate number can only be used by one active Slice listing."
-                            : verification.status === "TEMPORARILY_UNAVAILABLE"
-                              ? "Provider evidence was not saved. Try verification again later or continue to staff review."
+                            : [
+                                  "PENDING",
+                                  "TEMPORARILY_UNAVAILABLE",
+                                  "UNSUPPORTED",
+                                  "UNVERIFIED",
+                                ].includes(verification.status)
+                              ? "Certificate verification is pending. Listing can continue; verification is required before finalization."
                               : verification.status === "CERT_NOT_FOUND"
                                 ? "The provider did not recognize this certificate number."
                                 : "The certificate number still needs attention before this graded card can continue."}

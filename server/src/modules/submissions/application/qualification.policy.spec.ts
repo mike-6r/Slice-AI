@@ -92,7 +92,7 @@ describe('automated qualification policy', () => {
     });
     expect(result.outcome).toBe('BLOCKED');
   });
-  it('does not auto-qualify a Slice-clear certificate without provider grade evidence', () => {
+  it('auto-qualifies a Slice-clear certificate while provider verification is pending', () => {
     const result = evaluateQualification({
       ...base,
       certification: {
@@ -101,11 +101,14 @@ describe('automated qualification policy', () => {
         verifiedGrade: null,
       },
     });
-    expect(result.outcome).toBe('HUMAN_REVIEW_REQUIRED');
+    expect(result.outcome).toBe('AUTO_QUALIFIED');
     expect(result.checks).toContainEqual(
       expect.objectContaining({
         code: 'CERTIFICATION_PROVIDER',
-        result: 'UNCERTAIN',
+        result: 'PASS',
+        mandatory: false,
+        reason:
+          'Certificate verification is pending. Listing can continue; verification is required before finalization.',
       }),
     );
   });
@@ -122,7 +125,28 @@ describe('automated qualification policy', () => {
     expect(result.reasons.join(' ')).toContain('10');
     expect(result.reasons.join(' ')).toContain('9.00');
   });
-  it.each(['CERT_NOT_FOUND', 'TEMPORARILY_UNAVAILABLE', 'UNSUPPORTED'])(
+  it.each(['PENDING', 'TEMPORARILY_UNAVAILABLE', 'UNSUPPORTED', 'UNVERIFIED'])(
+    'keeps provider state %s nonblocking while verification is pending',
+    (providerStatus) => {
+      const result = evaluateQualification({
+        ...base,
+        certification: {
+          duplicateStatus: 'CLEAR',
+          providerStatus,
+          verifiedGrade: null,
+        },
+      });
+      expect(result.outcome).toBe('AUTO_QUALIFIED');
+      expect(result.checks).toContainEqual(
+        expect.objectContaining({
+          code: 'CERTIFICATION_PROVIDER',
+          result: 'PASS',
+          mandatory: false,
+        }),
+      );
+    },
+  );
+  it.each(['CERT_NOT_FOUND', 'AMBIGUOUS'])(
     'routes provider state %s to staff review without inventing a grade',
     (providerStatus) => {
       const result = evaluateQualification({
@@ -147,5 +171,7 @@ describe('automated qualification policy', () => {
   it('compares equivalent grade representations consistently', () => {
     expect(normalizeGrade('10')).toBe('10.00');
     expect(normalizeGrade('10.00')).toBe('10.00');
+    expect(normalizeGrade(null)).toBeNull();
+    expect(normalizeGrade('')).toBeNull();
   });
 });

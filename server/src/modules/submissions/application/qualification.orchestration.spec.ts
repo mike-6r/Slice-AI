@@ -250,6 +250,37 @@ describe('automated qualification orchestration', () => {
     );
   });
 
+  it('auto-qualifies a Slice-clear card while provider verification is pending', async () => {
+    const h = harness({
+      certificationVerifications: [
+        {
+          status: 'CLEAR',
+          verificationMode: 'SLICE_DUPLICATE_CHECK',
+          verifiedGrade: null,
+        },
+      ],
+    });
+    const result = await h.service.runForSubmission('submission-1');
+
+    expect(result).toMatchObject({
+      outcome: 'AUTO_QUALIFIED',
+      customerStatus: 'PRE_SALE_QUALIFIED',
+    });
+    expect(result.checks).toContainEqual(
+      expect.objectContaining({
+        code: 'CERTIFICATION_PROVIDER',
+        result: 'PASS',
+        mandatory: false,
+      }),
+    );
+    expect(h.downstream).toEqual({
+      assets: 1,
+      intakes: 1,
+      offerings: 1,
+      preSales: 1,
+    });
+  });
+
   it('routes incomplete evidence to the collector without creating downstream records', async () => {
     const h = harness({ media: [] });
     const result = await h.service.runForSubmission('submission-1');
