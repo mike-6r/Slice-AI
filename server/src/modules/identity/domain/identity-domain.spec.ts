@@ -138,6 +138,15 @@ describe('offline identity rules', () => {
         companyCode: 'PSA',
       }),
     ).not.toThrow();
+    expect(() =>
+      sanitizeAuditMetadata('CERT_PROVIDER_VERIFICATION_RECORDED', {
+        verificationId: 'verification-2',
+        companyCode: 'PSA',
+        status: 'VERIFIED',
+        providerReference: 'provider-trace-1',
+        mismatches: [],
+      }),
+    ).not.toThrow();
   });
   it('allows reviewer assignment lifecycle audit metadata', () => {
     expect(() =>
