@@ -44,10 +44,16 @@ import { accountStatusLabel, initialsFor, memberSinceLabel } from "./-account-pr
 
 export const Route = createFileRoute("/account")({
   head: () => ({ meta: [{ title: "Account Center | Slice" }] }),
-  validateSearch: (search): { sessions?: "all"; activity?: "all"; discordLink?: string } => ({
+  validateSearch: (search): {
+    sessions?: "all";
+    activity?: "all";
+    discordLink?: string;
+    verification?: "complete";
+  } => ({
     ...(search.sessions === "all" ? { sessions: "all" as const } : {}),
     ...(search.activity === "all" ? { activity: "all" as const } : {}),
     ...(typeof search.discordLink === "string" ? { discordLink: search.discordLink } : {}),
+    ...(search.verification === "complete" ? { verification: "complete" as const } : {}),
   }),
   component: AccountPageForTest,
 });
@@ -71,7 +77,12 @@ const date = (value: string | null | undefined) =>
     : "Not available";
 
 export function AccountPageForTest() {
-  const { sessions: sessionsView, activity: activityView, discordLink } = Route.useSearch();
+  const {
+    sessions: sessionsView,
+    activity: activityView,
+    discordLink,
+    verification: verificationReturn,
+  } = Route.useSearch();
   const { isAuthenticated } = useSession();
   const services = useAppServices();
   const client = useQueryClient();
@@ -158,6 +169,7 @@ export function AccountPageForTest() {
   const refresh = () => {
     void client.invalidateQueries({ queryKey: ["account"] });
     void client.invalidateQueries({ queryKey: queryKeys.providers.compliance });
+    void client.invalidateQueries({ queryKey: queryKeys.account.capabilities });
   };
   const showAllSessions = sessionsView === "all";
 
@@ -226,6 +238,7 @@ export function AccountPageForTest() {
                 query={compliance}
                 start={services.providers.startCompliance}
                 refresh={refresh}
+                returnedFromProvider={verificationReturn === "complete"}
               />
               <SessionsPanel sessions={sessions} refresh={refresh} showAll={showAllSessions} />
               <LinkedPanel
@@ -252,10 +265,12 @@ function IdentityVerificationPanel({
   query,
   start,
   refresh,
+  returnedFromProvider,
 }: {
   query: UseQueryResult<ComplianceSummary>;
   start: () => Promise<ComplianceSession>;
   refresh: () => void;
+  returnedFromProvider: boolean;
 }) {
   const verification = useMutation({
     mutationFn: start,
@@ -264,7 +279,26 @@ function IdentityVerificationPanel({
       if (session.sessionUrl) window.location.assign(session.sessionUrl);
     },
   });
+  const returnSync = useMutation({
+    mutationFn: start,
+    onSuccess: refresh,
+  });
   const state = query.data?.identityState ?? legacyIdentityState(query.data?.status);
+  const hasSyncedProviderReturn = useRef(false);
+  useEffect(() => {
+    if (
+      !returnedFromProvider ||
+      hasSyncedProviderReturn.current ||
+      !query.data ||
+      !["REQUIRES_INPUT", "PROCESSING"].includes(state)
+    )
+      return;
+    hasSyncedProviderReturn.current = true;
+    const url = new URL(globalThis.location.href);
+    url.searchParams.delete("verification");
+    globalThis.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    returnSync.mutate();
+  }, [query.data, returnSync, returnedFromProvider, state]);
   const label =
     state === "VERIFIED"
       ? "Verified"
@@ -321,6 +355,17 @@ function IdentityVerificationPanel({
       {verification.error ? (
         <p className="account-form-error">
           {errorCopy(verification.error, "Identity verification is currently unavailable.")}
+        </p>
+      ) : null}
+      {returnSync.error ? (
+        <p className="account-form-error">
+          {errorCopy(returnSync.error, "We could not refresh the verification result. Continue the verification to retry.")}
+        </p>
+      ) : null}
+      {state === "REQUIRES_INPUT" && query.data?.provider === "STRIPE_SANDBOX" ? (
+        <p className="text-sm text-subtle">
+          This is a Stripe test verification. Complete the hosted Stripe page to unlock test
+          trading; Slice staff cannot mark an identity verified.
         </p>
       ) : null}
     </Panel>

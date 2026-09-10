@@ -168,6 +168,20 @@ describe("Document 016 wallet UI", () => {
     expect(html).not.toMatch(/operational|certified|insured|your funds protected/i);
   });
 
+  it("tells a Stripe sandbox investor to complete the hosted test verification", () => {
+    const html = renderWallet({
+      compliance: {
+        ...approvedCompliance,
+        status: "PENDING",
+        identityState: "REQUIRES_INPUT",
+        provider: "STRIPE_SANDBOX",
+      },
+    });
+
+    expect(html).toContain("Complete the hosted Stripe test verification to unlock trading");
+    expect(html).not.toContain("Your verification is being reviewed");
+  });
+
   it("labels internal demo funding without representing it as a provider deposit", () => {
     const html = renderWallet({
       movements: { items: [], nextCursor: null },

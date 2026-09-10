@@ -43,7 +43,10 @@ const disconnectedBank: BankConnection = {
   isDefault: false,
 };
 
-function renderAccount(bankConnections: BankConnection[] = banks) {
+function renderAccount(
+  bankConnections: BankConnection[] = banks,
+  complianceSummary: ComplianceSummary = compliance,
+) {
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
   client.setQueryData(queryKeys.user.current, {
     id: "private-user-id",
@@ -62,7 +65,7 @@ function renderAccount(bankConnections: BankConnection[] = banks) {
       timezone: "Europe/London",
     },
   });
-  client.setQueryData(queryKeys.providers.compliance, compliance);
+  client.setQueryData(queryKeys.providers.compliance, complianceSummary);
   client.setQueryData(queryKeys.providers.bankConnections, bankConnections);
   client.setQueryData(queryKeys.account.email, {
     verified: true,
@@ -136,7 +139,7 @@ function renderAccount(bankConnections: BankConnection[] = banks) {
     },
     providers: {
       ...mockRepositories.providers,
-      getCompliance: async () => compliance,
+      getCompliance: async () => complianceSummary,
       listBankConnections: async () => bankConnections,
     },
   };
@@ -222,5 +225,17 @@ describe("account UI", () => {
 
     expect(html).toContain("Safe Bank");
     expect(html).not.toContain("Old Bank");
+  });
+
+  it("explains that a Stripe sandbox session must be completed with Stripe", () => {
+    const html = renderAccount(banks, {
+      ...compliance,
+      status: "PENDING",
+      identityState: "REQUIRES_INPUT",
+      provider: "STRIPE_SANDBOX",
+    });
+
+    expect(html).toContain("Complete the hosted Stripe page to unlock test trading");
+    expect(html).toContain("Slice staff cannot mark an identity verified");
   });
 });

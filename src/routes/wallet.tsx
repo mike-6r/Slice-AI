@@ -1746,7 +1746,7 @@ function AccountStatusPanel({
               <StatusRow
                 icon={<BadgeCheck />}
                 label="Identity verification"
-                detail={complianceDetail(query.data.status)}
+                detail={complianceDetail(query.data)}
                 status={query.data.status}
               />
               <StatusRow
@@ -2584,7 +2584,14 @@ function WalletAccessRequired() {
     </main>
   );
 }
-function complianceDetail(status: string) {
+function complianceDetail(
+  compliance: Pick<ComplianceSummary, "status" | "identityState" | "provider">,
+) {
+  if (compliance.status === "PENDING" && compliance.identityState === "REQUIRES_INPUT") {
+    return compliance.provider === "STRIPE_SANDBOX"
+      ? "Complete the hosted Stripe test verification to unlock trading"
+      : "Complete the hosted identity verification to unlock wallet features";
+  }
   return (
     (
       {
@@ -2594,7 +2601,7 @@ function complianceDetail(status: string) {
         REVIEW: "Your verification needs attention",
         REJECTED: "Verification could not be completed",
       } as Record<string, string>
-    )[status] ?? "Verification status unavailable"
+    )[compliance.status] ?? "Verification status unavailable"
   );
 }
 
