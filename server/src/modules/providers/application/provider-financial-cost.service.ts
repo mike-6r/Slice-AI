@@ -76,6 +76,42 @@ export class ProviderFinancialCostService {
     }
   }
 
+  /**
+   * Payment confirmation and provider availability are distinct. Stripe's
+   * `available_on` is the only provider signal used here; a calendar date in
+   * Slice is never substituted for it.
+   */
+  async paymentIntentSettlement(paymentIntentId: string) {
+    try {
+      const paymentIntent = await this.stripeFactory
+        .get()
+        .paymentIntents.retrieve(paymentIntentId);
+      if (paymentIntent.status !== 'succeeded') {
+        return { paymentConfirmed: false, providerAvailable: false };
+      }
+      const chargeId = objectId(paymentIntent.latest_charge);
+      if (!chargeId) return { paymentConfirmed: true, providerAvailable: false };
+      const charge = await this.stripeFactory.get().charges.retrieve(chargeId);
+      const balanceTransactionId = objectId(charge.balance_transaction);
+      if (!balanceTransactionId)
+        return { paymentConfirmed: true, providerAvailable: false };
+      const balanceTransaction = await this.stripeFactory
+        .get()
+        .balanceTransactions.retrieve(balanceTransactionId);
+      const availableOn =
+        typeof balanceTransaction.available_on === 'number'
+          ? new Date(balanceTransaction.available_on * 1000)
+          : null;
+      return {
+        paymentConfirmed: true,
+        providerAvailable:
+          availableOn !== null && availableOn.getTime() <= Date.now(),
+      };
+    } catch {
+      return { paymentConfirmed: false, providerAvailable: false };
+    }
+  }
+
   private async persistPaymentEvidence(input: {
     movementId: string;
     chargeId: string;
@@ -162,6 +198,20 @@ export class ProviderFinancialCostService {
     } catch (error) {
       return this.pending({ ...source, failureCode: safeError(error) });
     }
+  }
+
+  /**
+   * A bounded, provider-authoritative repair for the case where a verified
+   * PaymentIntent webhook was delivered but `balance.available` was not. A
+   * Stripe balance transaction that is still pending never releases Slice
+   * cash; the ledger policy remains the final trade/withdraw authority.
+   */
+  async reconcileStripeDeposit(input: {
+    movementId: string;
+    paymentIntentId: string;
+    requestId: string;
+  }) {
+    return this.observePaymentIntent(input);
   }
 
   private async pending(input: {

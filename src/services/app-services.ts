@@ -144,6 +144,7 @@ export class ProviderService {
   setDefaultBankConnection = (id: string) =>
     this.repositories.providers.setDefaultBankConnection(id);
   connectPayoutSetup = () => this.repositories.providers.getConnectPayoutSetup();
+  payoutDestinations = () => this.repositories.providers.getPayoutDestinations();
   feePolicy = () => this.repositories.providers.getFeePolicy();
   cardFundingOptions = () => this.repositories.providers.getCardFundingOptions();
   createConnectOnboarding = () => this.repositories.providers.createConnectOnboarding();
@@ -160,6 +161,8 @@ export class ProviderService {
     amountMinor: string;
     destinationReference?: string;
     destinationChain?: string;
+    payoutDestinationId?: string;
+    payoutMethod?: "standard" | "instant";
   }) => this.repositories.providers.createWithdrawal(input);
 }
 

@@ -41,6 +41,7 @@ import type {
   CardFundingSession,
   FeePolicy,
   PortfolioSummary,
+  StripePayoutDestinations,
   WalletInsights,
   WalletInsightsPeriod,
   WalletMovementPage,
@@ -69,6 +70,8 @@ export const Route = createFileRoute("/wallet")({
 type WalletMovementRequest = {
   action: WalletMovementType;
   amount: string;
+  payoutDestinationId?: string;
+  payoutMethod?: "standard" | "instant";
 };
 
 type DepositRail = "BACS_DIRECT_DEBIT" | "CARD";
@@ -86,6 +89,8 @@ export function Wallet() {
   const [withdrawalReviewAmount, setWithdrawalReviewAmount] = useState<string | null>(null);
   const [recentAuthAmount, setRecentAuthAmount] = useState<string | null>(null);
   const [recentAuthPassword, setRecentAuthPassword] = useState("");
+  const [payoutDestinationId, setPayoutDestinationId] = useState("");
+  const [payoutMethod, setPayoutMethod] = useState<"standard" | "instant">("standard");
   const [cardFundingSession, setCardFundingSession] = useState<CardFundingSession | null>(null);
   const [timelineMovement, setTimelineMovement] = useState<WalletMovementView | null>(null);
   const portfolio = useQuery({
@@ -116,6 +121,11 @@ export function Wallet() {
   const connectPayout = useQuery({
     queryKey: queryKeys.providers.connectPayoutSetup,
     queryFn: services.providers.connectPayoutSetup,
+    enabled: isAuthenticated,
+  });
+  const payoutDestinations = useQuery({
+    queryKey: queryKeys.providers.payoutDestinations,
+    queryFn: services.providers.payoutDestinations,
     enabled: isAuthenticated,
   });
   const feePolicy = useQuery({
@@ -155,10 +165,16 @@ export function Wallet() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.movements() });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.bankConnections });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.connectPayoutSetup });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.providers.payoutDestinations });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.feePolicy });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.withdrawalPreflight() });
     void queryClient.invalidateQueries({ queryKey: queryKeys.account.capabilities });
   };
+  useEffect(() => {
+    if (!payoutDestinationId && payoutDestinations.data?.selectedDestinationId) {
+      setPayoutDestinationId(payoutDestinations.data.selectedDestinationId);
+    }
+  }, [payoutDestinationId, payoutDestinations.data?.selectedDestinationId]);
   const verification = useMutation({
     mutationFn: services.providers.startCompliance,
     onSuccess: (result) => {
@@ -188,6 +204,8 @@ export function Wallet() {
         ? services.providers.createDeposit(amountMinor)
         : services.providers.createWithdrawal({
             amountMinor,
+            payoutDestinationId: payoutDestinationId || undefined,
+            payoutMethod,
           });
     },
     onSuccess: (result) => {
@@ -235,7 +253,12 @@ export function Wallet() {
       setRecentAuthAmount(null);
       setRecentAuthPassword("");
       if (retryAmount) {
-        movement.mutate({ action: "WITHDRAWAL", amount: retryAmount });
+        movement.mutate({
+          action: "WITHDRAWAL",
+          amount: retryAmount,
+          payoutDestinationId: payoutDestinationId || undefined,
+          payoutMethod,
+        });
       }
     },
   });
@@ -274,6 +297,11 @@ export function Wallet() {
             cardFundingOptions={cardFundingOptions.data?.card}
             cardFundingBusy={cardFunding.isPending}
             withdrawalPreflight={withdrawalPreflight}
+            payoutDestinations={payoutDestinations}
+            payoutDestinationId={payoutDestinationId}
+            payoutMethod={payoutMethod}
+            onPayoutDestinationChange={setPayoutDestinationId}
+            onPayoutMethodChange={setPayoutMethod}
             onCapabilityRequired={setCapabilityDialog}
             onReviewWithdrawal={setWithdrawalReviewAmount}
             onStartCardFunding={(savePaymentMethod) =>
@@ -321,12 +349,19 @@ export function Wallet() {
           <WithdrawalReviewDialog
             amount={withdrawalReviewAmount}
             feePolicy={feePolicy.data}
+            destination={payoutDestinations.data?.items.find((item) => item.id === payoutDestinationId) ?? null}
+            payoutMethod={payoutMethod}
             busy={movement.isPending}
             onClose={() => setWithdrawalReviewAmount(null)}
             onConfirm={() => {
               const requestedAmount = withdrawalReviewAmount;
               setWithdrawalReviewAmount(null);
-              movement.mutate({ action: "WITHDRAWAL", amount: requestedAmount });
+              movement.mutate({
+                action: "WITHDRAWAL",
+                amount: requestedAmount,
+                payoutDestinationId: payoutDestinationId || undefined,
+                payoutMethod,
+              });
             }}
           />
         ) : null}
@@ -1058,6 +1093,11 @@ function MoveMoneyPanel({
   cardFundingOptions,
   cardFundingBusy,
   withdrawalPreflight,
+  payoutDestinations,
+  payoutDestinationId,
+  payoutMethod,
+  onPayoutDestinationChange,
+  onPayoutMethodChange,
   onCapabilityRequired,
   onReviewWithdrawal,
   onStartCardFunding,
@@ -1076,6 +1116,11 @@ function MoveMoneyPanel({
   cardFundingOptions: CardFundingOptions | undefined;
   cardFundingBusy: boolean;
   withdrawalPreflight: UseQueryResult<WithdrawalPreflight>;
+  payoutDestinations: UseQueryResult<StripePayoutDestinations>;
+  payoutDestinationId: string;
+  payoutMethod: "standard" | "instant";
+  onPayoutDestinationChange: (value: string) => void;
+  onPayoutMethodChange: (value: "standard" | "instant") => void;
   onCapabilityRequired: (decision: AccountCapability) => void;
   onReviewWithdrawal: (amount: string) => void;
   onStartCardFunding: (savePaymentMethod: boolean) => void;
@@ -1241,10 +1286,47 @@ function MoveMoneyPanel({
             </dl>
           ) : null}
           {action === "WITHDRAWAL" ? (
-            <p>
-              Withdrawals use your verified payout account. Slice does not collect bank details in
-              this form, and eligible cash remains reserved until the provider confirms the payout.
-            </p>
+            <>
+              {payoutDestinations.data?.items.length ? (
+                <div className="wallet-payout-choice">
+                  <label>
+                    Payout destination
+                    <select
+                      value={payoutDestinationId}
+                      onChange={(event) => onPayoutDestinationChange(event.target.value)}
+                    >
+                      {payoutDestinations.data.items.length > 1 ? (
+                        <option value="">Choose a verified destination</option>
+                      ) : null}
+                      {payoutDestinations.data.items.map((item) => (
+                        <option key={item.id} value={item.id}>{item.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Payout speed
+                    <select
+                      value={payoutMethod}
+                      onChange={(event) => onPayoutMethodChange(event.target.value as "standard" | "instant")}
+                    >
+                      <option value="standard">Standard</option>
+                      <option
+                        value="instant"
+                        disabled={!payoutDestinations.data.items.find((item) => item.id === payoutDestinationId)?.instantEligible}
+                      >
+                        Instant{payoutDestinations.data.items.find((item) => item.id === payoutDestinationId)?.instantEligible ? "" : " (unavailable)"}
+                      </option>
+                    </select>
+                  </label>
+                </div>
+              ) : (
+                <p>{payoutDestinations.data?.reason ?? "Loading verified payout destinations…"}</p>
+              )}
+              <p>
+                Withdrawals use your verified Stripe destination. Slice does not collect bank details in
+                this form, and eligible cash remains reserved until Stripe confirms the payout.
+              </p>
+            </>
           ) : isCardDeposit ? (
             <>
               <p>
@@ -1333,12 +1415,16 @@ function MoveMoneyPanel({
 function WithdrawalReviewDialog({
   amount,
   feePolicy,
+  destination,
+  payoutMethod,
   busy,
   onClose,
   onConfirm,
 }: {
   amount: string;
   feePolicy: FeePolicy | undefined;
+  destination: StripePayoutDestinations["items"][number] | null;
+  payoutMethod: "standard" | "instant";
   busy: boolean;
   onClose: () => void;
   onConfirm: () => void;
@@ -1349,7 +1435,9 @@ function WithdrawalReviewDialog({
       ? feeMinorForPolicy(amountMinor, feePolicy.withdrawal.sliceFeeBps)
       : null;
   const netMinor = feePolicy && amountMinor ? withdrawalNetMinor(feePolicy, amount) : null;
-  const canConfirm = Boolean(feePolicy && amountMinor && feeMinor !== null && netMinor !== null);
+  const canConfirm = Boolean(
+    feePolicy && amountMinor && feeMinor !== null && netMinor !== null && destination,
+  );
   return (
     <div className="wallet-bank-dialog-backdrop" role="presentation">
       <section
@@ -1373,7 +1461,7 @@ function WithdrawalReviewDialog({
           </button>
         </header>
         <p className="wallet-bank-dialog__intro">
-          Your withdrawal will be sent in GBP to your verified Stripe payout account. Slice will
+          Your withdrawal will be sent in GBP to your selected verified Stripe payout destination. Slice will
           reserve the gross amount until the provider confirms the payout.
         </p>
         <dl className="wallet-withdrawal-review__summary">
@@ -1392,6 +1480,14 @@ function WithdrawalReviewDialog({
           <div>
             <dt>Currency</dt>
             <dd>GBP</dd>
+          </div>
+          <div>
+            <dt>Destination</dt>
+            <dd>{destination?.label ?? "Choose a verified destination"}</dd>
+          </div>
+          <div>
+            <dt>Payout speed</dt>
+            <dd>{payoutMethod === "instant" ? "Instant" : "Standard"}</dd>
           </div>
         </dl>
         <p className="wallet-bank-dialog__intro">

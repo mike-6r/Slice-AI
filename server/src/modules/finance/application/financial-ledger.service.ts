@@ -777,6 +777,7 @@ export class FinancialLedgerService {
 
   async walletForUser(userId: string) {
     await this.releaseMaturedBacsDepositsForUser(userId, 'wallet-projection');
+    await this.releaseOrphanedTradingReservationsForUser(userId);
     const accounts = await this.db.financialAccount.findMany({
       where: { ownerType: 'USER', ownerUserId: userId, currency: 'GBP' },
       include: { balance: true },
@@ -978,6 +979,87 @@ export class FinancialLedgerService {
         };
       }),
     };
+  }
+
+  /**
+   * A cancellation and its cash release are normally atomic. This defensive
+   * reconciliation covers historical or interrupted flows where a terminal
+   * order left its active reservation behind, so a wallet cannot report cash
+   * as reserved when no executable order still owns it.
+   */
+  private async releaseOrphanedTradingReservationsForUser(userId: string) {
+    const accounts = await this.db.financialAccount.findMany({
+      where: { ownerType: 'USER', ownerUserId: userId, currency: 'GBP' },
+      select: { id: true },
+    });
+    const accountIds = accounts.map((account) => account.id);
+    if (accountIds.length === 0) return;
+    const candidates = await this.db.cashReservation.findMany({
+      where: {
+        accountId: { in: accountIds },
+        purposeType: 'TRADING_ORDER',
+        status: 'ACTIVE',
+      },
+      select: { id: true, accountId: true },
+      orderBy: [{ accountId: 'asc' }, { id: 'asc' }],
+    });
+    if (candidates.length === 0) return;
+
+    await this.db.$transaction(async (db) => {
+      for (const candidate of candidates) {
+        await db.$queryRaw`SELECT id FROM "CashReservation" WHERE id = ${candidate.id} FOR UPDATE`;
+        const reservation = await db.cashReservation.findUnique({
+          where: { id: candidate.id },
+        });
+        if (
+          !reservation ||
+          reservation.status !== 'ACTIVE' ||
+          reservation.purposeType !== 'TRADING_ORDER'
+        )
+          continue;
+        const activeOrder = await db.tradingOrder.findFirst({
+          where: {
+            status: { in: ['PENDING_RESERVATION', 'OPEN', 'PARTIALLY_FILLED'] },
+            OR: [
+              { id: reservation.purposeId },
+              { cashReservationId: reservation.id },
+            ],
+          },
+          select: { id: true },
+        });
+        if (activeOrder) continue;
+
+        await this.lockAccounts(db, [reservation.accountId]);
+        await this.lockBalance(db, reservation.accountId);
+        await db.cashReservation.update({
+          where: { id: reservation.id },
+          data: { status: 'RELEASED' },
+        });
+        await db.accountBalance.update({
+          where: { accountId: reservation.accountId },
+          data: {
+            reservedMinor: { decrement: reservation.amountMinor },
+            version: { increment: 1 },
+          },
+        });
+        await createIdentityTransaction(db).audit.append({
+          id: randomUUID(),
+          actorUserId: null,
+          actorType: 'SYSTEM',
+          action: 'FINANCE_CASH_RELEASED',
+          resourceType: 'cash-reservation',
+          resourceId: reservation.id,
+          requestId: 'wallet-projection-reconciliation',
+          sessionId: null,
+          result: 'SUCCESS',
+          metadata: {
+            amountMinor: reservation.amountMinor.toString(),
+            reason: 'ORPHANED_TRADING_ORDER_RESERVATION',
+          },
+          createdAt: new Date(),
+        });
+      }
+    });
   }
 
   async walletInsightsForUser(

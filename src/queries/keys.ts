@@ -55,6 +55,7 @@ export const queryKeys = {
     identityDetails: ["providers", "identity-details"] as const,
     bankConnections: ["providers", "bank-connections"] as const,
     connectPayoutSetup: ["providers", "connect-payout-setup"] as const,
+    payoutDestinations: ["providers", "payout-destinations"] as const,
     feePolicy: ["providers", "fee-policy"] as const,
     withdrawalPreflight: (amountMinor = "0") =>
       ["providers", "withdrawal-preflight", amountMinor] as const,

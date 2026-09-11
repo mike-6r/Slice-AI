@@ -63,6 +63,7 @@ import type {
   WalletBalance,
   WalletMovementPage,
   WalletMovementView,
+  StripePayoutDestinations,
   WalletTransaction,
   AccountCapability,
   IdentityDetailsProjection,
@@ -3414,6 +3415,7 @@ export interface ProviderRepository {
   }): Promise<{ disconnected: boolean; replayed: boolean; pendingMovementCount?: number }>;
   setDefaultBankConnection(id: string): Promise<{ selected: boolean }>;
   getConnectPayoutSetup(): Promise<ConnectPayoutSetup>;
+  getPayoutDestinations(): Promise<StripePayoutDestinations>;
   getFeePolicy(): Promise<FeePolicy>;
   getCardFundingOptions(): Promise<{ card: CardFundingOptions }>;
   createConnectOnboarding(): Promise<ConnectPayoutSetup>;
@@ -3430,6 +3432,8 @@ export interface ProviderRepository {
     amountMinor: string;
     destinationReference?: string;
     destinationChain?: string;
+    payoutDestinationId?: string;
+    payoutMethod?: "standard" | "instant";
   }): Promise<WalletMovementView>;
 }
 export interface NotificationRepository {

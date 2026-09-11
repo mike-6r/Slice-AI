@@ -974,7 +974,6 @@ export function SubmissionPage() {
   const resumableDrafts = (drafts.data?.items ?? []).filter((item) =>
     canResumeListing(item.status),
   );
-
   if (submitted && submission) {
     return <SubmissionReceived submission={submission} />;
   }
@@ -996,10 +995,9 @@ export function SubmissionPage() {
             </p>
           </div>
           <Link
-            to="/submissions/$id"
-            params={{ id: resumableDrafts[0]?.id ?? "" }}
+            to="/collector-workspace"
+            search={{ section: "submissions" }}
             className="list-guided-drafts"
-            disabled={!resumableDrafts[0]}
           >
             My submissions <ChevronRight aria-hidden="true" />
           </Link>

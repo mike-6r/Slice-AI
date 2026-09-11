@@ -185,6 +185,23 @@ export class ProviderWebhookService {
       return;
     }
     if (type === 'mandate.updated') return;
+    if (type === 'balance.available') {
+      // Stripe's balance.available event is account-wide and does not name a
+      // PaymentIntent. Re-read only Slice-owned pending deposit intents; each
+      // transition still requires that intent's Stripe status and balance
+      // transaction evidence, never just the calendar or aggregate balance.
+      try {
+        await this.movements.reconcilePendingStripeDeposits(
+          `stripe-balance-available:${eventId}`,
+        );
+      } catch (error) {
+        // A mismatch requires the normal webhook retry path instead of a
+        // false processed acknowledgement; transient Stripe reads remain
+        // best-effort during an ordinary wallet page read.
+        throw error;
+      }
+      return;
+    }
     if (type.startsWith('identity.verification_session.')) {
       const providerReference = this.text(payload.id);
       if (!providerReference) return;
@@ -227,7 +244,14 @@ export class ProviderWebhookService {
     } else if (type === 'payment_intent.processing' || type === 'payment_intent.requires_action') {
       await this.movements.processingFromProvider({ movementId, requestId });
     } else if (type === 'payment_intent.succeeded') {
-      await this.movements.completeFromProvider({ movementId, providerReference: paymentIntentId, providerEventId: eventId, requestId });
+      const settlement = await this.providerCosts.paymentIntentSettlement(
+        paymentIntentId,
+      );
+      if (settlement.providerAvailable) {
+        await this.movements.completeFromProvider({ movementId, providerReference: paymentIntentId, providerEventId: eventId, requestId });
+      } else {
+        await this.movements.processingFromProvider({ movementId, requestId });
+      }
       if (current.rail === 'CARD') {
         await this.cardFunding.syncInstrumentLabel(movementId, paymentIntentId);
       }

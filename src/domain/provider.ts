@@ -188,6 +188,19 @@ export interface WalletMovementView {
   }>;
 }
 
+export interface StripePayoutDestination {
+  id: string;
+  label: string;
+  type: "BANK_ACCOUNT" | "DEBIT_CARD";
+  instantEligible: boolean;
+}
+
+export interface StripePayoutDestinations {
+  items: StripePayoutDestination[];
+  selectedDestinationId: string | null;
+  reason: string | null;
+}
+
 export interface WalletMovementPage {
   items: WalletMovementView[];
   nextCursor: string | null;

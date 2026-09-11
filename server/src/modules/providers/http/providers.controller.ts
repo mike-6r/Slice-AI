@@ -14,7 +14,7 @@ import { RequirePermission } from '../../identity/access/permission.decorator';
 import { WithdrawalPreflightService } from '../application/withdrawal-preflight.service';
 import { StripeCardFundingService } from '../application/stripe-card-funding.service';
 
-const amount = z.object({ amountMinor: z.string().regex(/^\d+$/).max(32), destinationReference: z.string().min(1).max(256).optional(), destinationChain: z.string().min(1).max(32).optional() }).strict();
+const amount = z.object({ amountMinor: z.string().regex(/^\d+$/).max(32), destinationReference: z.string().min(1).max(256).optional(), destinationChain: z.string().min(1).max(32).optional(), payoutDestinationId: z.string().min(1).max(256).optional(), payoutMethod: z.enum(['standard', 'instant']).optional() }).strict();
 const cardFunding = z.object({ amountMinor: z.string().regex(/^\d+$/).max(32), savePaymentMethod: z.boolean().default(false) }).strict();
 const page = z.object({ cursor: z.string().min(1).optional(), limit: z.coerce.number().int().min(1).max(100).default(20) }).strict();
 const hold = z.object({ userId: z.string().min(1), scope: z.enum(['FUNDING', 'WITHDRAWAL', 'TRADING_ELIGIBILITY', 'EXTERNAL_MOVEMENT', 'ACCOUNT']), reasonCode: z.string().min(1).max(64) }).strict();
@@ -40,7 +40,7 @@ export class ProvidersController {
     return this.write(req, key, () => this.movements.createCardDeposit(req.actor!, input.amountMinor, req.requestId ?? 'unknown', key!, input.savePaymentMethod ?? false));
   }
   @Post('wallet/withdrawals') @UseGuards(AccessTokenGuard)
-  async withdrawal(@Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { const input = this.parse(amount, body); return this.write(req, key, () => this.movements.createWithdrawal(req.actor!, input.amountMinor, req.requestId ?? 'unknown', key!, input.destinationReference, input.destinationChain)); }
+  async withdrawal(@Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { const input = this.parse(amount, body); return this.write(req, key, () => this.movements.createWithdrawal(req.actor!, input.amountMinor, req.requestId ?? 'unknown', key!, input.destinationReference, input.destinationChain, input.payoutDestinationId, input.payoutMethod)); }
   @Get('wallet/movements') @UseGuards(AccessTokenGuard)
   list(@Query() query: unknown, @Req() req: AuthenticatedRequest) { const input = this.parse(page, query); return this.movements.list(req.actor!.userId, input.cursor, input.limit); }
   @Get('wallet/movements/:movementId') @UseGuards(AccessTokenGuard)
@@ -71,6 +71,8 @@ export class ProvidersController {
   async defaultBank(@Param('connectionId') connectionId: string, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { return this.write(req, key, () => this.bankLinks.setDefault(req.actor!, connectionId, req.requestId ?? 'unknown', req.ip ?? 'unknown')); }
   @Get('wallet/payouts/connect') @UseGuards(AccessTokenGuard)
   connectStatus(@Req() req: AuthenticatedRequest) { return this.connectPayouts.status(req.actor!); }
+  @Get('wallet/payouts/destinations') @UseGuards(AccessTokenGuard)
+  payoutDestinations(@Req() req: AuthenticatedRequest) { return this.connectPayouts.payoutDestinations(req.actor!); }
   @Post('wallet/payouts/connect/onboarding') @UseGuards(AccessTokenGuard)
   async connectOnboarding(@Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { return this.write(req, key, () => this.connectPayouts.createOnboardingLink(req.actor!, req.requestId ?? 'unknown')); }
   @Post('wallet/payouts/connect/refresh') @UseGuards(AccessTokenGuard)

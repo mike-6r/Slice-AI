@@ -60,9 +60,14 @@ export function CollectorAssetPreview({
   const { formatMoney } = useCurrency();
   const price = listing.preSale
     ? formatMoney(listing.preSale.pricePerUnitMinor, listing.preSale.currency)
-    : listing.estimatedMarketValue
-      ? formatMoney(listing.estimatedMarketValue.amount, listing.estimatedMarketValue.currency)
-      : null;
+    : listing.marketPricePerSlice
+      ? formatMoney(listing.marketPricePerSlice.amount, listing.marketPricePerSlice.currency)
+      : listing.estimatedMarketValue
+        ? formatMoney(listing.estimatedMarketValue.amount, listing.estimatedMarketValue.currency)
+        : null;
+  const marketValue = listing.estimatedMarketValue
+    ? formatMoney(listing.estimatedMarketValue.amount, listing.estimatedMarketValue.currency)
+    : null;
   const state = listing.preSale ? "PRE-SALE" : "LIVE";
   const identity = [
     listing.year,
@@ -136,9 +141,15 @@ export function CollectorAssetPreview({
                 {price ? (
                   <div className="collector-mini-holding__metrics is-live">
                     <div>
-                      <small>Market reference</small>
-                      <strong>{price}</strong>
+                      <small>
+                        {listing.marketPricePerSlice ? "Price per Slice" : "Market reference"}
+                      </small>
+                      <strong>
+                        {price}
+                        {listing.marketPricePerSlice ? " / Slice" : ""}
+                      </strong>
                     </div>
+                    {marketValue ? <small>Total value {marketValue}</small> : null}
                   </div>
                 ) : null}
                 <div className="collector-mini-holding__state">Live on market</div>
@@ -479,9 +490,14 @@ export function PublicCollectorAssetCard({ listing }: { listing: CollectorPublis
   const isPreSale = Boolean(listing.preSale);
   const price = isPreSale
     ? formatMoney(listing.preSale!.pricePerUnitMinor, listing.preSale!.currency)
-    : listing.estimatedMarketValue
-      ? formatMoney(listing.estimatedMarketValue.amount, listing.estimatedMarketValue.currency)
-      : "—";
+    : listing.marketPricePerSlice
+      ? formatMoney(listing.marketPricePerSlice.amount, listing.marketPricePerSlice.currency)
+      : listing.estimatedMarketValue
+        ? formatMoney(listing.estimatedMarketValue.amount, listing.estimatedMarketValue.currency)
+        : "—";
+  const marketValue = listing.estimatedMarketValue
+    ? formatMoney(listing.estimatedMarketValue.amount, listing.estimatedMarketValue.currency)
+    : null;
   const ownership = listing.preSale?.sliceOwnershipPercentageBps;
   const available = listing.preSale?.availableUnits;
   const offered = listing.preSale?.offeredUnits;
@@ -512,8 +528,11 @@ export function PublicCollectorAssetCard({ listing }: { listing: CollectorPublis
         </small>
         <strong>
           {price}
-          {isPreSale ? " / Slice" : ""}
+          {isPreSale || listing.marketPricePerSlice ? " / Slice" : ""}
         </strong>
+        {!isPreSale && marketValue ? (
+          <span className="public-collector-asset-market-value">Total value {marketValue}</span>
+        ) : null}
         {ownership !== undefined ? (
           <span className="public-collector-asset-ownership">
             {(ownership / 100).toFixed(2)}% ownership per Slice

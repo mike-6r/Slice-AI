@@ -208,6 +208,9 @@ async function main() {
               id: nullableId(payout),
               amountMinor: payout.amount.toString(),
               status: payout.status,
+              method: payout.method,
+              destinationId: typeof payout.destination === 'string' ? payout.destination : payout.destination?.id ?? null,
+              balanceTransactionId: typeof payout.balance_transaction === 'string' ? payout.balance_transaction : payout.balance_transaction?.id ?? null,
               arrivalDate: payout.arrival_date ? new Date(payout.arrival_date * 1000).toISOString() : null,
               failureCode: payout.failure_code ?? null,
             }

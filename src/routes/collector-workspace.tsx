@@ -54,21 +54,6 @@ import { asSupportedCurrency, formatDisplayMoney } from "@/currency/currency-pre
 import { getCurrencyPresentation } from "@/currency/currency-store";
 import { queryKeys } from "@/queries/keys";
 
-export const Route = createFileRoute("/collector-workspace")({
-  validateSearch: (search: Record<string, unknown>) => {
-    const tab =
-      typeof search.tab === "string" ? normalizeAssetDetailSection(search.tab) : undefined;
-    return {
-      ...(typeof search.collectible === "string" && search.collectible.length > 0
-        ? { collectible: search.collectible.slice(0, 120) }
-        : {}),
-      ...(tab ? { tab } : {}),
-    };
-  },
-  head: () => ({ meta: [{ title: "Collector Workspace | Slice" }] }),
-  component: CollectorWorkspacePage,
-});
-
 type WorkspaceSection =
   | "overview"
   | "collectibles"
@@ -84,6 +69,44 @@ type WorkspaceSection =
   | "settings"
   | "subscription"
   | "asset";
+
+const workspaceSections = new Set<WorkspaceSection>([
+  "overview",
+  "collectibles",
+  "submissions",
+  "valuations",
+  "custody",
+  "market",
+  "performance",
+  "requests",
+  "documents",
+  "profile",
+  "activity",
+  "settings",
+  "subscription",
+  "asset",
+]);
+
+export const Route = createFileRoute("/collector-workspace")({
+  validateSearch: (search: Record<string, unknown>) => {
+    const tab =
+      typeof search.tab === "string" ? normalizeAssetDetailSection(search.tab) : undefined;
+    const section =
+      typeof search.section === "string" &&
+      workspaceSections.has(search.section as WorkspaceSection)
+        ? (search.section as WorkspaceSection)
+        : undefined;
+    return {
+      ...(typeof search.collectible === "string" && search.collectible.length > 0
+        ? { collectible: search.collectible.slice(0, 120) }
+        : {}),
+      ...(tab ? { tab } : {}),
+      ...(section ? { section } : {}),
+    };
+  },
+  head: () => ({ meta: [{ title: "Collector Workspace | Slice" }] }),
+  component: CollectorWorkspacePage,
+});
 
 type AssetDetailSection =
   | "overview"
@@ -129,7 +152,7 @@ function CollectorWorkspace() {
   const client = useQueryClient();
   const navigate = useNavigate({ from: Route.fullPath });
   const routeSearch = Route.useSearch();
-  const [active, setActive] = useState<WorkspaceSection>("overview");
+  const [active, setActive] = useState<WorkspaceSection>(routeSearch.section ?? "overview");
   const [selectedId, setSelectedId] = useState<string | null>(routeSearch.collectible ?? null);
   const [detailSection, setDetailSection] = useState<AssetDetailSection>(
     routeSearch.tab ?? "overview",
@@ -187,11 +210,14 @@ function CollectorWorkspace() {
   });
 
   useEffect(() => {
-    if (!routeSearch.collectible) return;
-    setSelectedId(routeSearch.collectible);
-    setActive("asset");
-    setDetailSection(routeSearch.tab ?? "overview");
-  }, [routeSearch.collectible, routeSearch.tab]);
+    if (routeSearch.collectible) {
+      setSelectedId(routeSearch.collectible);
+      setActive("asset");
+      setDetailSection(routeSearch.tab ?? "overview");
+      return;
+    }
+    setActive(routeSearch.section ?? "overview");
+  }, [routeSearch.collectible, routeSearch.section, routeSearch.tab]);
 
   if (overview.isLoading) return <WorkspaceState title="Loading your collector workspace" />;
   if (overview.isError || !overview.data)
@@ -218,8 +244,11 @@ function CollectorWorkspace() {
         search: { collectible: assetId, ...(nextTab !== "overview" ? { tab: nextTab } : {}) },
         replace: true,
       });
-    } else if (routeSearch.collectible) {
-      void navigate({ search: {}, replace: true });
+    } else {
+      void navigate({
+        search: section === "overview" ? {} : { section },
+        replace: true,
+      });
     }
     setMobileOpen(false);
   };

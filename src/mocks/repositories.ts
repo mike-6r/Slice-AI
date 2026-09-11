@@ -1477,6 +1477,13 @@ export const mockRepositories: AppRepositories = {
         expiresAt: null,
       };
     },
+    async getPayoutDestinations() {
+      return {
+        items: [],
+        selectedDestinationId: null,
+        reason: "Payout destinations are unavailable in explicit mock mode.",
+      };
+    },
     async getFeePolicy() {
       return {
         currency: "GBP" as const,

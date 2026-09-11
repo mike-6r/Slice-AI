@@ -24,6 +24,13 @@ export type ConnectPayoutWebhookEffect = {
   reasonCode?: string;
 };
 
+export type StripePayoutDestination = {
+  id: string;
+  label: string;
+  type: 'BANK_ACCOUNT' | 'DEBIT_CARD';
+  instantEligible: boolean;
+};
+
 export class ConnectPayoutExternalTransferError extends Error {
   readonly externalTransferCreated = true;
   constructor(message: string) {
@@ -485,6 +492,8 @@ export class StripeConnectPayoutService {
     userId: string;
     movementId: string;
     amountMinor: string;
+    payoutDestinationId?: string;
+    payoutMethod?: 'standard' | 'instant';
   }) {
     const stripe = this.stripeFactory.get();
     const provider = this.stripeFactory.provider();
@@ -504,12 +513,6 @@ export class StripeConnectPayoutService {
         message: 'Complete payout setup before withdrawing available cash.',
       });
     const externalAccountId = await this.resolveExternalAccountId(stripe, account);
-    const amount = BigInt(input.amountMinor);
-    if (amount > BigInt(Number.MAX_SAFE_INTEGER))
-      throw new ConflictException({
-        code: 'STRIPE_AMOUNT_OUT_OF_RANGE',
-        message: 'Withdrawal amount is too large.',
-      });
     let payout = await this.db.connectPayout.findUnique({
       where: { movementId: input.movementId },
     });
@@ -521,6 +524,18 @@ export class StripeConnectPayoutService {
         ),
         status: payout.status,
       };
+    const destination = await this.resolvePayoutDestination({
+      stripe,
+      externalAccountId,
+      requestedId: input.payoutDestinationId,
+      requestedMethod: input.payoutMethod ?? 'standard',
+    });
+    const amount = BigInt(input.amountMinor);
+    if (amount > BigInt(Number.MAX_SAFE_INTEGER))
+      throw new ConflictException({
+        code: 'STRIPE_AMOUNT_OUT_OF_RANGE',
+        message: 'Withdrawal amount is too large.',
+      });
     if (!payout)
       payout = await this.db.connectPayout.create({
         data: {
@@ -533,6 +548,20 @@ export class StripeConnectPayoutService {
           currency: 'GBP',
         },
       });
+    // Persist the selected provider account before any external movement. The
+    // value is an opaque Stripe ID, never a bank/card number.
+    await this.db.moneyMovement.updateMany({
+      where: { id: input.movementId, userId: input.userId },
+      data: {
+        selectedPayoutDestinationIdCiphertext: this.crypto.encrypt(
+          destination.id,
+          `movement-payout-destination:${input.movementId}`,
+        ),
+        selectedPayoutDestinationIdHash: this.crypto.hash(destination.id),
+        providerInstrumentLabel: destination.label,
+        encryptionKeyVersion: this.crypto.keyVersion,
+      },
+    });
     // This is provider evidence only. Capturing it before the transfer makes a
     // sandbox or staff trace explain exactly what changed without ever using a
     // Stripe balance as the customer-wallet authority.
@@ -575,6 +604,7 @@ export class StripeConnectPayoutService {
               `connect-transfer:${payout.id}`,
             ),
             externalTransferIdHash: this.crypto.hash(transferId),
+            ...this.transferEvidenceData(payout.id, transfer),
             encryptionKeyVersion: this.crypto.keyVersion,
             status: 'TRANSFERRED',
             lastSyncedAt: new Date(),
@@ -618,7 +648,8 @@ export class StripeConnectPayoutService {
         {
           amount: Number(amount),
           currency: 'gbp',
-          method: 'standard',
+          destination: destination.id,
+          method: input.payoutMethod ?? 'standard',
           metadata: {
             slice_movement_id: input.movementId,
             slice_connect_payout_id: payout.id,
@@ -638,6 +669,7 @@ export class StripeConnectPayoutService {
             `connect-payout:${payout.id}`,
           ),
           externalPayoutIdHash: this.crypto.hash(externalPayout.id),
+          ...this.payoutEvidenceData(payout.id, externalPayout),
           status,
           lastSyncedAt: new Date(),
         },
@@ -710,7 +742,11 @@ export class StripeConnectPayoutService {
     if (type === 'payout.paid') {
       await this.db.connectPayout.update({
         where: { id: mapping.id },
-        data: { status: 'PAID', lastSyncedAt: new Date() },
+        data: {
+          ...this.payoutEvidenceData(mapping.id, payload),
+          status: 'PAID',
+          lastSyncedAt: new Date(),
+        },
       });
       await this.captureBalancesForMapping(mapping);
       return {
@@ -723,8 +759,11 @@ export class StripeConnectPayoutService {
       await this.db.connectPayout.update({
         where: { id: mapping.id },
         data: {
+          ...this.payoutEvidenceData(mapping.id, payload),
           status: type === 'payout.canceled' ? 'CANCELED' : 'FAILED',
-          failureCode: type.toUpperCase().replace('.', '_'),
+          failureCode:
+            this.text(payload.failure_code) ??
+            type.toUpperCase().replace('.', '_'),
           lastSyncedAt: new Date(),
         },
       });
@@ -740,7 +779,11 @@ export class StripeConnectPayoutService {
     }
     await this.db.connectPayout.update({
       where: { id: mapping.id },
-      data: { status: 'PROCESSING', lastSyncedAt: new Date() },
+      data: {
+        ...this.payoutEvidenceData(mapping.id, payload),
+        status: 'PROCESSING',
+        lastSyncedAt: new Date(),
+      },
     });
     await this.captureBalancesForMapping(mapping);
     return { movementId: mapping.movementId, action: 'PROCESSING' };
@@ -762,6 +805,151 @@ export class StripeConnectPayoutService {
       // a payout. The durable movement and Stripe IDs remain available for a
       // subsequent protected trace/reconciliation read.
     }
+  }
+
+  async payoutDestinations(actor: Actor) {
+    const provider = this.stripeFactory.provider();
+    const environment = this.stripeFactory.environment();
+    const account = await this.db.externalConnectAccount.findUnique({
+      where: {
+        provider_environment_userId: {
+          provider,
+          environment,
+          userId: actor.userId,
+        },
+      },
+    });
+    if (!account || account.status !== 'READY') {
+      return {
+        items: [] as StripePayoutDestination[],
+        selectedDestinationId: null,
+        reason: 'Complete payout setup before choosing a payout destination.',
+      };
+    }
+    const stripe = this.stripeFactory.get();
+    const externalAccountId = await this.resolveExternalAccountId(stripe, account);
+    const items = await this.listPayoutDestinations(stripe, externalAccountId);
+    return {
+      items,
+      selectedDestinationId: items.length === 1 ? items[0].id : null,
+      reason:
+        items.length === 0
+          ? 'Add and verify a bank account or eligible debit card in Stripe payout setup.'
+          : null,
+    };
+  }
+
+  private async resolvePayoutDestination(input: {
+    stripe: Stripe;
+    externalAccountId: string;
+    requestedId?: string;
+    requestedMethod: 'standard' | 'instant';
+  }) {
+    const destinations = await this.listPayoutDestinations(
+      input.stripe,
+      input.externalAccountId,
+    );
+    if (destinations.length === 0) {
+      throw new ConflictException({
+        code: 'PAYOUT_DESTINATION_REQUIRED',
+        message:
+          'Add and verify a bank account or eligible debit card in Stripe payout setup before withdrawing.',
+      });
+    }
+    const destination = input.requestedId
+      ? destinations.find((item) => item.id === input.requestedId)
+      : destinations.length === 1
+        ? destinations[0]
+        : null;
+    if (!destination) {
+      throw new ConflictException({
+        code: 'PAYOUT_DESTINATION_SELECTION_REQUIRED',
+        message: 'Choose one of your verified Stripe payout destinations.',
+      });
+    }
+    if (input.requestedMethod === 'instant' && !destination.instantEligible) {
+      throw new ConflictException({
+        code: 'INSTANT_PAYOUT_UNAVAILABLE',
+        message: 'Instant payout is not available for the selected payout destination.',
+      });
+    }
+    return destination;
+  }
+
+  private async listPayoutDestinations(stripe: Stripe, externalAccountId: string) {
+    const accountsResource = stripe.accounts as unknown as {
+      listExternalAccounts: (
+        accountId: string,
+        params: { limit: number },
+      ) => Promise<{ data: unknown[] }>;
+    };
+    const page = await accountsResource.listExternalAccounts(externalAccountId, {
+      limit: 100,
+    });
+    return page.data
+      .map((item) => payoutDestination(item))
+      .filter((item): item is StripePayoutDestination => item !== null);
+  }
+
+  private transferEvidenceData(
+    connectPayoutId: string,
+    transfer: Stripe.Transfer,
+  ) {
+    const balanceTransactionId = providerObjectId(transfer.balance_transaction);
+    const destinationPaymentId = providerObjectId(transfer.destination_payment);
+    return {
+      ...(balanceTransactionId
+        ? {
+            transferBalanceTransactionIdCiphertext: this.crypto.encrypt(
+              balanceTransactionId,
+              `connect-transfer-balance-transaction:${connectPayoutId}`,
+            ),
+            transferBalanceTransactionIdHash: this.crypto.hash(balanceTransactionId),
+          }
+        : {}),
+      ...(destinationPaymentId
+        ? {
+            destinationPaymentIdCiphertext: this.crypto.encrypt(
+              destinationPaymentId,
+              `connect-destination-payment:${connectPayoutId}`,
+            ),
+            destinationPaymentIdHash: this.crypto.hash(destinationPaymentId),
+          }
+        : {}),
+    };
+  }
+
+  private payoutEvidenceData(connectPayoutId: string, payout: Record<string, unknown> | Stripe.Payout) {
+    const record = payout as Record<string, unknown>;
+    const balanceTransactionId = providerObjectId(record.balance_transaction);
+    const destinationId = providerObjectId(record.destination);
+    const method = this.text(record.method);
+    const arrivalDate =
+      typeof record.arrival_date === 'number'
+        ? new Date(record.arrival_date * 1000)
+        : undefined;
+    return {
+      ...(balanceTransactionId
+        ? {
+            payoutBalanceTransactionIdCiphertext: this.crypto.encrypt(
+              balanceTransactionId,
+              `connect-payout-balance-transaction:${connectPayoutId}`,
+            ),
+            payoutBalanceTransactionIdHash: this.crypto.hash(balanceTransactionId),
+          }
+        : {}),
+      ...(destinationId
+        ? {
+            externalDestinationIdCiphertext: this.crypto.encrypt(
+              destinationId,
+              `connect-external-destination:${connectPayoutId}`,
+            ),
+            externalDestinationIdHash: this.crypto.hash(destinationId),
+          }
+        : {}),
+      ...(method ? { payoutMethod: method } : {}),
+      ...(arrivalDate ? { arrivalDate } : {}),
+    };
   }
 
   private async captureBalances(
@@ -1067,4 +1255,37 @@ function balanceMinor(entries: Array<{ amount: number; currency: string }>) {
         Number.isSafeInteger(entry.amount) ? total + BigInt(entry.amount) : total,
       0n,
     );
+}
+
+function providerObjectId(value: unknown) {
+  if (typeof value === 'string' && value.length > 0) return value;
+  if (value && typeof value === 'object' && 'id' in value) {
+    const id = (value as { id?: unknown }).id;
+    return typeof id === 'string' && id.length > 0 ? id : null;
+  }
+  return null;
+}
+
+function payoutDestination(value: unknown): StripePayoutDestination | null {
+  if (!value || typeof value !== 'object') return null;
+  const item = value as Record<string, unknown>;
+  const id = providerObjectId(item);
+  const object = typeof item.object === 'string' ? item.object : null;
+  const last4 = typeof item.last4 === 'string' ? item.last4 : null;
+  if (!id || !last4 || (object !== 'bank_account' && object !== 'card')) return null;
+  const methods = Array.isArray(item.available_payout_methods)
+    ? item.available_payout_methods.filter((method): method is string => typeof method === 'string')
+    : [];
+  const type = object === 'card' ? 'DEBIT_CARD' : 'BANK_ACCOUNT';
+  const bankName = typeof item.bank_name === 'string' ? item.bank_name.trim() : '';
+  const brand = typeof item.brand === 'string' ? item.brand.trim() : '';
+  return {
+    id,
+    type,
+    label:
+      type === 'BANK_ACCOUNT'
+        ? `${bankName || 'Bank'} •••• ${last4}`
+        : `${brand || 'Debit card'} •••• ${last4}`,
+    instantEligible: methods.includes('instant'),
+  };
 }

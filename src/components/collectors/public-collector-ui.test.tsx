@@ -54,6 +54,7 @@ const liveListing: CollectorPublishedListing = {
   year: 2018,
   grade: "BGS 9.5",
   estimatedMarketValue: { amount: minorUnits(1_848_839), currency: "GBP" },
+  marketPricePerSlice: { amount: minorUnits(1_850), currency: "GBP" },
 };
 
 const collector: CollectorProfile = {
@@ -98,8 +99,9 @@ describe("CollectorCard", () => {
     expect(html).toContain("0.01%");
     expect(html).toContain("10000 available");
     expect(html).toContain("12d 3h remaining");
-    expect(html).toContain("Market reference");
+    expect(html).toContain("Price per Slice");
     expect(html).toContain("GBP 18488.39");
+    expect(html).toContain("GBP 18.50 / Slice");
     expect(html).toContain("View Collector");
     expect(html).toContain("View all 3 assets");
     expect(html).toContain("+1 more assets");

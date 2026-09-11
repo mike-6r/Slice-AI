@@ -156,6 +156,26 @@ describe('MarketService similar-assets projection', () => {
       ],
     });
   });
+
+  it('falls back to other published assets when its category has no matches', async () => {
+    const { service, db } = createService(baseRow);
+    db.asset.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([baseRow]);
+
+    await expect(service.similar('current-card', 3)).resolves.toMatchObject({
+      items: [{ assetId: 'similar-public-id' }],
+    });
+    expect(db.asset.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: { notIn: ['current-asset'] },
+        }),
+        take: 3,
+      }),
+    );
+  });
 });
 
 describe('MarketService persisted PriceCharting history', () => {
@@ -218,7 +238,9 @@ describe('MarketService persisted PriceCharting history', () => {
           ],
         }),
       },
-      marketObservation: { findMany: jest.fn().mockResolvedValue(observations) },
+      marketObservation: {
+        findMany: jest.fn().mockResolvedValue(observations),
+      },
     };
     const service = new MarketService(
       db as never,
@@ -228,17 +250,21 @@ describe('MarketService persisted PriceCharting history', () => {
       { createPrivateDownloadUrl: jest.fn() } as never,
     );
 
-    await expect(service.history('current-card', 'ALL')).resolves.toMatchObject({
-      source: 'PRICECHARTING',
-      series: 'UNGRADED',
-      availableSeries: ['UNGRADED'],
-      historyPointCount: 2,
-      latestValue: { minor: '1200', currency: 'USD' },
-      movementAvailability: 'AVAILABLE',
-    });
+    await expect(service.history('current-card', 'ALL')).resolves.toMatchObject(
+      {
+        source: 'PRICECHARTING',
+        series: 'UNGRADED',
+        availableSeries: ['UNGRADED'],
+        historyPointCount: 2,
+        latestValue: { minor: '1200', currency: 'USD' },
+        movementAvailability: 'AVAILABLE',
+      },
+    );
     expect(db.marketObservation.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ providerExternalId: 'current-product-id' }),
+        where: expect.objectContaining({
+          providerExternalId: 'current-product-id',
+        }),
       }),
     );
   });

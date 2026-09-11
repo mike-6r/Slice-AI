@@ -36,6 +36,8 @@ import {
 } from './stripe-connect-payout.service';
 import { WithdrawalPreflightService } from './withdrawal-preflight.service';
 import { StripeCardFundingService } from './stripe-card-funding.service';
+import { ProviderFinancialCostService } from './provider-financial-cost.service';
+import { StripeClientFactory } from './stripe-provider.client';
 
 type MovementType = 'DEPOSIT' | 'WITHDRAWAL';
 type MovementRail = 'BACS_DIRECT_DEBIT' | 'CARD' | 'CONNECT_STANDARD_PAYOUT';
@@ -182,6 +184,8 @@ export class WalletMovementService {
     @Optional() private readonly cardFunding?: StripeCardFundingService,
     @Optional()
     private readonly withdrawalPreflight?: WithdrawalPreflightService,
+    @Optional() private readonly providerCosts?: ProviderFinancialCostService,
+    @Optional() private readonly stripeFactory?: StripeClientFactory,
   ) {
     this.screening =
       config.providerMode === 'local'
@@ -245,6 +249,8 @@ export class WalletMovementService {
     key: string,
     destinationReference = 'LOCAL_LOW_RISK',
     destinationChain?: string,
+    payoutDestinationId?: string,
+    payoutMethod?: 'standard' | 'instant',
   ) {
     // Refresh the provider projection before evaluating the capability. This
     // prevents a previously READY Connect row from allowing a withdrawal
@@ -310,7 +316,16 @@ export class WalletMovementService {
         message: 'Withdrawal requires compliance review.',
       });
     }
-    return (await this.create(actor, 'WITHDRAWAL', amountMinor, requestId, key))
+    return (await this.create(
+      actor,
+      'WITHDRAWAL',
+      amountMinor,
+      requestId,
+      key,
+      'CONNECT_STANDARD_PAYOUT',
+      false,
+      { payoutDestinationId, payoutMethod },
+    ))
       .movement;
   }
 
@@ -337,6 +352,10 @@ export class WalletMovementService {
       ? 'CONNECT_STANDARD_PAYOUT'
       : 'BACS_DIRECT_DEBIT',
     savePaymentMethod = false,
+    withdrawalOptions?: {
+      payoutDestinationId?: string;
+      payoutMethod?: 'standard' | 'instant';
+    },
   ) {
     const amountMinor = this.amount(amountText);
     const sliceFeeMinor =
@@ -754,6 +773,8 @@ export class WalletMovementService {
           amountMinor: (
             movement.providerAmountMinor ?? movement.amountMinor
           ).toString(),
+          payoutDestinationId: withdrawalOptions?.payoutDestinationId,
+          payoutMethod: withdrawalOptions?.payoutMethod,
         });
         providerOperationStarted = true;
         await this.withdrawalPreflight?.consumeProviderLiquidity(
@@ -1613,6 +1634,7 @@ export class WalletMovementService {
 
   */
   async list(userId: string, cursor?: string, limit = 20) {
+    await this.reconcilePendingStripeDeposits('wallet-movements-list', userId);
     const rows = await this.db.moneyMovement.findMany({
       where: { userId, ...(cursor ? { id: { lt: cursor } } : {}) },
       include: {
@@ -1650,6 +1672,7 @@ export class WalletMovementService {
   }
 
   async detail(userId: string, movementId: string) {
+    await this.reconcilePendingStripeDeposits('wallet-movement-detail', userId);
     const movement = await this.db.moneyMovement.findFirst({
       where: { id: movementId, userId },
       include: {
@@ -1686,6 +1709,59 @@ export class WalletMovementService {
     return this.safe(movement, false);
   }
 
+  async reconcilePendingStripeDeposits(requestId: string, userId?: string) {
+    if (
+      this.config.providerMode === 'local' ||
+      !this.providerCosts ||
+      !this.stripeFactory ||
+      !this.config.stripeSecretKey
+    )
+      return;
+    try {
+      const candidates = await this.db.moneyMovement.findMany({
+        where: {
+          ...(userId ? { userId } : {}),
+          type: 'DEPOSIT',
+          provider: moneyMovementProviderCode(this.config.providerMode),
+          status: { in: ['PENDING_PROVIDER', 'PROCESSING', 'HELD'] },
+          providerReferenceCiphertext: { not: null },
+        },
+        select: { id: true, providerReferenceCiphertext: true },
+        orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+        take: userId ? 20 : 100,
+      });
+      for (const movement of candidates) {
+        const paymentIntentId = this.crypto.decrypt(
+          movement.providerReferenceCiphertext!,
+          `movement:${movement.id}`,
+        );
+        if (!paymentIntentId.startsWith('pi_')) continue;
+        const settlement = await this.providerCosts.paymentIntentSettlement(
+          paymentIntentId,
+        );
+        if (settlement.providerAvailable) {
+          await this.completeFromProvider({
+            movementId: movement.id,
+            providerReference: paymentIntentId,
+            providerEventId: `stripe-reconciliation:${paymentIntentId}`,
+            requestId,
+          });
+        } else if (settlement.paymentConfirmed) {
+          await this.processingFromProvider({ movementId: movement.id, requestId });
+        }
+        await this.providerCosts.reconcileStripeDeposit({
+          movementId: movement.id,
+          paymentIntentId,
+          requestId,
+        });
+      }
+    } catch (error) {
+      if (error instanceof ConflictException) throw error;
+      // Reconciliation is an opportunistic recovery path. A wallet read must
+      // remain available when Stripe is temporarily unreachable.
+    }
+  }
+
   /**
    * Staff-only reconciliation trace. It deliberately excludes client secrets,
    * payment-method details, bank details, webhook payloads, and encryption
@@ -1717,7 +1793,13 @@ export class WalletMovementService {
             status: true,
             failureCode: true,
             externalTransferIdCiphertext: true,
+            transferBalanceTransactionIdCiphertext: true,
+            destinationPaymentIdCiphertext: true,
             externalPayoutIdCiphertext: true,
+            payoutBalanceTransactionIdCiphertext: true,
+            externalDestinationIdCiphertext: true,
+            payoutMethod: true,
+            arrivalDate: true,
             connectAccount: {
               select: {
                 id: true,
@@ -1778,10 +1860,34 @@ export class WalletMovementService {
               `connect-transfer:${movement.connectPayout.id}`,
             )
           : null,
+        transferBalanceTransactionId: movement.connectPayout
+          ? this.decryptConnectReference(
+              movement.connectPayout.transferBalanceTransactionIdCiphertext,
+              `connect-transfer-balance-transaction:${movement.connectPayout.id}`,
+            )
+          : null,
+        destinationPaymentId: movement.connectPayout
+          ? this.decryptConnectReference(
+              movement.connectPayout.destinationPaymentIdCiphertext,
+              `connect-destination-payment:${movement.connectPayout.id}`,
+            )
+          : null,
         connectPayoutId: movement.connectPayout
           ? this.decryptConnectReference(
               movement.connectPayout.externalPayoutIdCiphertext,
               `connect-payout:${movement.connectPayout.id}`,
+            )
+          : null,
+        payoutBalanceTransactionId: movement.connectPayout
+          ? this.decryptConnectReference(
+              movement.connectPayout.payoutBalanceTransactionIdCiphertext,
+              `connect-payout-balance-transaction:${movement.connectPayout.id}`,
+            )
+          : null,
+        externalDestinationId: movement.connectPayout
+          ? this.decryptConnectReference(
+              movement.connectPayout.externalDestinationIdCiphertext,
+              `connect-external-destination:${movement.connectPayout.id}`,
             )
           : null,
         connectedAccountId: movement.connectPayout
@@ -1806,6 +1912,8 @@ export class WalletMovementService {
         ? {
             status: movement.connectPayout.status,
             failureCode: movement.connectPayout.failureCode,
+            method: movement.connectPayout.payoutMethod,
+            arrivalDate: movement.connectPayout.arrivalDate?.toISOString() ?? null,
             balanceSnapshots: movement.connectPayout.balanceSnapshots.map(
               (snapshot) => ({
                 stage: snapshot.stage,

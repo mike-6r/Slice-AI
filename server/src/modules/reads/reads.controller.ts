@@ -954,6 +954,13 @@ const publicCollectorUserInclude = (
                 decidedAt: true,
               },
             },
+            ownershipSupply: { select: { totalUnits: true } },
+            tradingExecutions: {
+              where: { settlementStatus: 'SETTLED' },
+              orderBy: [{ executedAt: 'desc' }, { id: 'desc' }],
+              take: 1,
+              select: { priceMinor: true, executedAt: true },
+            },
           },
         },
         media: {
@@ -1042,6 +1049,8 @@ async function publicCollectorView(
           currency: string;
           decidedAt: Date;
         }>;
+        ownershipSupply: { totalUnits: bigint } | null;
+        tradingExecutions: Array<{ priceMinor: bigint; executedAt: Date }>;
       } | null;
     }>;
   },
@@ -1065,106 +1074,142 @@ async function publicCollectorView(
           return [];
         const market = asset.marketSnapshots[0] ?? null;
         const valuation = asset.valuationDecisions[0] ?? null;
+        const latestExecution = asset.tradingExecutions[0] ?? null;
+        const authoritativeValue =
+          valuation?.valueMinor ?? market?.estimatedMarketValueMinor ?? null;
+        const derivedMarketValue =
+          authoritativeValue ??
+          (latestExecution && asset.ownershipSupply
+            ? latestExecution.priceMinor * asset.ownershipSupply.totalUnits
+            : null);
+        const marketCurrency = valuation?.currency ?? market?.currency ?? 'GBP';
         return [
           {
             submission,
             asset,
             market,
             valuation,
+            latestExecution,
+            derivedMarketValue,
+            marketCurrency,
           },
         ];
       })
-      .map(async ({ submission, asset, market, valuation }) => ({
-        publicId: asset.publicId,
-        slug: asset.slug,
-        title: asset.title,
-        category: asset.category.name,
-        year: asset.year,
-        cardNumber: asset.cardNumber,
-        variant: asset.shortName ?? asset.collectibleSet?.name ?? null,
-        grade: asset.gradeScaleEntry
-          ? `${asset.gradeScaleEntry.company.displayName || asset.gradeScaleEntry.company.name} ${asset.gradeScaleEntry.label}`
-          : null,
-        preSale:
-          asset.preSale?.status === 'ACTIVE'
-            ? (() => {
-                const reservedUnits = asset.preSale.reservations.reduce(
-                  (sum, row) => sum + row.units,
-                  0n,
-                );
-                const offeredUnits = asset.preSale.initialOffering.offeredUnits;
-                return {
-                  status: asset.preSale.status,
-                  openedAt: asset.preSale.openedAt?.toISOString() ?? null,
-                  deadlineAt: asset.preSale.deadlineAt?.toISOString() ?? null,
-                  physicalStatus: asset.preSale.physicalStatus,
-                  collectorEstimateMinor: null,
-                  pricePerUnitMinor:
-                    asset.preSale.initialOffering.pricePerUnitMinor.toString(),
-                  currency: asset.preSale.initialOffering.currency,
-                  offeredPercentageBps: asset.preSale.initialOffering.totalUnits
-                    ? Number(
-                        (asset.preSale.initialOffering.offeredUnits * 10_000n) /
-                          asset.preSale.initialOffering.totalUnits,
-                      )
-                    : 0,
-                  totalSupply:
-                    asset.preSale.initialOffering.totalUnits.toString(),
-                  offeredUnits: offeredUnits.toString(),
-                  reservedUnits: reservedUnits.toString(),
-                  availableUnits: (offeredUnits - reservedUnits).toString(),
-                  reservedPercentageBps: offeredUnits
-                    ? Number((reservedUnits * 10_000n) / offeredUnits)
-                    : 0,
-                  sliceOwnershipPercentageBps:
-                    asset.preSale.initialOffering.totalUnits > 0n
+      .map(
+        async ({
+          submission,
+          asset,
+          market,
+          valuation,
+          latestExecution,
+          derivedMarketValue,
+          marketCurrency,
+        }) => ({
+          publicId: asset.publicId,
+          slug: asset.slug,
+          title: asset.title,
+          category: asset.category.name,
+          year: asset.year,
+          cardNumber: asset.cardNumber,
+          variant: asset.shortName ?? asset.collectibleSet?.name ?? null,
+          grade: asset.gradeScaleEntry
+            ? `${asset.gradeScaleEntry.company.displayName || asset.gradeScaleEntry.company.name} ${asset.gradeScaleEntry.label}`
+            : null,
+          preSale:
+            asset.preSale?.status === 'ACTIVE'
+              ? (() => {
+                  const reservedUnits = asset.preSale.reservations.reduce(
+                    (sum, row) => sum + row.units,
+                    0n,
+                  );
+                  const offeredUnits =
+                    asset.preSale.initialOffering.offeredUnits;
+                  return {
+                    status: asset.preSale.status,
+                    openedAt: asset.preSale.openedAt?.toISOString() ?? null,
+                    deadlineAt: asset.preSale.deadlineAt?.toISOString() ?? null,
+                    physicalStatus: asset.preSale.physicalStatus,
+                    collectorEstimateMinor: null,
+                    pricePerUnitMinor:
+                      asset.preSale.initialOffering.pricePerUnitMinor.toString(),
+                    currency: asset.preSale.initialOffering.currency,
+                    offeredPercentageBps: asset.preSale.initialOffering
+                      .totalUnits
                       ? Number(
-                          10_000n / asset.preSale.initialOffering.totalUnits,
-                        )
-                      : 0,
-                  collectorRetainedPercentageBps:
-                    asset.preSale.initialOffering.totalUnits > 0n
-                      ? Number(
-                          (asset.preSale.initialOffering.retainedUnits *
+                          (asset.preSale.initialOffering.offeredUnits *
                             10_000n) /
                             asset.preSale.initialOffering.totalUnits,
                         )
                       : 0,
-                };
-              })()
-            : null,
-        listedAt: asset.publishedAt?.toISOString() ?? null,
-        media: (
-          await Promise.all(
-            submission.media.map(async (media) => ({
-              id: media.id,
-              slot: media.slot,
-              url: await storage
-                .createPrivateDownloadUrl(
-                  media.objectKey,
-                  new Date(Date.now() + 5 * 60_000),
-                )
-                .catch(() => null),
-              alt: `${asset.title} ${media.slot.toLowerCase()} approved media`,
-            })),
-          )
-        ).filter(
-          (
-            media,
-          ): media is { id: string; slot: string; url: string; alt: string } =>
-            Boolean(media.url),
-        ),
-        market: valuation || market
-          ? {
-              estimatedValueMinor: (
-                valuation?.valueMinor ?? market!.estimatedMarketValueMinor
-              ).toString(),
-              currency: valuation?.currency ?? market!.currency,
-              asOf: (valuation?.decidedAt ?? market!.asOf).toISOString(),
-              dataStatus: market?.status ?? 'LIVE',
-            }
-          : null,
-      })),
+                    totalSupply:
+                      asset.preSale.initialOffering.totalUnits.toString(),
+                    offeredUnits: offeredUnits.toString(),
+                    reservedUnits: reservedUnits.toString(),
+                    availableUnits: (offeredUnits - reservedUnits).toString(),
+                    reservedPercentageBps: offeredUnits
+                      ? Number((reservedUnits * 10_000n) / offeredUnits)
+                      : 0,
+                    sliceOwnershipPercentageBps:
+                      asset.preSale.initialOffering.totalUnits > 0n
+                        ? Number(
+                            10_000n / asset.preSale.initialOffering.totalUnits,
+                          )
+                        : 0,
+                    collectorRetainedPercentageBps:
+                      asset.preSale.initialOffering.totalUnits > 0n
+                        ? Number(
+                            (asset.preSale.initialOffering.retainedUnits *
+                              10_000n) /
+                              asset.preSale.initialOffering.totalUnits,
+                          )
+                        : 0,
+                  };
+                })()
+              : null,
+          listedAt: asset.publishedAt?.toISOString() ?? null,
+          media: (
+            await Promise.all(
+              submission.media.map(async (media) => ({
+                id: media.id,
+                slot: media.slot,
+                url: await storage
+                  .createPrivateDownloadUrl(
+                    media.objectKey,
+                    new Date(Date.now() + 5 * 60_000),
+                  )
+                  .catch(() => null),
+                alt: `${asset.title} ${media.slot.toLowerCase()} approved media`,
+              })),
+            )
+          ).filter(
+            (
+              media,
+            ): media is {
+              id: string;
+              slot: string;
+              url: string;
+              alt: string;
+            } => Boolean(media.url),
+          ),
+          market:
+            derivedMarketValue !== null || latestExecution
+              ? {
+                  estimatedValueMinor: derivedMarketValue?.toString() ?? null,
+                  pricePerSliceMinor:
+                    latestExecution?.priceMinor.toString() ?? null,
+                  currency: marketCurrency,
+                  asOf: (
+                    valuation?.decidedAt ??
+                    market?.asOf ??
+                    latestExecution!.executedAt
+                  ).toISOString(),
+                  dataStatus:
+                    market?.status ??
+                    (latestExecution ? 'LIVE' : 'UNAVAILABLE'),
+                }
+              : null,
+        }),
+      ),
   );
   const profile = x.publicCollectorProfile;
   return {

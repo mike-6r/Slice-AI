@@ -26,6 +26,8 @@ export interface CollectorPublishedListing {
   listedAt?: string | null;
   media?: Array<{ id: string; slot: string; url: string; alt: string }>;
   estimatedMarketValue?: Money;
+  /** The latest settled secondary-market price for one Slice, when available. */
+  marketPricePerSlice?: Money;
   asOf?: string;
   dataStatus?: "DEMO" | "DELAYED" | "LIVE" | "UNAVAILABLE";
   preSale?: PreSaleProjection | null;

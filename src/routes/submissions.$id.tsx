@@ -25,7 +25,7 @@ import {
 
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
-import type { CreateSubmissionDraft, SubmissionMedia } from "@/domain/submission";
+import type { CreateSubmissionDraft, SubmissionDetail, SubmissionMedia } from "@/domain/submission";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { mediaStatusLabel, submissionName, submissionStatusLabel } from "./-list-presentation";
 
@@ -257,8 +257,8 @@ function SubmissionDetailPage() {
           </p>
         </div>
         <Link
-          to="/list"
-          search={{ draft: undefined }}
+          to="/collector-workspace"
+          search={{ section: "submissions" }}
           className="text-sm font-semibold text-accent"
         >
           Back to submissions
@@ -743,7 +743,11 @@ function SubmittedAssetExperience({
     <main className="submission-experience-page">
       <div className="submission-experience-shell">
         <header className="submission-experience-topbar">
-          <Link to="/list" search={{ draft: undefined }} className="submission-experience-back">
+          <Link
+            to="/collector-workspace"
+            search={{ section: "submissions" }}
+            className="submission-experience-back"
+          >
             <ArrowRight aria-hidden="true" /> All submissions
           </Link>
           <span>Private record · {shortSubmissionId(submission.id)}</span>

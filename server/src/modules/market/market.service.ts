@@ -772,7 +772,7 @@ export class MarketService {
       orderBy: [{ title: 'asc' }, { id: 'asc' }],
       take: boundedLimit,
     });
-    const rows =
+    const categoryRows =
       sameSetRows.length >= boundedLimit || !asset.setId
         ? sameSetRows
         : [
@@ -782,6 +782,22 @@ export class MarketService {
               select: projection,
               orderBy: [{ title: 'asc' }, { id: 'asc' }],
               take: boundedLimit - sameSetRows.length,
+            })),
+          ];
+    const rows =
+      categoryRows.length >= boundedLimit
+        ? categoryRows
+        : [
+            ...categoryRows,
+            ...(await this.db.asset.findMany({
+              where: {
+                status: 'PUBLISHED',
+                ...publicBetaAssetWhere(this.config.isBeta),
+                id: { notIn: [asset.id, ...categoryRows.map((row) => row.id)] },
+              },
+              select: projection,
+              orderBy: [{ publishedAt: 'desc' }, { id: 'asc' }],
+              take: boundedLimit - categoryRows.length,
             })),
           ];
     const assetIds = rows.map((row) => row.id);
@@ -1672,16 +1688,15 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
               currency: asset.preSale.initialOffering.currency,
               collectorEstimateMinor,
               offeredPercentageBps: totalUnits
-                ? Number(
-                    (offeredUnits * 10_000n) /
-                      totalUnits,
-                  )
+                ? Number((offeredUnits * 10_000n) / totalUnits)
                 : undefined,
               totalSupply: totalUnits.toString(),
-              sliceOwnershipPercentageBps: totalUnits > 0n ? Number(10_000n / totalUnits) : 0,
-              collectorRetainedPercentageBps: totalUnits > 0n
-                ? Number(((totalUnits - offeredUnits) * 10_000n) / totalUnits)
-                : 0,
+              sliceOwnershipPercentageBps:
+                totalUnits > 0n ? Number(10_000n / totalUnits) : 0,
+              collectorRetainedPercentageBps:
+                totalUnits > 0n
+                  ? Number(((totalUnits - offeredUnits) * 10_000n) / totalUnits)
+                  : 0,
               offeredUnits: offeredUnits.toString(),
               reservedUnits: reservedUnits.toString(),
               availableUnits: (offeredUnits - reservedUnits).toString(),

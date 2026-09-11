@@ -272,7 +272,8 @@ type CollectorDto = {
     listedAt?: string | null;
     media?: Array<{ id: string; slot: string; url: string; alt: string }>;
     market: {
-      estimatedValueMinor: string;
+      estimatedValueMinor: string | null;
+      pricePerSliceMinor?: string | null;
       currency: "GBP" | "USD" | "EUR" | "CAD";
       asOf: string;
       dataStatus: "DEMO" | "DELAYED" | "LIVE" | "UNAVAILABLE";
@@ -292,7 +293,8 @@ type CollectorDto = {
     listedAt?: string | null;
     media?: Array<{ id: string; slot: string; url: string; alt: string }>;
     market: {
-      estimatedValueMinor: string;
+      estimatedValueMinor: string | null;
+      pricePerSliceMinor?: string | null;
       currency: "GBP" | "USD" | "EUR" | "CAD";
       asOf: string;
       dataStatus: "DEMO" | "DELAYED" | "LIVE" | "UNAVAILABLE";
@@ -324,9 +326,20 @@ const mapCollector = (value: CollectorDto): CollectorProfile => ({
     grade: listing.grade,
     listedAt: listing.listedAt,
     media: listing.media,
-    estimatedMarketValue: listing.market
-      ? { amount: safeMinor(listing.market.estimatedValueMinor), currency: listing.market.currency }
-      : undefined,
+    estimatedMarketValue:
+      listing.market?.estimatedValueMinor != null
+        ? {
+            amount: safeMinor(listing.market.estimatedValueMinor),
+            currency: listing.market.currency,
+          }
+        : undefined,
+    marketPricePerSlice:
+      listing.market?.pricePerSliceMinor != null
+        ? {
+            amount: safeMinor(listing.market.pricePerSliceMinor),
+            currency: listing.market.currency,
+          }
+        : undefined,
     asOf: listing.market?.asOf,
     dataStatus: listing.market?.dataStatus,
     preSale: listing.preSale ?? null,
@@ -345,9 +358,20 @@ const mapCollector = (value: CollectorDto): CollectorProfile => ({
     grade: listing.grade,
     listedAt: listing.listedAt,
     media: listing.media,
-    estimatedMarketValue: listing.market
-      ? { amount: safeMinor(listing.market.estimatedValueMinor), currency: listing.market.currency }
-      : undefined,
+    estimatedMarketValue:
+      listing.market?.estimatedValueMinor != null
+        ? {
+            amount: safeMinor(listing.market.estimatedValueMinor),
+            currency: listing.market.currency,
+          }
+        : undefined,
+    marketPricePerSlice:
+      listing.market?.pricePerSliceMinor != null
+        ? {
+            amount: safeMinor(listing.market.pricePerSliceMinor),
+            currency: listing.market.currency,
+          }
+        : undefined,
     asOf: listing.market?.asOf,
     dataStatus: listing.market?.dataStatus,
     preSale: listing.preSale ?? null,
@@ -1008,9 +1032,7 @@ const mapExecutionPage = (raw: unknown): TradingExecutionPage => {
     return {
       executionId: stringField(item.executionId, "execution.id"),
       assetSlug:
-        item.assetSlug === undefined
-          ? null
-          : nullableString(item.assetSlug, "execution.assetSlug"),
+        item.assetSlug === undefined ? null : nullableString(item.assetSlug, "execution.assetSlug"),
       assetSummary:
         item.assetSummary && typeof item.assetSummary === "object"
           ? (() => {
@@ -1266,6 +1288,35 @@ const mapMovement = (raw: unknown): WalletMovementView => {
                 throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid movement timeline.");
               })(),
         }),
+  };
+};
+
+const mapPayoutDestinations = (raw: unknown) => {
+  const value = objectField(raw, "payout destinations");
+  if (!Array.isArray(value.items)) {
+    throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid payout destinations from service.");
+  }
+  return {
+    items: value.items.map((entry) => {
+      const item = objectField(entry, "payout destination");
+      if (
+        (item.type !== "BANK_ACCOUNT" && item.type !== "DEBIT_CARD") ||
+        typeof item.instantEligible !== "boolean"
+      ) {
+        throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid payout destination from service.");
+      }
+      return {
+        id: stringField(item.id, "payout destination.id"),
+        label: stringField(item.label, "payout destination.label"),
+        type: item.type as "BANK_ACCOUNT" | "DEBIT_CARD",
+        instantEligible: item.instantEligible,
+      };
+    }),
+    selectedDestinationId: nullableString(
+      value.selectedDestinationId,
+      "payout destinations.selectedDestinationId",
+    ),
+    reason: nullableString(value.reason, "payout destinations.reason"),
   };
 };
 
@@ -7703,6 +7754,11 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       },
       async getConnectPayoutSetup() {
         return mapConnectPayoutSetup(await client.get<unknown>("/wallet/payouts/connect"));
+      },
+      async getPayoutDestinations() {
+        return mapPayoutDestinations(
+          await client.get<unknown>("/wallet/payouts/destinations"),
+        );
       },
       async getFeePolicy() {
         return mapFeePolicy(await client.get<unknown>("/fees"));
