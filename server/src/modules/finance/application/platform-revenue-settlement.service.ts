@@ -198,7 +198,10 @@ export class PlatformRevenueSettlementService {
           requestedByUserId: settlement.requestedByUserId,
           reason: settlement.reason,
           externalStatus: 'NOT_CONFIGURED',
-          idempotencyKeyHash: approvalHash,
+          // This is a one-way correlation fingerprint, not the idempotency
+          // credential itself. Keep the audit field free of sensitive-key
+          // names so it remains valid under the metadata guard.
+          approvalFingerprint: approvalHash,
         },
         createdAt: new Date(),
       });

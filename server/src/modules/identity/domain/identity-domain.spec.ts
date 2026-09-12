@@ -227,6 +227,42 @@ describe('offline identity rules', () => {
       }),
     ).not.toThrow();
   });
+  it('allows the financial recovery and settlement audit metadata', () => {
+    expect(() =>
+      sanitizeAuditMetadata('BACS_RISK_HOLD_RELEASED', {
+        providerAvailableOn: '2026-09-12T00:00:00.000Z',
+        releasePolicy: 'PROVIDER_AVAILABLE_ON',
+      }),
+    ).not.toThrow();
+    expect(() =>
+      sanitizeAuditMetadata('WALLET_RETURN_DEFICIT_CREATED', {
+        amountMinor: '2500',
+        reasonCode: 'BACS_RETURNED',
+      }),
+    ).not.toThrow();
+    expect(() =>
+      sanitizeAuditMetadata('WALLET_RETURN_RESERVATIONS_HELD', {
+        activeReservationCount: 2,
+      }),
+    ).not.toThrow();
+    expect(() =>
+      sanitizeAuditMetadata('PLATFORM_REVENUE_SETTLEMENT_REQUESTED', {
+        requestedAmountMinor: '1250',
+        safeToSweepMinor: '1250',
+        reason: 'Monthly settlement',
+        externalStatus: 'NOT_CONFIGURED',
+        financialSnapshotAt: '2026-09-12T00:00:00.000Z',
+      }),
+    ).not.toThrow();
+    expect(() =>
+      sanitizeAuditMetadata('PLATFORM_REVENUE_SETTLEMENT_APPROVED', {
+        requestedByUserId: 'user-1',
+        reason: 'Monthly settlement',
+        externalStatus: 'NOT_CONFIGURED',
+        approvalFingerprint: 'a'.repeat(64),
+      }),
+    ).not.toThrow();
+  });
   it('allows graded-card certification review audit metadata', () => {
     expect(() =>
       sanitizeAuditMetadata('CERT_VERIFICATION_REQUESTED', {
