@@ -699,6 +699,35 @@ describe("HTTP catalogue mapping", () => {
     );
   });
 
+  it("reopens a pending card deposit through its dedicated safe endpoint", async () => {
+    const request = vi.fn().mockResolvedValue({
+      movement: {
+        id: "movement-1",
+        type: "DEPOSIT",
+        amountMinor: "1250",
+        currency: "GBP",
+        status: "PENDING_PROVIDER",
+        createdAt: "2026-08-08T00:00:00.000Z",
+        updatedAt: "2026-08-08T00:00:00.000Z",
+        replayed: false,
+      },
+      cardFunding: {
+        clientSecret: "pi_test_secret",
+        publishableKey: "pk_test_slice",
+      },
+    });
+    const repositories = createHttpRepositories({ get: vi.fn(), request } as unknown as ApiClient);
+
+    await expect(repositories.providers.resumeCardDeposit("movement-1")).resolves.toMatchObject({
+      movement: { id: "movement-1", status: "PENDING_PROVIDER" },
+      cardFunding: { publishableKey: "pk_test_slice" },
+    });
+
+    expect(request).toHaveBeenCalledWith("/wallet/card-deposits/movement-1/resume", {
+      method: "POST",
+    });
+  });
+
   it("maps only the safe persisted bank projection and never fabricates institution data", async () => {
     const get = vi.fn().mockResolvedValue({
       items: [
@@ -1164,11 +1193,13 @@ describe("HTTP catalogue mapping", () => {
       note: "Verified against the received collectible.",
     };
 
-    await expect(repositories.admin.completeIntakeVerification("intake-1", input)).resolves.toEqual({
-      intakeId: "intake-1",
-      status: "VERIFIED",
-      completedAt: "2026-09-05T14:00:00.000Z",
-    });
+    await expect(repositories.admin.completeIntakeVerification("intake-1", input)).resolves.toEqual(
+      {
+        intakeId: "intake-1",
+        status: "VERIFIED",
+        completedAt: "2026-09-05T14:00:00.000Z",
+      },
+    );
 
     expect(request).toHaveBeenCalledWith(
       "/admin/intake/intake-1/verification/complete",

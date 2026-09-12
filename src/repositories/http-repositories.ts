@@ -7756,9 +7756,7 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
         return mapConnectPayoutSetup(await client.get<unknown>("/wallet/payouts/connect"));
       },
       async getPayoutDestinations() {
-        return mapPayoutDestinations(
-          await client.get<unknown>("/wallet/payouts/destinations"),
-        );
+        return mapPayoutDestinations(await client.get<unknown>("/wallet/payouts/destinations"));
       },
       async getFeePolicy() {
         return mapFeePolicy(await client.get<unknown>("/fees"));
@@ -7813,6 +7811,14 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
             body: input,
             headers: { "Idempotency-Key": idempotencyKey() },
           }),
+        );
+      },
+      async resumeCardDeposit(movementId) {
+        return mapCardFundingSession(
+          await client.request<unknown>(
+            `/wallet/card-deposits/${encodeURIComponent(movementId)}/resume`,
+            { method: "POST" },
+          ),
         );
       },
       async createWithdrawal(input) {

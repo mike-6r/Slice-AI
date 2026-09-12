@@ -1,5 +1,10 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Stripe v22 is CommonJS in the Nest CommonJS build. */
-import { ConflictException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import {
+  ConflictException,
+  Inject,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import Stripe = require('stripe');
@@ -36,7 +41,8 @@ export class StripeCardFundingService {
         available: false,
         provider: null,
         currency: 'GBP',
-        reason: 'Card funding is available only through the configured Stripe environment.',
+        reason:
+          'Card funding is available only through the configured Stripe environment.',
       };
     }
     if (!this.config.stripeCardFundingEnabled) {
@@ -111,7 +117,8 @@ export class StripeCardFundingService {
     } catch {
       throw new ServiceUnavailableException({
         code: 'STRIPE_CARD_FUNDING_FAILED',
-        message: 'The secure card payment could not be started. No Slice cash was made available.',
+        message:
+          'The secure card payment could not be started. No Slice cash was made available.',
       });
     }
     if (
@@ -121,7 +128,8 @@ export class StripeCardFundingService {
     ) {
       throw new ServiceUnavailableException({
         code: 'STRIPE_CARD_FUNDING_INVALID',
-        message: 'The secure card payment could not be prepared. No Slice cash was made available.',
+        message:
+          'The secure card payment could not be prepared. No Slice cash was made available.',
       });
     }
     return {
@@ -136,6 +144,70 @@ export class StripeCardFundingService {
   }
 
   /**
+   * Returns the client secret for the existing, customer-owned PaymentIntent
+   * after proving it is still the same Slice deposit and is still awaiting
+   * payment details. This deliberately never creates a second PaymentIntent.
+   */
+  async resumePaymentIntent(input: {
+    movementId: string;
+    amountMinor: string;
+    providerReference: string;
+  }) {
+    const options = this.options();
+    if (!options.available) {
+      throw new ConflictException({
+        code: 'CARD_FUNDING_UNAVAILABLE',
+        message: options.reason ?? 'Card funding is currently unavailable.',
+      });
+    }
+    let intent: Stripe.PaymentIntent;
+    try {
+      intent = await this.stripeFactory
+        .get()
+        .paymentIntents.retrieve(input.providerReference);
+    } catch {
+      throw new ServiceUnavailableException({
+        code: 'STRIPE_CARD_FUNDING_RESUME_FAILED',
+        message:
+          'The secure card payment could not be reopened. Please try again shortly.',
+      });
+    }
+    const expectedAmount = BigInt(input.amountMinor);
+    const validIntent =
+      intent.id === input.providerReference &&
+      intent.amount === Number(expectedAmount) &&
+      intent.currency.toLowerCase() === 'gbp' &&
+      intent.livemode === (this.config.providerMode === 'stripe_live') &&
+      intent.metadata.slice_movement_id === input.movementId &&
+      intent.metadata.slice_currency === 'GBP' &&
+      intent.metadata.slice_funding_rail === 'card';
+    if (!validIntent || !intent.client_secret) {
+      throw new ConflictException({
+        code: 'CARD_PAYMENT_NOT_RESUMABLE',
+        message:
+          'This card payment can no longer be resumed. Refresh your Wallet to see its latest status.',
+      });
+    }
+    if (
+      ![
+        'requires_payment_method',
+        'requires_confirmation',
+        'requires_action',
+      ].includes(intent.status)
+    ) {
+      throw new ConflictException({
+        code: 'CARD_PAYMENT_NOT_RESUMABLE',
+        message:
+          'This card payment is already being processed or is no longer available. Refresh your Wallet to see its latest status.',
+      });
+    }
+    return {
+      clientSecret: intent.client_secret,
+      publishableKey: this.stripeFactory.publishableKey(),
+    };
+  }
+
+  /**
    * Stores only a customer-safe card label after a verified provider event.
    * The full payment method object never becomes a public Slice record.
    */
@@ -143,18 +215,30 @@ export class StripeCardFundingService {
     try {
       const intent = await this.stripeFactory
         .get()
-        .paymentIntents.retrieve(paymentIntentId, { expand: ['payment_method'] });
+        .paymentIntents.retrieve(paymentIntentId, {
+          expand: ['payment_method'],
+        });
       const paymentMethod =
         typeof intent.payment_method === 'string'
-          ? await this.stripeFactory.get().paymentMethods.retrieve(intent.payment_method)
+          ? await this.stripeFactory
+              .get()
+              .paymentMethods.retrieve(intent.payment_method)
           : intent.payment_method;
-      if (!paymentMethod || paymentMethod.type !== 'card' || !paymentMethod.card?.last4) return;
+      if (
+        !paymentMethod ||
+        paymentMethod.type !== 'card' ||
+        !paymentMethod.card?.last4
+      )
+        return;
       const brand = paymentMethod.card.brand
-        ? paymentMethod.card.brand.charAt(0).toUpperCase() + paymentMethod.card.brand.slice(1)
+        ? paymentMethod.card.brand.charAt(0).toUpperCase() +
+          paymentMethod.card.brand.slice(1)
         : 'Card';
       await this.db.moneyMovement.updateMany({
         where: { id: movementId, provider: this.stripeFactory.provider() },
-        data: { providerInstrumentLabel: `${brand} •••• ${paymentMethod.card.last4}` },
+        data: {
+          providerInstrumentLabel: `${brand} •••• ${paymentMethod.card.last4}`,
+        },
       });
     } catch {
       // A payment can still settle safely without an optional display label.

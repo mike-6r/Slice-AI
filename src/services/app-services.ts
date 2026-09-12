@@ -157,6 +157,8 @@ export class ProviderService {
   createDeposit = (amountMinor: string) => this.repositories.providers.createDeposit(amountMinor);
   createCardDeposit = (input: { amountMinor: string; savePaymentMethod: boolean }) =>
     this.repositories.providers.createCardDeposit(input);
+  resumeCardDeposit = (movementId: string) =>
+    this.repositories.providers.resumeCardDeposit(movementId);
   createWithdrawal = (input: {
     amountMinor: string;
     destinationReference?: string;

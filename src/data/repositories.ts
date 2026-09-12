@@ -3428,6 +3428,7 @@ export interface ProviderRepository {
     amountMinor: string;
     savePaymentMethod: boolean;
   }): Promise<CardFundingSession>;
+  resumeCardDeposit(movementId: string): Promise<CardFundingSession>;
   createWithdrawal(input: {
     amountMinor: string;
     destinationReference?: string;

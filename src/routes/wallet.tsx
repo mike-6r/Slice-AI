@@ -25,7 +25,12 @@ import {
   WalletCards,
   type LucideIcon,
 } from "lucide-react";
-import { loadStripe, type Stripe, type StripeElements, type StripePaymentElement } from "@stripe/stripe-js";
+import {
+  loadStripe,
+  type Stripe,
+  type StripeElements,
+  type StripePaymentElement,
+} from "@stripe/stripe-js";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
@@ -246,6 +251,13 @@ export function Wallet() {
       refreshWallet();
     },
   });
+  const resumeCardFunding = useMutation({
+    mutationFn: (movementId: string) => services.providers.resumeCardDeposit(movementId),
+    onSuccess: (session) => {
+      setCardFundingSession(session);
+      refreshWallet();
+    },
+  });
   const recentAuth = useMutation({
     mutationFn: (password: string) => services.repositories.account.confirmRecentAuth(password),
     onSuccess: () => {
@@ -323,12 +335,15 @@ export function Wallet() {
         >
           <MovementsPanel
             query={movements}
-            demoFundingCount={(portfolioTransactions.data?.items ?? []).filter(
-              (item) => item.type.toUpperCase() === "DEMO_FUNDING" && item.side === "CREDIT",
-            ).length}
+            demoFundingCount={
+              (portfolioTransactions.data?.items ?? []).filter(
+                (item) => item.type.toUpperCase() === "DEMO_FUNDING" && item.side === "CREDIT",
+              ).length
+            }
             filter={movementFilter}
             setFilter={setMovementFilter}
             onTimelineSelect={setTimelineMovement}
+            onResumeCardFunding={(movementId) => resumeCardFunding.mutateAsync(movementId)}
           />
           <div className="wallet-side-stack">
             <SettlementTimelinePanel
@@ -349,7 +364,9 @@ export function Wallet() {
           <WithdrawalReviewDialog
             amount={withdrawalReviewAmount}
             feePolicy={feePolicy.data}
-            destination={payoutDestinations.data?.items.find((item) => item.id === payoutDestinationId) ?? null}
+            destination={
+              payoutDestinations.data?.items.find((item) => item.id === payoutDestinationId) ?? null
+            }
             payoutMethod={payoutMethod}
             busy={movement.isPending}
             onClose={() => setWithdrawalReviewAmount(null)}
@@ -645,8 +662,7 @@ function ConnectedBankPanel({
             <StatusPill status={connectPayout.data?.status ?? "NOT_STARTED"} />
           </div>
           <p>
-            Payout account identity and bank details are collected securely by Stripe, not by
-            Slice.
+            Payout account identity and bank details are collected securely by Stripe, not by Slice.
           </p>
         </div>
         <div className="wallet-bank-reassurance" aria-label="Bank connection safeguards">
@@ -1147,7 +1163,7 @@ function MoveMoneyPanel({
           ? "Set up a UK bank mandate before requesting a deposit."
           : isCardDeposit && !cardAvailable
             ? (cardFundingOptions?.reason ?? "Card funding is currently unavailable.")
-          : null;
+            : null;
   const requestedAmountMinor = parseWalletGbp(amount);
   const withdrawalBlocked =
     action === "WITHDRAWAL" &&
@@ -1295,7 +1311,9 @@ function MoveMoneyPanel({
                         <option value="">Choose a verified destination</option>
                       ) : null}
                       {payoutDestinations.data.items.map((item) => (
-                        <option key={item.id} value={item.id}>{item.label}</option>
+                        <option key={item.id} value={item.id}>
+                          {item.label}
+                        </option>
                       ))}
                     </select>
                   </label>
@@ -1303,14 +1321,25 @@ function MoveMoneyPanel({
                     Payout speed
                     <select
                       value={payoutMethod}
-                      onChange={(event) => onPayoutMethodChange(event.target.value as "standard" | "instant")}
+                      onChange={(event) =>
+                        onPayoutMethodChange(event.target.value as "standard" | "instant")
+                      }
                     >
                       <option value="standard">Standard</option>
                       <option
                         value="instant"
-                        disabled={!payoutDestinations.data.items.find((item) => item.id === payoutDestinationId)?.instantEligible}
+                        disabled={
+                          !payoutDestinations.data.items.find(
+                            (item) => item.id === payoutDestinationId,
+                          )?.instantEligible
+                        }
                       >
-                        Instant{payoutDestinations.data.items.find((item) => item.id === payoutDestinationId)?.instantEligible ? "" : " (unavailable)"}
+                        Instant
+                        {payoutDestinations.data.items.find(
+                          (item) => item.id === payoutDestinationId,
+                        )?.instantEligible
+                          ? ""
+                          : " (unavailable)"}
                       </option>
                     </select>
                   </label>
@@ -1319,15 +1348,16 @@ function MoveMoneyPanel({
                 <p>{payoutDestinations.data?.reason ?? "Loading verified payout destinations…"}</p>
               )}
               <p>
-                Withdrawals use your verified Stripe destination. Slice does not collect bank details in
-                this form, and eligible cash remains reserved until Stripe confirms the payout.
+                Withdrawals use your verified Stripe destination. Slice does not collect bank
+                details in this form, and eligible cash remains reserved until Stripe confirms the
+                payout.
               </p>
             </>
           ) : isCardDeposit ? (
             <>
               <p>
-                Your card details and any 3D Secure check are handled by Stripe. Slice receives
-                only the provider payment outcome, never your card number or security code.
+                Your card details and any 3D Secure check are handled by Stripe. Slice receives only
+                the provider payment outcome, never your card number or security code.
               </p>
               <label className="wallet-card-save">
                 <input
@@ -1364,12 +1394,7 @@ function MoveMoneyPanel({
           ) : null}
           <button
             type="submit"
-            disabled={
-              domainBlocked ||
-              withdrawalBlocked ||
-              movement.isPending ||
-              cardFundingBusy
-            }
+            disabled={domainBlocked || withdrawalBlocked || movement.isPending || cardFundingBusy}
           >
             {movement.isPending || cardFundingBusy
               ? "Submitting…"
@@ -1395,7 +1420,9 @@ function MoveMoneyPanel({
               : "Your request will appear in wallet history once it is accepted.")}
         </p>
         {movement.error ? <InlineError error={movement.error} /> : null}
-        {cardFundingBusy ? <p className="wallet-move-note">Preparing Stripe’s secure payment form…</p> : null}
+        {cardFundingBusy ? (
+          <p className="wallet-move-note">Preparing Stripe’s secure payment form…</p>
+        ) : null}
         {movement.data ? (
           <p className="wallet-move-success">
             {movement.data.type === "DEPOSIT" ? "Deposit" : "Withdrawal"} request created —{" "}
@@ -1456,8 +1483,8 @@ function WithdrawalReviewDialog({
           </button>
         </header>
         <p className="wallet-bank-dialog__intro">
-          Your withdrawal will be sent in GBP to your selected verified Stripe payout destination. Slice will
-          reserve the gross amount until the provider confirms the payout.
+          Your withdrawal will be sent in GBP to your selected verified Stripe payout destination.
+          Slice will reserve the gross amount until the provider confirms the payout.
         </p>
         <dl className="wallet-withdrawal-review__summary">
           <div>
@@ -1635,8 +1662,9 @@ function CardFundingDialog({
           </small>
         </div>
         <p className="wallet-bank-dialog__intro">
-          Card details and any 3D Secure step are handled directly by Stripe. Slice does not see
-          or store your card number or CVC.
+          Card details and any 3D Secure step are handled directly by Stripe. Slice does not see or
+          store your card number or CVC. If you close this form before paying, reopen the pending
+          card deposit from Movement history to continue it.
         </p>
         <div className="wallet-stripe-payment-element" aria-live="polite">
           {/*
@@ -1998,12 +2026,14 @@ function MovementsPanel({
   filter,
   setFilter,
   onTimelineSelect,
+  onResumeCardFunding,
 }: {
   query: UseQueryResult<WalletMovementPage>;
   demoFundingCount: number;
   filter: WalletMovementFilter;
   setFilter: (value: WalletMovementFilter) => void;
   onTimelineSelect: (item: WalletMovementView) => void;
+  onResumeCardFunding: (movementId: string) => Promise<CardFundingSession>;
 }) {
   const items = filterWalletMovements(query.data?.items ?? [], filter);
   const [selected, setSelected] = useState<WalletMovementView | null>(null);
@@ -2083,13 +2113,20 @@ function MovementsPanel({
             }
             action={
               <Link to={demoFundingCount ? "/portfolio" : "/how-it-works"}>
-                {demoFundingCount ? "View portfolio activity" : "Learn how it works"} <ArrowRight aria-hidden="true" />
+                {demoFundingCount ? "View portfolio activity" : "Learn how it works"}{" "}
+                <ArrowRight aria-hidden="true" />
               </Link>
             }
           />
         ) : null}
       </div>
-      {selected ? <MovementDetail item={selected} onClose={() => setSelected(null)} /> : null}
+      {selected ? (
+        <MovementDetail
+          item={selected}
+          onClose={() => setSelected(null)}
+          onResumeCardFunding={onResumeCardFunding}
+        />
+      ) : null}
     </WalletPanel>
   );
 }
@@ -2209,13 +2246,43 @@ function WalletInsightsPanel() {
   );
 }
 
-function MovementDetail({ item, onClose }: { item: WalletMovementView; onClose: () => void }) {
+function MovementDetail({
+  item,
+  onClose,
+  onResumeCardFunding,
+}: {
+  item: WalletMovementView;
+  onClose: () => void;
+  onResumeCardFunding: (movementId: string) => Promise<CardFundingSession>;
+}) {
   const services = useAppServices();
+  const [resumeError, setResumeError] = useState<string | null>(null);
+  const [resuming, setResuming] = useState(false);
   const detail = useQuery({
     queryKey: ["providers", "movement", item.id],
     queryFn: () => services.providers.movement(item.id),
   });
   const movement = detail.data ?? item;
+  const canResumeCardPayment =
+    movement.type === "DEPOSIT" &&
+    movement.rail === "CARD" &&
+    movement.status === "PENDING_PROVIDER";
+  const resumeCardPayment = async () => {
+    setResuming(true);
+    setResumeError(null);
+    try {
+      await onResumeCardFunding(movement.id);
+      onClose();
+    } catch (error) {
+      setResumeError(
+        error instanceof ApiError
+          ? error.message
+          : "We could not reopen this card payment. Please try again shortly.",
+      );
+    } finally {
+      setResuming(false);
+    }
+  };
   return (
     <div className="wallet-detail-backdrop" role="presentation" onClick={onClose}>
       <section
@@ -2300,7 +2367,9 @@ function MovementDetail({ item, onClose }: { item: WalletMovementView; onClose: 
             <dl className="wallet-detail__facts">
               <div>
                 <dt>Slice fee</dt>
-                <dd>{formatWalletMoney(movement.fees?.sliceFeeMinor ?? movement.sliceFeeMinor ?? "0")}</dd>
+                <dd>
+                  {formatWalletMoney(movement.fees?.sliceFeeMinor ?? movement.sliceFeeMinor ?? "0")}
+                </dd>
               </div>
               <div>
                 <dt>Provider fee</dt>
@@ -2320,6 +2389,26 @@ function MovementDetail({ item, onClose }: { item: WalletMovementView; onClose: 
               </div>
             </dl>
           </section>
+          {canResumeCardPayment ? (
+            <section className="wallet-detail__resume">
+              <p className="wallet-detail__section-label">Continue payment</p>
+              <strong>Finish your secure card payment</strong>
+              <p>
+                This pending payment is still reserved with Stripe. Continue with the same secure
+                payment form — no second deposit will be created.
+              </p>
+              <button type="button" onClick={() => void resumeCardPayment()} disabled={resuming}>
+                <CreditCard aria-hidden="true" />
+                {resuming ? "Opening secure payment…" : "Continue secure card payment"}
+                <ArrowRight aria-hidden="true" />
+              </button>
+              {resumeError ? (
+                <p className="wallet-detail__resume-error" role="alert">
+                  {resumeError}
+                </p>
+              ) : null}
+            </section>
+          ) : null}
           {movement.failure ? (
             <section className="wallet-detail__outcome is-warning">
               <p className="wallet-detail__section-label">What happened</p>
@@ -2745,10 +2834,7 @@ function friendlyStatus(status: string) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function movementRailLabel(
-  rail: WalletMovementView["rail"],
-  type: WalletMovementType,
-) {
+function movementRailLabel(rail: WalletMovementView["rail"], type: WalletMovementType) {
   if (rail === "CARD") return "Stripe card payment";
   if (rail === "BACS_DIRECT_DEBIT") return "UK bank · Bacs Direct Debit";
   if (rail === "CONNECT_STANDARD_PAYOUT") return "Stripe Connect · standard payout";
@@ -2787,7 +2873,10 @@ function settlementStepsFor(item: WalletMovementView | undefined) {
     return [
       { label: "Withdrawal requested", state: stateFor(0) },
       { label: "Wallet cash reserved", state: stateFor(1) },
-      { label: "Provider payout processing", state: completed ? "complete" : processing ? "active" : "next" },
+      {
+        label: "Provider payout processing",
+        state: completed ? "complete" : processing ? "active" : "next",
+      },
       { label: "Payout confirmed", state: completed ? "complete" : "next" },
     ] as const;
   }
@@ -2796,9 +2885,15 @@ function settlementStepsFor(item: WalletMovementView | undefined) {
       label: item.rail === "CARD" ? "Secure card payment created" : "Bank deposit requested",
       state: stateFor(0),
     },
-    { label: "Provider payment confirmation", state: completed ? "complete" : processing ? "active" : "next" },
     {
-      label: item.rail === "BACS_DIRECT_DEBIT" ? "Funds available from Stripe" : "Wallet credit recorded",
+      label: "Provider payment confirmation",
+      state: completed ? "complete" : processing ? "active" : "next",
+    },
+    {
+      label:
+        item.rail === "BACS_DIRECT_DEBIT"
+          ? "Funds available from Stripe"
+          : "Wallet credit recorded",
       state: item.status === "SETTLED" ? "complete" : "next",
     },
     {

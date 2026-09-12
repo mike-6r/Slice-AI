@@ -1,22 +1,42 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { Bell, CheckCheck, CircleDot } from "lucide-react";
+import {
+  Bell,
+  BellRing,
+  Check,
+  CheckCheck,
+  ClipboardCheck,
+  MessageCircle,
+  PackageCheck,
+  ReceiptText,
+  TrendingUp,
+  WalletCards,
+  type LucideIcon,
+} from "lucide-react";
+import { type ReactNode, useState } from "react";
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
 import { recordQaRollback } from "@/auth/qa-harness";
 import { toast } from "sonner";
+import type { Notification } from "@/domain";
 import { formatDate } from "@/lib/format";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
+
 const currentUser = "current" as never;
+
+type NotificationFilter = "ALL" | "UNREAD";
+
 export const Route = createFileRoute("/notifications")({
   head: () => ({ meta: [{ title: "Notifications | Slice" }] }),
   component: Notifications,
 });
+
 function Notifications() {
   const services = useAppServices();
   const client = useQueryClient();
   const { isAuthenticated } = useSession();
+  const [filter, setFilter] = useState<NotificationFilter>("ALL");
   const key = ["notifications", "current"];
   const unreadKey = queryKeys.notifications.unread;
   const list = useQuery({
@@ -84,94 +104,250 @@ function Notifications() {
   const authRequired =
     !isAuthenticated || (list.error instanceof ApiError && list.error.status === 401);
   const unread = list.data?.filter((item) => !item.readAt).length ?? 0;
+  const notifications = list.data ?? [];
+  const visibleNotifications =
+    filter === "UNREAD" ? notifications.filter((item) => !item.readAt) : notifications;
+
   return (
-    <main className="page-shell max-w-3xl py-10 sm:py-12">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[.16em] text-accent">
-            Notifications
-          </p>
-          <h1 className="mt-2 font-display text-4xl font-bold tracking-[-.05em]">
-            Updates, in one place.
-          </h1>
-          <p className="mt-3 text-sm text-subtle">
-            Only notifications from your authenticated account are shown.
-          </p>
-        </div>
-        <button
-          type="button"
-          disabled={readAll.isPending || unread === 0}
-          onClick={() => readAll.mutate()}
-          className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-semibold hover:bg-elevated"
-        >
-          <CheckCheck className="size-4" />
-          Mark all read
-        </button>
-      </header>
-      {!authRequired && list.isLoading ? (
-        <section className="customer-state mt-7 space-y-3" aria-label="Loading notifications">
-          <div className="customer-skeleton h-16" />
-          <div className="customer-skeleton h-16" />
-          <div className="customer-skeleton h-16" />
-        </section>
-      ) : authRequired ? (
-        <section className="customer-state mt-7 text-center">
-          <h2 className="text-lg font-semibold">Sign in to see notifications</h2>
-          <p className="mt-2 text-sm text-subtle">
-            Notification history is private to your authenticated account.
-          </p>
-        </section>
-      ) : list.isError ? (
-        <section className="customer-state mt-7 text-center">
-          <h2 className="text-lg font-semibold">Notifications unavailable</h2>
-          <p className="mt-2 text-sm text-subtle">Try again to load your durable updates.</p>
-          <button
-            type="button"
-            className="mt-4 font-semibold text-accent"
-            onClick={() => void list.refetch()}
-          >
-            Retry
-          </button>
-        </section>
-      ) : list.data?.length ? (
-        <div className="notification-list mt-7 overflow-hidden rounded-xl border border-border bg-elevated">
-          {list.data.map((item) => (
+    <main className="notifications-page">
+      <div className="page-shell notifications-shell">
+        <header className="notifications-hero">
+          <div className="notifications-hero__copy">
+            <p className="notifications-hero__eyebrow">
+              <BellRing aria-hidden="true" /> Account updates
+            </p>
+            <h1>Everything worth knowing.</h1>
+            <p>
+              Your private record of account, wallet, market and collectible activity—newest first.
+            </p>
+          </div>
+          <div className="notifications-hero__actions">
+            <dl className="notifications-hero__summary" aria-label="Notification summary">
+              <div>
+                <dt>Unread</dt>
+                <dd>{unread}</dd>
+              </div>
+              <div>
+                <dt>Total</dt>
+                <dd>{notifications.length}</dd>
+              </div>
+            </dl>
             <button
-              key={item.id}
               type="button"
-              disabled={Boolean(item.readAt) || read.isPending}
-              onClick={() => read.mutate(item.id)}
-              className="notification-list__row flex w-full gap-3 border-b border-border p-4 text-left last:border-0 hover:bg-surface"
+              disabled={readAll.isPending || unread === 0}
+              onClick={() => readAll.mutate()}
+              className="notifications-hero__read-all"
             >
-              <span
-                className={`notification-list__icon ${item.readAt ? "text-muted" : "text-accent"}`}
-              >
-                {item.readAt ? <Bell className="size-4" /> : <CircleDot className="size-4" />}
-              </span>
-              <span className="notification-list__copy min-w-0 flex-1">
-                <span className="notification-list__heading flex justify-between gap-3">
-                  <span className="notification-list__title font-semibold">{item.title}</span>
-                  <span className="shrink-0 text-xs text-muted">{formatDate(item.createdAt)}</span>
-                </span>
-                <span className="notification-list__body mt-1 block text-sm leading-6 text-subtle">
-                  {item.body}
-                </span>
-              </span>
+              <CheckCheck aria-hidden="true" />
+              {readAll.isPending ? "Marking read…" : "Mark all read"}
             </button>
-          ))}
-        </div>
-      ) : (
-        <section className="customer-state mt-7 text-center">
-          <Bell className="mx-auto size-6 text-accent" aria-hidden="true" />
-          <h2 className="mt-3 text-lg font-semibold">You have no notifications</h2>
-          <p className="mt-2 text-sm text-subtle">
-            Durable updates about your account and activity will appear here.
-          </p>
-        </section>
-      )}
-      <p className="mt-4 text-center text-xs text-muted">
-        {unread} unread update{unread === 1 ? "" : "s"}
-      </p>
+          </div>
+        </header>
+
+        {!authRequired && list.isLoading ? (
+          <NotificationsLoading />
+        ) : authRequired ? (
+          <NotificationState
+            title="Sign in to see your updates"
+            detail="Notification history is private to your authenticated account."
+          />
+        ) : list.isError ? (
+          <NotificationState
+            title="Notifications are unavailable"
+            detail="Try again to load your durable account updates."
+            action={
+              <button type="button" onClick={() => void list.refetch()}>
+                Try again
+              </button>
+            }
+          />
+        ) : notifications.length ? (
+          <section className="notifications-inbox" aria-label="Account notifications">
+            <div className="notifications-inbox__toolbar">
+              <div>
+                <p className="notifications-inbox__eyebrow">Your inbox</p>
+                <h2>{filter === "UNREAD" ? "Unread updates" : "All updates"}</h2>
+              </div>
+              <div className="notifications-filter" role="tablist" aria-label="Notification filter">
+                {(
+                  [
+                    ["ALL", `All ${notifications.length}`],
+                    ["UNREAD", `Unread ${unread}`],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="tab"
+                    aria-selected={filter === value}
+                    className={filter === value ? "is-active" : ""}
+                    onClick={() => setFilter(value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {visibleNotifications.length ? (
+              <div className="notifications-inbox__list">
+                {visibleNotifications.map((item) => (
+                  <NotificationRow
+                    key={item.id}
+                    item={item}
+                    isMutating={read.isPending}
+                    onRead={() => read.mutate(item.id)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <NotificationState
+                compact
+                title="You’re all caught up"
+                detail="There are no unread updates right now."
+              />
+            )}
+          </section>
+        ) : (
+          <NotificationState
+            icon={<Bell aria-hidden="true" />}
+            title="Your inbox is clear"
+            detail="Durable updates about your account and activity will appear here."
+          />
+        )}
+      </div>
     </main>
   );
+}
+
+function NotificationRow({
+  item,
+  isMutating,
+  onRead,
+}: {
+  item: Notification;
+  isMutating: boolean;
+  onRead: () => void;
+}) {
+  const presentation = notificationPresentation(item);
+  const Icon = presentation.icon;
+  const unread = !item.readAt;
+  const title = notificationTitle(item, presentation.title);
+  return (
+    <button
+      type="button"
+      disabled={!unread || isMutating}
+      onClick={onRead}
+      className={`notifications-inbox__row ${unread ? "is-unread" : "is-read"}`}
+      aria-label={
+        unread
+          ? `${presentation.title}. ${title}. Mark this notification as read.`
+          : `${presentation.title}. ${title}. Read.`
+      }
+    >
+      <span className={`notifications-inbox__icon is-${presentation.tone}`} aria-hidden="true">
+        <Icon />
+      </span>
+      <span className="notifications-inbox__copy">
+        <span className="notifications-inbox__meta">
+          <span>{presentation.title}</span>
+          <time dateTime={item.createdAt}>{notificationDate(item.createdAt)}</time>
+        </span>
+        <strong>{title}</strong>
+        <span className="notifications-inbox__body">{item.body}</span>
+      </span>
+      <span className="notifications-inbox__state" aria-hidden="true">
+        {unread ? <span>New</span> : <Check />}
+      </span>
+    </button>
+  );
+}
+
+function NotificationsLoading() {
+  return (
+    <section
+      className="notifications-inbox notifications-inbox--loading"
+      aria-label="Loading notifications"
+    >
+      <div className="notifications-inbox__toolbar">
+        <div>
+          <p className="notifications-inbox__eyebrow">Your inbox</p>
+          <h2>Loading updates</h2>
+        </div>
+      </div>
+      <div className="notifications-inbox__list">
+        {[1, 2, 3, 4].map((item) => (
+          <div className="notifications-skeleton" key={item} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function NotificationState({
+  icon,
+  title,
+  detail,
+  action,
+  compact = false,
+}: {
+  icon?: ReactNode;
+  title: string;
+  detail: string;
+  action?: ReactNode;
+  compact?: boolean;
+}) {
+  return (
+    <section className={`notifications-state${compact ? " is-compact" : ""}`}>
+      {icon ? <span className="notifications-state__icon">{icon}</span> : null}
+      <div>
+        <h2>{title}</h2>
+        <p>{detail}</p>
+      </div>
+      {action ? <div className="notifications-state__action">{action}</div> : null}
+    </section>
+  );
+}
+
+function notificationPresentation(item: Notification): {
+  title: string;
+  tone: "wallet" | "market" | "collectible" | "orders" | "community" | "account";
+  icon: LucideIcon;
+} {
+  const source = `${item.type} ${item.title} ${item.body}`.toUpperCase();
+  if (/(DEPOSIT|WITHDRAWAL|WALLET|PORTFOLIO)/.test(source)) {
+    return { title: "Wallet & portfolio", tone: "wallet", icon: WalletCards };
+  }
+  if (/(SUBMISSION|COLLECTIBLE|INTAKE|CUSTODY|VAULT)/.test(source)) {
+    return { title: "Collectibles", tone: "collectible", icon: ClipboardCheck };
+  }
+  if (/(ORDER|RESERVATION|OFFER|PROPOSAL|EXECUTION)/.test(source)) {
+    return { title: "Orders & offers", tone: "orders", icon: ReceiptText };
+  }
+  if (/(PRICE|MARKET|WATCHLIST)/.test(source)) {
+    return { title: "Market watch", tone: "market", icon: TrendingUp };
+  }
+  if (/(DISCUSSION|COMMENT|REPLY)/.test(source)) {
+    return { title: "Community", tone: "community", icon: MessageCircle };
+  }
+  return { title: "Account", tone: "account", icon: PackageCheck };
+}
+
+function notificationTitle(item: Notification, fallback: string) {
+  const title = item.title.trim();
+  if (/^[A-Z_\s]+$/.test(title)) return `${fallback} update`;
+  return title;
+}
+
+function notificationDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return formatDate(value);
+
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const dayDifference = Math.round((startOfToday - startOfDate) / 86_400_000);
+
+  if (dayDifference === 0) return "Today";
+  if (dayDifference === 1) return "Yesterday";
+  return formatDate(date);
 }

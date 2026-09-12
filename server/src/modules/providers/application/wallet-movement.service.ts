@@ -242,6 +242,82 @@ export class WalletMovementService {
     return result;
   }
 
+  /**
+   * Reopens an abandoned Stripe-hosted card form for its authenticated owner.
+   * The existing PaymentIntent is reused, so this cannot create a duplicate
+   * deposit or a second card charge.
+   */
+  async resumeCardDeposit(actor: Actor, movementId: string, requestId: string) {
+    const cardFundingService = this.cardFunding;
+    const options = cardFundingService?.options();
+    if (!cardFundingService || !options?.available) {
+      throw new ConflictException({
+        code: 'CARD_FUNDING_UNAVAILABLE',
+        message: options?.reason ?? 'Card funding is currently unavailable.',
+      });
+    }
+    await this.capabilities?.requireCardFunding(actor);
+    // Resolve a payment Stripe has already confirmed before deciding whether it
+    // still needs a card form. A successful payment must never be reopened.
+    await this.reconcilePendingStripeDeposits(
+      'card-funding-resume',
+      actor.userId,
+    );
+    const movement = await this.db.moneyMovement.findFirst({
+      where: {
+        id: movementId,
+        userId: actor.userId,
+        type: 'DEPOSIT',
+        rail: 'CARD',
+      },
+    });
+    if (!movement) {
+      throw new NotFoundException({
+        code: 'CARD_PAYMENT_NOT_FOUND',
+        message: 'Card payment was not found.',
+      });
+    }
+    if (movement.status !== 'PENDING_PROVIDER') {
+      throw new ConflictException({
+        code: 'CARD_PAYMENT_NOT_RESUMABLE',
+        message:
+          'This card payment is already being processed or is no longer available. Refresh your Wallet to see its latest status.',
+      });
+    }
+    const providerReference = this.decryptMovementReference(movement);
+    if (!providerReference?.startsWith('pi_')) {
+      throw new ConflictException({
+        code: 'CARD_PAYMENT_NOT_RESUMABLE',
+        message:
+          'This card payment can no longer be resumed. Start a new payment from your Wallet.',
+      });
+    }
+    const cardFunding = await cardFundingService.resumePaymentIntent({
+      movementId: movement.id,
+      amountMinor: movement.amountMinor.toString(),
+      providerReference,
+    });
+    await this.db.$transaction(async (db) => {
+      await createIdentityTransaction(db).audit.append({
+        id: randomUUID(),
+        actorUserId: actor.userId,
+        actorType: 'USER',
+        action: 'WALLET_CARD_FUNDING_RESUMED',
+        resourceType: 'money-movement',
+        resourceId: movement.id,
+        requestId,
+        sessionId: actor.sessionId as never,
+        result: 'SUCCESS',
+        metadata: { movementId: movement.id },
+        createdAt: new Date(),
+      });
+    });
+    return {
+      movement: this.safe(movement, false),
+      cardFunding,
+    };
+  }
+
   async createWithdrawal(
     actor: Actor,
     amountMinor: string,
@@ -316,17 +392,18 @@ export class WalletMovementService {
         message: 'Withdrawal requires compliance review.',
       });
     }
-    return (await this.create(
-      actor,
-      'WITHDRAWAL',
-      amountMinor,
-      requestId,
-      key,
-      'CONNECT_STANDARD_PAYOUT',
-      false,
-      { payoutDestinationId, payoutMethod },
-    ))
-      .movement;
+    return (
+      await this.create(
+        actor,
+        'WITHDRAWAL',
+        amountMinor,
+        requestId,
+        key,
+        'CONNECT_STANDARD_PAYOUT',
+        false,
+        { payoutDestinationId, payoutMethod },
+      )
+    ).movement;
   }
 
   private async createWithCapability(
@@ -1446,14 +1523,15 @@ export class WalletMovementService {
           input.requestId,
           input.reasonCode,
         );
-      const recoveredMinor = deficitMinor > 0n
-        ? await this.ledger.recoverReturnedFundsDeficitInTransaction(
-            db,
-            updated.userId,
-            input.requestId,
-            this.providerActor(updated.userId, updated.id),
-          )
-        : 0n;
+      const recoveredMinor =
+        deficitMinor > 0n
+          ? await this.ledger.recoverReturnedFundsDeficitInTransaction(
+              db,
+              updated.userId,
+              input.requestId,
+              this.providerActor(updated.userId, updated.id),
+            )
+          : 0n;
       const outstandingMinor = deficitMinor - recoveredMinor;
       await createIdentityTransaction(db).audit.append({
         id: randomUUID(),
@@ -1749,9 +1827,8 @@ export class WalletMovementService {
           `movement:${movement.id}`,
         );
         if (!paymentIntentId.startsWith('pi_')) continue;
-        const settlement = await this.providerCosts.paymentIntentSettlement(
-          paymentIntentId,
-        );
+        const settlement =
+          await this.providerCosts.paymentIntentSettlement(paymentIntentId);
         if (settlement.providerAvailable) {
           await this.completeFromProvider({
             movementId: movement.id,
@@ -1760,7 +1837,10 @@ export class WalletMovementService {
             requestId,
           });
         } else if (settlement.paymentConfirmed) {
-          await this.processingFromProvider({ movementId: movement.id, requestId });
+          await this.processingFromProvider({
+            movementId: movement.id,
+            requestId,
+          });
         }
         await this.providerCosts.reconcileStripeDeposit({
           movementId: movement.id,
@@ -1807,7 +1887,9 @@ export class WalletMovementService {
       });
       for (const candidate of candidates) {
         try {
-          const effect = await this.connectPayouts.reconcilePayout(candidate.id);
+          const effect = await this.connectPayouts.reconcilePayout(
+            candidate.id,
+          );
           if (!effect) continue;
           if (effect.action === 'PROCESSING') {
             await this.processingFromProvider({
@@ -2001,7 +2083,8 @@ export class WalletMovementService {
             status: movement.connectPayout.status,
             failureCode: movement.connectPayout.failureCode,
             method: movement.connectPayout.payoutMethod,
-            arrivalDate: movement.connectPayout.arrivalDate?.toISOString() ?? null,
+            arrivalDate:
+              movement.connectPayout.arrivalDate?.toISOString() ?? null,
             balanceSnapshots: movement.connectPayout.balanceSnapshots.map(
               (snapshot) => ({
                 stage: snapshot.stage,

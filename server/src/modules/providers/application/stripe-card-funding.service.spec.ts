@@ -27,12 +27,14 @@ describe('StripeCardFundingService', () => {
   });
 
   it('creates a GBP PaymentIntent with a Slice movement idempotency key and no card data', async () => {
-    const paymentIntentsCreate = jest.fn<() => Promise<unknown>>().mockResolvedValue({
-      id: 'pi_test_card_123',
-      client_secret: 'pi_test_card_123_secret_only_for_customer',
-      currency: 'gbp',
-      livemode: false,
-    });
+    const paymentIntentsCreate = jest
+      .fn<() => Promise<unknown>>()
+      .mockResolvedValue({
+        id: 'pi_test_card_123',
+        client_secret: 'pi_test_card_123_secret_only_for_customer',
+        currency: 'gbp',
+        livemode: false,
+      });
     const db = {
       externalProviderCustomer: {
         findUnique: jest.fn<() => Promise<unknown>>().mockResolvedValue(null),
@@ -53,7 +55,9 @@ describe('StripeCardFundingService', () => {
       {
         get: () => ({
           customers: {
-            create: jest.fn<() => Promise<unknown>>().mockResolvedValue({ id: 'cus_test_123' }),
+            create: jest
+              .fn<() => Promise<unknown>>()
+              .mockResolvedValue({ id: 'cus_test_123' }),
           },
           paymentIntents: { create: paymentIntentsCreate },
         }),
@@ -95,5 +99,94 @@ describe('StripeCardFundingService', () => {
         idempotencyKey: 'slice-card-funding:SANDBOX:movement-1',
       }),
     );
+  });
+
+  it('resumes only the original pending PaymentIntent without creating another one', async () => {
+    const paymentIntentsCreate = jest.fn<() => Promise<unknown>>();
+    const paymentIntentsRetrieve = jest
+      .fn<() => Promise<unknown>>()
+      .mockResolvedValue({
+        id: 'pi_test_card_123',
+        client_secret: 'pi_test_card_123_secret_only_for_customer',
+        amount: 1250,
+        currency: 'gbp',
+        livemode: false,
+        status: 'requires_payment_method',
+        metadata: {
+          slice_movement_id: 'movement-1',
+          slice_currency: 'GBP',
+          slice_funding_rail: 'card',
+        },
+      });
+    const service = new StripeCardFundingService(
+      {} as never,
+      {} as never,
+      {
+        get: () => ({
+          paymentIntents: {
+            create: paymentIntentsCreate,
+            retrieve: paymentIntentsRetrieve,
+          },
+        }),
+        provider: () => 'STRIPE_SANDBOX',
+        environment: () => 'SANDBOX',
+        publishableKey: () => 'pk_test_slice',
+      } as never,
+      config as never,
+    );
+
+    await expect(
+      service.resumePaymentIntent({
+        movementId: 'movement-1',
+        amountMinor: '1250',
+        providerReference: 'pi_test_card_123',
+      }),
+    ).resolves.toEqual({
+      clientSecret: 'pi_test_card_123_secret_only_for_customer',
+      publishableKey: 'pk_test_slice',
+    });
+
+    expect(paymentIntentsRetrieve).toHaveBeenCalledWith('pi_test_card_123');
+    expect(paymentIntentsCreate).not.toHaveBeenCalled();
+  });
+
+  it('refuses to reopen a card payment Stripe has already processed', async () => {
+    const service = new StripeCardFundingService(
+      {} as never,
+      {} as never,
+      {
+        get: () => ({
+          paymentIntents: {
+            retrieve: jest.fn<() => Promise<unknown>>().mockResolvedValue({
+              id: 'pi_test_card_123',
+              client_secret: 'pi_test_card_123_secret_only_for_customer',
+              amount: 1250,
+              currency: 'gbp',
+              livemode: false,
+              status: 'succeeded',
+              metadata: {
+                slice_movement_id: 'movement-1',
+                slice_currency: 'GBP',
+                slice_funding_rail: 'card',
+              },
+            }),
+          },
+        }),
+        provider: () => 'STRIPE_SANDBOX',
+        environment: () => 'SANDBOX',
+        publishableKey: () => 'pk_test_slice',
+      } as never,
+      config as never,
+    );
+
+    await expect(
+      service.resumePaymentIntent({
+        movementId: 'movement-1',
+        amountMinor: '1250',
+        providerReference: 'pi_test_card_123',
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'CARD_PAYMENT_NOT_RESUMABLE' }),
+    });
   });
 });
