@@ -32,17 +32,22 @@ import {
 
 type Db = Prisma.TransactionClient;
 
-export function bacsReleaseAt(providerAvailableOn: Date, holdDays: number) {
-  return new Date(providerAvailableOn.getTime() + holdDays * 86_400_000);
+/**
+ * `available_on` is the provider's settlement authority. Keep this helper
+ * for historical callers, but never add a Slice-owned delay after the
+ * provider has made funds available.
+ */
+export function bacsReleaseAt(providerAvailableOn: Date, _holdDays = 0) {
+  return new Date(providerAvailableOn.getTime());
 }
 
 export function isBacsReleaseEligible(
   providerAvailableOn: Date,
-  holdDays: number,
+  _holdDays: number,
   now: Date,
 ) {
   return (
-    now.getTime() >= bacsReleaseAt(providerAvailableOn, holdDays).getTime()
+    now.getTime() >= providerAvailableOn.getTime()
   );
 }
 
@@ -72,16 +77,12 @@ export class FinancialLedgerService {
   ) {}
 
   /**
-   * Bacs success is provider confirmation, not a product decision that the
-   * money is safe to spend. The deposit account is therefore deliberately
-   * separate from CASH_AVAILABLE while the explicit risk policy is unset.
+   * New Bacs deposits settle straight into available cash once Stripe marks
+   * the balance transaction available. This remains a compatibility seam
+   * while historical BACS_RISK_HOLD rows are migrated lazily.
    */
   bacsRiskHoldEnabled() {
-    return (
-      this.config?.providerMode !== undefined &&
-      this.config.providerMode !== 'local' &&
-      this.config.stripeBankFundingRail === 'bacs_debit'
-    );
+    return false;
   }
 
   async depositCashAccount(
@@ -121,24 +122,20 @@ export class FinancialLedgerService {
   }
 
   /**
-   * Lazy release is only enabled by an explicit configured policy. The
-   * provider's available_on timestamp is evidence used by that policy; it is
-   * not treated as proof that Bacs return/dispute risk has disappeared.
+   * Releases only historical BACS_RISK_HOLD balances. It deliberately uses
+   * Stripe's providerAvailableOn timestamp directly, with no extra app hold.
    */
   async releaseMaturedBacsDepositsForUser(
     userId: string,
     requestId = 'bacs-risk-policy',
     now = new Date(),
   ) {
-    const holdDays = this.config?.bacsInternalTradeHoldDays;
-    if (!this.bacsRiskHoldEnabled() || holdDays === undefined) return 0;
-    const maturedBefore = new Date(now.getTime() - holdDays * 86_400_000);
     const candidates = await this.db.moneyMovement.findMany({
       where: {
         userId,
         type: 'DEPOSIT',
         status: 'HELD',
-        providerAvailableOn: { lte: maturedBefore },
+        providerAvailableOn: { lte: now },
       },
       select: { id: true },
       orderBy: [{ providerAvailableOn: 'asc' }, { id: 'asc' }],
@@ -169,8 +166,6 @@ export class FinancialLedgerService {
     requestId: string,
     now: Date,
   ) {
-    const holdDays = this.config?.bacsInternalTradeHoldDays;
-    if (holdDays === undefined) return false;
     return this.db.$transaction(async (db) => {
       await db.$queryRaw`SELECT id FROM "MoneyMovement" WHERE id = ${movementId} FOR UPDATE`;
       const movement = await db.moneyMovement.findUnique({
@@ -183,7 +178,7 @@ export class FinancialLedgerService {
         movement.status !== 'HELD' ||
         movement.cashAccount.code !== 'BACS_RISK_HOLD' ||
         !movement.providerAvailableOn ||
-        !isBacsReleaseEligible(movement.providerAvailableOn, holdDays, now)
+        !isBacsReleaseEligible(movement.providerAvailableOn, 0, now)
       )
         return false;
       const cash = await this.depositCashAccount(db, movement.userId, false);
@@ -244,7 +239,7 @@ export class FinancialLedgerService {
         result: 'SUCCESS',
         metadata: {
           providerAvailableOn: movement.providerAvailableOn.toISOString(),
-          holdDays,
+          releasePolicy: 'PROVIDER_AVAILABLE_ON',
         },
         createdAt: now,
       });
@@ -505,26 +500,47 @@ export class FinancialLedgerService {
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
     if (!deficit) return 0n;
-    const cash = await db.financialAccount.findFirst({
+    // Use the existing fungible-cash convention deterministically: ordinary
+    // customer cash first, then still-available collector proceeds. Active
+    // order/payout reservations are never seized here.
+    const recoverableAccounts = await db.financialAccount.findMany({
       where: {
         ownerType: 'USER',
         ownerUserId: userId,
-        code: 'CASH_AVAILABLE',
+        code: { in: ['CASH_AVAILABLE', 'COLLECTOR_PROCEEDS_AVAILABLE'] },
         currency: 'GBP',
         status: 'ACTIVE',
       },
       include: { balance: true },
+      orderBy: { code: 'asc' },
     });
-    if (!cash) return 0n;
-    const cashAvailable = maxZero(
-      accountAuthority(
-        cash.normalSide,
-        cash.balance?.postedDebitMinor ?? 0n,
-        cash.balance?.postedCreditMinor ?? 0n,
-      ) - (cash.balance?.reservedMinor ?? 0n),
-    );
     const remaining = deficit.amountMinor - deficit.recoveredMinor;
-    const recovery = cashAvailable < remaining ? cashAvailable : remaining;
+    let unrecovered = remaining;
+    const recoveryLines: JournalLine[] = [];
+    for (const account of recoverableAccounts.sort(
+      (left, right) =>
+        Number(left.code === 'COLLECTOR_PROCEEDS_AVAILABLE') -
+        Number(right.code === 'COLLECTOR_PROCEEDS_AVAILABLE'),
+    )) {
+      const available = maxZero(
+        accountAuthority(
+          account.normalSide,
+          account.balance?.postedDebitMinor ?? 0n,
+          account.balance?.postedCreditMinor ?? 0n,
+        ) - (account.balance?.reservedMinor ?? 0n),
+      );
+      const amount = available < unrecovered ? available : unrecovered;
+      if (amount > 0n) {
+        recoveryLines.push({
+          accountId: account.id,
+          side: 'DEBIT',
+          amountMinor: amount.toString(),
+        });
+        unrecovered -= amount;
+      }
+      if (unrecovered === 0n) break;
+    }
+    const recovery = remaining - unrecovered;
     if (recovery <= 0n) return 0n;
     const receivable = await this.deficitReceivableAccount(db);
     await this.postInTransaction(
@@ -536,11 +552,7 @@ export class FinancialLedgerService {
         correlationId: `bacs-deficit-recovery:${deficit.id}:${deficit.recoveredMinor}`,
         descriptionCode: 'RETURNED_FUNDS_DEFICIT_RECOVERED',
         lines: [
-          {
-            accountId: cash.id,
-            side: 'DEBIT',
-            amountMinor: recovery.toString(),
-          },
+          ...recoveryLines,
           {
             accountId: receivable.id,
             side: 'CREDIT',
@@ -561,11 +573,25 @@ export class FinancialLedgerService {
         resolvedAt: recovered ? new Date() : null,
       },
     });
-    if (recovered) {
+    const openDeficitCount = recovered
+      ? await db.financialDeficit.count({
+          where: {
+            userId,
+            status: { in: ['OPEN', 'PARTIALLY_RECOVERED'] },
+          },
+        })
+      : 1;
+    const restrictionsReleased = recovered && openDeficitCount === 0;
+    if (restrictionsReleased) {
       await db.complianceHold.updateMany({
         where: {
-          movementId: deficit.sourceMovementId,
-          reasonCode: 'RETURNED_FUNDS_DEFICIT',
+          userId,
+          reasonCode: {
+            in: [
+              'RETURNED_FUNDS_DEFICIT',
+              'RETURNED_FUNDS_RESERVATION_REVIEW',
+            ],
+          },
           status: 'ACTIVE',
         },
         data: { status: 'RELEASED', releasedAt: new Date() },
@@ -574,13 +600,13 @@ export class FinancialLedgerService {
     await this.outbox.append(
       db,
       financialNotificationEvent({
-        kind: recovered
+        kind: restrictionsReleased
           ? financialNotificationKind.deficitResolved
           : financialNotificationKind.deficitPartiallyRecovered,
-        title: recovered
+        title: restrictionsReleased
           ? 'Outstanding balance resolved'
           : 'Outstanding balance partially recovered',
-        body: recovered
+        body: restrictionsReleased
           ? `Your outstanding Slice balance has been fully recovered. The temporary financial restrictions on your account have been removed.`
           : `${formatGbpMinor(recovery)} has been applied to your outstanding Slice balance. ${formatGbpMinor(updatedDeficit.amountMinor - updatedDeficit.recoveredMinor)} remains outstanding, so buying and withdrawals remain temporarily restricted.`,
         resourceType: 'financial-deficit',
@@ -596,7 +622,7 @@ export class FinancialLedgerService {
         eventSuffix: updatedDeficit.recoveredMinor.toString(),
       }),
     );
-    if (recovered) {
+    if (restrictionsReleased) {
       await this.outbox.append(
         db,
         financialNotificationEvent({
@@ -616,6 +642,20 @@ export class FinancialLedgerService {
       );
     }
     return recovery;
+  }
+
+  /**
+   * A future, provider-settled deposit is the normal safe recovery path for a
+   * returned-funds deficit. The caller owns the transaction so settlement,
+   * recovery and the resulting restriction state are atomic.
+   */
+  async recoverReturnedFundsDeficitInTransaction(
+    db: Db,
+    userId: string,
+    requestId: string,
+    actor: Actor,
+  ) {
+    return this.recoverDeficitInTransaction(db, userId, requestId, actor);
   }
 
   async deficitReceivableAccount(db: Db) {
@@ -950,12 +990,8 @@ export class FinancialLedgerService {
         providerAvailableOn:
           movement.providerAvailableOn?.toISOString() ?? null,
         expectedReleaseAt:
-          movement.providerAvailableOn &&
-          this.config?.bacsInternalTradeHoldDays !== undefined
-            ? bacsReleaseAt(
-                movement.providerAvailableOn,
-                this.config.bacsInternalTradeHoldDays,
-              ).toISOString()
+          movement.providerAvailableOn
+            ? bacsReleaseAt(movement.providerAvailableOn).toISOString()
             : null,
       })),
       withdrawableSources,

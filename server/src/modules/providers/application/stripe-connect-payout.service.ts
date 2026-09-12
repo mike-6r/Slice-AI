@@ -789,6 +789,54 @@ export class StripeConnectPayoutService {
     return { movementId: mapping.movementId, action: 'PROCESSING' };
   }
 
+  /**
+   * Stripe may not deliver connected-account payout events to a platform
+   * webhook endpoint. Re-read only an already-persisted Slice payout so a
+   * missed event cannot leave a terminal provider payout processing forever.
+   */
+  async reconcilePayout(connectPayoutId: string) {
+    const provider = this.stripeFactory.provider();
+    const environment = this.stripeFactory.environment();
+    const payout = await this.db.connectPayout.findFirst({
+      where: {
+        id: connectPayoutId,
+        provider,
+        environment,
+        externalPayoutIdCiphertext: { not: null },
+      },
+      include: {
+        connectAccount: {
+          select: {
+            id: true,
+            userId: true,
+            environment: true,
+            externalAccountIdCiphertext: true,
+          },
+        },
+      },
+    });
+    if (!payout?.externalPayoutIdCiphertext) return null;
+    const payoutId = this.crypto.decrypt(
+      payout.externalPayoutIdCiphertext,
+      `connect-payout:${payout.id}`,
+    );
+    const stripe = this.stripeFactory.get();
+    const externalAccountId = await this.resolveExternalAccountId(
+      stripe,
+      payout.connectAccount,
+    );
+    const externalPayout = await stripe.payouts.retrieve(
+      payoutId,
+      {},
+      { stripeAccount: externalAccountId },
+    );
+    return this.processWebhook(
+      provider,
+      payoutWebhookType(externalPayout.status),
+      externalPayout as unknown as Record<string, unknown>,
+    );
+  }
+
   private async captureBalancesForMapping(mapping: {
     id: string;
     connectAccount: ConnectAccountRow;
@@ -1245,6 +1293,13 @@ function mapPayoutStatus(status: string) {
   if (status === 'failed') return 'FAILED' as const;
   if (status === 'canceled') return 'CANCELED' as const;
   return 'PROCESSING' as const;
+}
+
+function payoutWebhookType(status: string) {
+  if (status === 'paid') return 'payout.paid';
+  if (status === 'failed') return 'payout.failed';
+  if (status === 'canceled') return 'payout.canceled';
+  return 'payout.updated';
 }
 
 function balanceMinor(entries: Array<{ amount: number; currency: string }>) {

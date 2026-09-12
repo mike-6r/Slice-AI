@@ -5243,7 +5243,7 @@ function ControlCenterRevamp({
             value={center.financialOperations.customerCashLiabilityMinor}
           />
           <ControlFinanceMetric
-            label="Bacs risk-held"
+            label="Legacy Bacs hold"
             value={center.financialOperations.bacsRiskHeldMinor}
           />
           <ControlFinanceMetric
@@ -8619,7 +8619,7 @@ function ConsolidatedUserDetailExperience({
             <DetailRow label="Available cash" value={money(finance.availableMinor)} />
             <DetailRow label="Reserved" value={money(finance.reservedMinor)} />
             <DetailRow label="Provider pending" value={money(finance.pendingMinor)} />
-            <DetailRow label="Bacs risk-held" value={money(finance.bacsHeldMinor)} />
+            <DetailRow label="Legacy Bacs hold" value={money(finance.bacsHeldMinor)} />
             <DetailRow label="Financial deficit" value={money(finance.deficitMinor)} />
             <DetailRow
               label="Returns / manual review"

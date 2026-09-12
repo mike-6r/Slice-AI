@@ -513,15 +513,11 @@ function WalletKpis({
       <WalletKpi
         icon={Clock3}
         label="Pending deposits"
-        value={formatWalletMoney(cash.riskHeldMinor ?? "0")}
+        value={formatWalletMoney(cash.pendingMinor ?? "0")}
         detail={
-          cash.riskHeldDeposits?.find((deposit) => deposit.expectedReleaseAt)?.expectedReleaseAt
-            ? "Expected after " +
-              formatShortDate(
-                cash.riskHeldDeposits.find((deposit) => deposit.expectedReleaseAt)!
-                  .expectedReleaseAt!,
-              )
-            : "Recent Bacs cash held while the bank debit clears"
+          cash.pendingDepositCount
+            ? `${cash.pendingDepositCount} ${cash.pendingDepositCount === 1 ? "deposit is" : "deposits are"} waiting for bank settlement`
+            : "No deposits waiting for bank settlement"
         }
       />
       <WalletKpi
@@ -1344,9 +1340,8 @@ function MoveMoneyPanel({
             </>
           ) : (
             <p>
-              Bacs deposits can remain held while the bank debit clears. Held cash is visible in
-              your total, but cannot be used to buy or withdraw until Slice&apos;s configured risk
-              policy releases it.
+              Your bank deposit is unavailable while Stripe is waiting for bank settlement. Once
+              Stripe makes the funds available, they are available to trade and withdraw.
             </p>
           )}
           {feePolicy.data && action === "WITHDRAWAL" && parseWalletGbp(amount) ? (
@@ -2803,8 +2798,8 @@ function settlementStepsFor(item: WalletMovementView | undefined) {
     },
     { label: "Provider payment confirmation", state: completed ? "complete" : processing ? "active" : "next" },
     {
-      label: item.rail === "BACS_DIRECT_DEBIT" ? "Funds clearing" : "Wallet credit recorded",
-      state: item.status === "HELD" || item.status === "SETTLED" ? "complete" : "next",
+      label: item.rail === "BACS_DIRECT_DEBIT" ? "Funds available from Stripe" : "Wallet credit recorded",
+      state: item.status === "SETTLED" ? "complete" : "next",
     },
     {
       label: "Available to trade or withdraw",

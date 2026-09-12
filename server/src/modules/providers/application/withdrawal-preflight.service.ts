@@ -84,7 +84,6 @@ export class WithdrawalPreflightService {
     const tradeAvailableMinor = maxZero(
       BigInt(wallet.tradeAvailableMinor ?? wallet.availableMinor),
     );
-    const riskHeldMinor = maxZero(BigInt(wallet.riskHeldMinor ?? '0'));
     const postedWithdrawableMinor = maxZero(
       BigInt(wallet.withdrawableMinor ?? wallet.availableMinor),
     );
@@ -126,7 +125,7 @@ export class WithdrawalPreflightService {
     // Settling is the customer-specific maturity bucket only. Provider-wide
     // liquidity is reported independently so a treasury shortfall is never
     // mislabeled as a customer's funds still settling.
-    const settlingMinor = riskHeldMinor + maturityPendingMinor;
+    const settlingMinor = maturityPendingMinor;
     const maturityStatus =
       settlingMinor > 0n
         ? customerEligibleMinor > 0n

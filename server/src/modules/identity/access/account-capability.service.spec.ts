@@ -277,6 +277,29 @@ describe('AccountCapabilityService', () => {
     });
   });
 
+  it('allows a replacement deposit but blocks trading and withdrawals during returned-funds recovery', async () => {
+    const service = subject(
+      user({
+        complianceHolds: [
+          { reasonCode: 'RETURNED_FUNDS_DEFICIT' },
+          { reasonCode: 'RETURNED_FUNDS_RESERVATION_REVIEW' },
+        ],
+      }),
+    );
+    await expect(service.evaluate('user-1', 'DEPOSIT_FUNDS')).resolves.toMatchObject({
+      allowed: true,
+      reason: null,
+    });
+    await expect(service.evaluate('user-1', 'PLACE_BUY_ORDER')).resolves.toMatchObject({
+      allowed: false,
+      reason: 'COMPLIANCE_REVIEW_REQUIRED',
+    });
+    await expect(service.evaluate('user-1', 'WITHDRAW_FUNDS')).resolves.toMatchObject({
+      allowed: false,
+      reason: 'COMPLIANCE_REVIEW_REQUIRED',
+    });
+  });
+
   it('uses the active provider KYC case instead of an approval from another provider', async () => {
     const service = subject(
       user({ complianceCases: [{ status: 'PENDING' }] }),

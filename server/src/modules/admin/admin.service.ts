@@ -10105,7 +10105,7 @@ export class AdminService {
         provider: item.provider,
         providerStatus: item.status,
         providerAvailableOn: item.providerAvailableOn?.toISOString() ?? null,
-        holdReason: item.failureCode ?? 'BACS_RETURN_RISK_HOLD',
+        holdReason: item.failureCode ?? 'LEGACY_BACS_HOLD',
         createdAt: item.createdAt.toISOString(),
         updatedAt: item.updatedAt.toISOString(),
       })),

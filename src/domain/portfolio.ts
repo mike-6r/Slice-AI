@@ -26,7 +26,7 @@ export interface PortfolioCashSummary {
   withdrawableMinor?: GbpMinorUnits;
   /** Posted GBP cash that is eligible for orders and executions. */
   tradeAvailableMinor?: GbpMinorUnits;
-  /** Provider-confirmed Bacs cash held while return risk is unresolved. */
+  /** Legacy Bacs-hold fields retained while historical rows are migrated. */
   riskHeldMinor?: GbpMinorUnits;
   riskHeldDepositCount?: number;
   riskHeldDeposits?: BacsRiskHeldDeposit[];

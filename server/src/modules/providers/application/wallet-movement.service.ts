@@ -432,19 +432,11 @@ export class WalletMovementService {
         // race past the composite account uniqueness constraint.
         await db.$queryRaw`SELECT id FROM "User" WHERE id = ${actor.userId} FOR UPDATE`;
       }
-      const bacsRiskHold =
-        type === 'DEPOSIT' &&
-        rail === 'BACS_DIRECT_DEBIT' &&
-        this.ledger.bacsRiskHoldEnabled();
       const cashAccounts = await db.financialAccount.findMany({
         where: {
           ownerType: 'USER',
           ownerUserId: actor.userId,
-          code: {
-            in: bacsRiskHold
-              ? ['BACS_RISK_HOLD']
-              : ['CASH_AVAILABLE', 'COLLECTOR_PROCEEDS_AVAILABLE'],
-          },
+          code: { in: ['CASH_AVAILABLE', 'COLLECTOR_PROCEEDS_AVAILABLE'] },
           currency: 'GBP',
           status: 'ACTIVE',
         },
@@ -471,17 +463,9 @@ export class WalletMovementService {
                 hasSufficientAvailable(account),
             ) ??
             cashAccounts.find((account) => account.code === 'CASH_AVAILABLE'))
-          : cashAccounts.find(
-              (account) =>
-                account.code ===
-                (bacsRiskHold ? 'BACS_RISK_HOLD' : 'CASH_AVAILABLE'),
-            );
+          : cashAccounts.find((account) => account.code === 'CASH_AVAILABLE');
       if (!cash && type === 'DEPOSIT')
-        cash = await this.ledger.depositCashAccount(
-          db,
-          actor.userId,
-          bacsRiskHold,
-        );
+        cash = await this.ledger.depositCashAccount(db, actor.userId, false);
       if (!cash && type === 'WITHDRAWAL')
         throw new ConflictException({
           code: 'NO_WITHDRAWABLE_BALANCE',
@@ -937,7 +921,7 @@ export class WalletMovementService {
       const providerAmountMinor =
         movement.providerAmountMinor ?? movement.amountMinor;
       const actor = this.providerActor(movement.userId, movement.id);
-      const riskHeld =
+      const legacyBacsHold =
         movement.type === 'DEPOSIT' &&
         movement.cashAccount.code === 'BACS_RISK_HOLD';
       const journal = await this.ledger.postInTransaction(
@@ -993,6 +977,41 @@ export class WalletMovementService {
         input.requestId,
         `provider-movement:${movement.id}:journal`,
       );
+      // Deposits created before the policy change can still point at the
+      // retired BACS_RISK_HOLD account. Reclassify them in this same verified
+      // provider-settlement transaction, rather than preserving a second
+      // post-settlement wait.
+      if (legacyBacsHold) {
+        const cash = await this.ledger.depositCashAccount(
+          db,
+          movement.userId,
+          false,
+        );
+        await this.ledger.postInTransaction(
+          db,
+          actor,
+          {
+            type: 'CASH_RELEASE',
+            financialDataClass: movement.financialDataClass,
+            correlationId: `bacs-risk-release:${movement.id}`,
+            descriptionCode: 'LEGACY_BACS_HOLD_RELEASED',
+            lines: [
+              {
+                accountId: movement.cashAccountId,
+                side: 'DEBIT',
+                amountMinor: movement.amountMinor.toString(),
+              },
+              {
+                accountId: cash.id,
+                side: 'CREDIT',
+                amountMinor: movement.amountMinor.toString(),
+              },
+            ],
+          },
+          input.requestId,
+          `bacs-risk-release:${movement.id}`,
+        );
+      }
       if (movement.type === 'WITHDRAWAL' && movement.reservationId) {
         await this.ledger.consumeCashInTransaction(
           db,
@@ -1009,7 +1028,7 @@ export class WalletMovementService {
       const transitioned = await db.moneyMovement.updateMany({
         where: { id: movement.id, status: { notIn: ['SETTLED', 'HELD'] } },
         data: {
-          status: riskHeld ? 'HELD' : 'SETTLED',
+          status: 'SETTLED',
           ledgerTransactionId: journal.transactionId,
           providerReferenceCiphertext: this.crypto.encrypt(
             input.providerReference,
@@ -1018,7 +1037,7 @@ export class WalletMovementService {
           providerReferenceHash: referenceHash,
           encryptionKeyVersion: this.crypto.keyVersion,
           settledAt: new Date(),
-          failureCode: riskHeld ? 'BACS_RETURN_RISK_HOLD' : null,
+          failureCode: null,
           version: { increment: 1 },
         },
       });
@@ -1032,9 +1051,7 @@ export class WalletMovementService {
           movementId: updated.id,
           fromStatus: current.status,
           toStatus: updated.status,
-          reasonCode: riskHeld
-            ? 'PROVIDER_CONFIRMED_BACS_RISK_HELD'
-            : 'PROVIDER_CONFIRMED',
+          reasonCode: 'PROVIDER_CONFIRMED',
         },
       });
       await createIdentityTransaction(db).audit.append({
@@ -1049,45 +1066,30 @@ export class WalletMovementService {
         result: 'SUCCESS',
         metadata: {
           status: 'SETTLED',
-          reasonCode: riskHeld
-            ? 'PROVIDER_CONFIRMED_BACS_RISK_HELD'
-            : 'PROVIDER_CONFIRMED',
+          reasonCode: 'PROVIDER_CONFIRMED',
         },
         createdAt: new Date(),
       });
-      if (riskHeld) {
-        await this.outbox.append(
+      if (updated.type === 'DEPOSIT')
+        await this.ledger.recoverReturnedFundsDeficitInTransaction(
           db,
-          financialNotificationEvent({
-            kind: financialNotificationKind.depositClearing,
-            title: 'Bank deposit clearing',
-            body: `Your ${formatGbpMinor(updated.amountMinor)} bank deposit was confirmed and is clearing. It is visible in your Wallet, but it cannot be used for trading or withdrawals until Slice releases it under the current risk policy.`,
-            resourceType: 'money-movement',
-            resourceId: updated.id,
-            aggregateType: 'money-movement',
-            aggregateId: updated.id,
-            amountMinor: updated.amountMinor.toString(),
-            actorUserId: updated.userId,
-            correlationId: input.requestId,
-            occurredAt: updated.settledAt!,
-            eventSuffix: 'clearing',
-          }),
+          updated.userId,
+          input.requestId,
+          actor,
         );
-      } else {
-        await this.outbox.append(
-          db,
-          movementSettledEvent({
-            movementId: updated.id,
-            type: updated.type,
-            amountMinor: updated.amountMinor.toString(),
-            currency: 'GBP',
-            status: 'SETTLED',
-            actorUserId: updated.userId,
-            correlationId: input.requestId,
-            occurredAt: updated.settledAt!,
-          }),
-        );
-      }
+      await this.outbox.append(
+        db,
+        movementSettledEvent({
+          movementId: updated.id,
+          type: updated.type,
+          amountMinor: updated.amountMinor.toString(),
+          currency: 'GBP',
+          status: 'SETTLED',
+          actorUserId: updated.userId,
+          correlationId: input.requestId,
+          occurredAt: updated.settledAt!,
+        }),
+      );
       return this.safe(updated, false);
     });
   }
@@ -1444,6 +1446,15 @@ export class WalletMovementService {
           input.requestId,
           input.reasonCode,
         );
+      const recoveredMinor = deficitMinor > 0n
+        ? await this.ledger.recoverReturnedFundsDeficitInTransaction(
+            db,
+            updated.userId,
+            input.requestId,
+            this.providerActor(updated.userId, updated.id),
+          )
+        : 0n;
+      const outstandingMinor = deficitMinor - recoveredMinor;
       await createIdentityTransaction(db).audit.append({
         id: randomUUID(),
         actorUserId: null,
@@ -1458,8 +1469,8 @@ export class WalletMovementService {
         createdAt: new Date(),
       });
       const returnBody =
-        deficitMinor > 0n
-          ? `A ${formatGbpMinor(updated.amountMinor)} bank deposit was returned by your bank. Because some of those funds had already been used, your Slice account now has an outstanding balance of ${formatGbpMinor(deficitMinor)}. Buying and withdrawals are temporarily restricted until it is resolved.`
+        outstandingMinor > 0n
+          ? `A ${formatGbpMinor(updated.amountMinor)} bank deposit was returned by your bank. Because some of those funds had already been used, your Slice account now has an outstanding balance of ${formatGbpMinor(outstandingMinor)}. Buying and withdrawals are temporarily restricted until it is resolved.`
           : `A ${formatGbpMinor(updated.amountMinor)} bank deposit was returned by your bank. Those funds are no longer available in Slice. If you think this is incorrect, please contact support.`;
       await this.outbox.append(
         db,
@@ -1472,7 +1483,7 @@ export class WalletMovementService {
           aggregateType: 'money-movement',
           aggregateId: updated.id,
           amountMinor: updated.amountMinor.toString(),
-          outstandingMinor: deficitMinor.toString(),
+          outstandingMinor: outstandingMinor.toString(),
           actorUserId: updated.userId,
           correlationId: input.requestId,
           eventSuffix: 'returned',
@@ -1635,6 +1646,7 @@ export class WalletMovementService {
   */
   async list(userId: string, cursor?: string, limit = 20) {
     await this.reconcilePendingStripeDeposits('wallet-movements-list', userId);
+    await this.reconcilePendingStripePayouts('wallet-movements-list', userId);
     const rows = await this.db.moneyMovement.findMany({
       where: { userId, ...(cursor ? { id: { lt: cursor } } : {}) },
       include: {
@@ -1673,6 +1685,7 @@ export class WalletMovementService {
 
   async detail(userId: string, movementId: string) {
     await this.reconcilePendingStripeDeposits('wallet-movement-detail', userId);
+    await this.reconcilePendingStripePayouts('wallet-movement-detail', userId);
     const movement = await this.db.moneyMovement.findFirst({
       where: { id: movementId, userId },
       include: {
@@ -1759,6 +1772,81 @@ export class WalletMovementService {
       if (error instanceof ConflictException) throw error;
       // Reconciliation is an opportunistic recovery path. A wallet read must
       // remain available when Stripe is temporarily unreachable.
+    }
+  }
+
+  /**
+   * Recovery for missed Stripe Connect payout webhooks. This only reads a
+   * payout that Slice already created and persisted, then applies the same
+   * terminal transition and provider-cost observation as the webhook path.
+   */
+  async reconcilePendingStripePayouts(requestId: string, userId?: string) {
+    if (
+      this.config.providerMode === 'local' ||
+      !this.connectPayouts ||
+      !this.config.stripeSecretKey
+    )
+      return;
+    const provider = moneyMovementProviderCode(this.config.providerMode);
+    const stripeProvider = provider as 'STRIPE_SANDBOX' | 'STRIPE_LIVE';
+    try {
+      const candidates = await this.db.connectPayout.findMany({
+        where: {
+          provider,
+          status: { in: ['CREATED', 'TRANSFERRED', 'PROCESSING'] },
+          externalPayoutIdCiphertext: { not: null },
+          movement: {
+            ...(userId ? { userId } : {}),
+            type: 'WITHDRAWAL',
+            status: { in: ['PENDING_PROVIDER', 'PROCESSING', 'MANUAL_REVIEW'] },
+          },
+        },
+        select: { id: true },
+        orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+        take: userId ? 20 : 100,
+      });
+      for (const candidate of candidates) {
+        try {
+          const effect = await this.connectPayouts.reconcilePayout(candidate.id);
+          if (!effect) continue;
+          if (effect.action === 'PROCESSING') {
+            await this.processingFromProvider({
+              movementId: effect.movementId,
+              requestId,
+            });
+          } else if (effect.action === 'COMPLETE' && effect.providerReference) {
+            await this.completeFromProvider({
+              movementId: effect.movementId,
+              providerReference: effect.providerReference,
+              providerEventId: `stripe-payout-reconciliation:${effect.providerReference}`,
+              requestId,
+            });
+            await this.providerCosts?.observePayoutForExternalId({
+              provider: stripeProvider,
+              payoutId: effect.providerReference,
+              requestId,
+            });
+          } else if (effect.action === 'FAIL') {
+            await this.failFromProvider({
+              movementId: effect.movementId,
+              reasonCode: effect.reasonCode ?? 'STRIPE_PAYOUT_FAILED',
+              requestId,
+            });
+          } else if (effect.action === 'HOLD') {
+            await this.holdFromProvider({
+              movementId: effect.movementId,
+              reasonCode: effect.reasonCode ?? 'STRIPE_PAYOUT_REVIEW',
+              requestId,
+            });
+          }
+        } catch {
+          // A single unavailable provider payout must not prevent the wallet
+          // from returning the other movements it can safely display.
+        }
+      }
+    } catch {
+      // This is a read-recovery path. Stripe outages remain visible as the
+      // existing processing state rather than breaking Wallet reads.
     }
   }
 

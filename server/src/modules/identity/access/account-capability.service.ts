@@ -337,12 +337,14 @@ export class AccountCapabilityService {
     const held = user.complianceHolds.length > 0 &&
       !(capability === 'DEPOSIT_FUNDS' &&
         deficitHold &&
-        user.complianceHolds.every(
-          (hold) => hold.reasonCode === 'RETURNED_FUNDS_DEFICIT',
+        user.complianceHolds.every((hold) =>
+          ['RETURNED_FUNDS_DEFICIT', 'RETURNED_FUNDS_RESERVATION_REVIEW'].includes(
+            hold.reasonCode,
+          ),
         ));
     // A returned-funds deficit must stop new exposure and withdrawals, but a
-    // verified future deposit is a supported recovery path. That deposit is
-    // still routed into BACS_RISK_HOLD and cannot itself be spent.
+    // verified future deposit is a supported recovery path. Any recovered
+    // balance is applied atomically before the remaining deposit is usable.
     if (deficitHold && capability !== 'DEPOSIT_FUNDS') {
       needs('IDENTITY_VERIFICATION', false);
       return this.denied(capability, 'COMPLIANCE_REVIEW_REQUIRED', requirements);

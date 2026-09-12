@@ -2,11 +2,11 @@ import { bacsReleaseAt, isBacsReleaseEligible } from './financial-ledger.service
 import { evaluateDepositLimits } from '../../providers/application/wallet-movement.service';
 
 describe('approved initial financial launch policy boundaries', () => {
-  it('releases Bacs funds exactly at providerAvailableOn plus seven days', () => {
+  it('releases Bacs funds exactly when the provider makes them available', () => {
     const availableOn = new Date('2026-08-01T12:00:00.000Z');
     const releaseAt = bacsReleaseAt(availableOn, 7);
-    expect(releaseAt.toISOString()).toBe('2026-08-08T12:00:00.000Z');
-    expect(isBacsReleaseEligible(availableOn, 7, new Date('2026-08-08T11:59:59.999Z'))).toBe(false);
+    expect(releaseAt.toISOString()).toBe('2026-08-01T12:00:00.000Z');
+    expect(isBacsReleaseEligible(availableOn, 7, new Date('2026-08-01T11:59:59.999Z'))).toBe(false);
     expect(isBacsReleaseEligible(availableOn, 7, releaseAt)).toBe(true);
   });
 
