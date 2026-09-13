@@ -172,16 +172,7 @@ export class StripeCardFundingService {
           'The secure card payment could not be reopened. Please try again shortly.',
       });
     }
-    const expectedAmount = BigInt(input.amountMinor);
-    const validIntent =
-      intent.id === input.providerReference &&
-      intent.amount === Number(expectedAmount) &&
-      intent.currency.toLowerCase() === 'gbp' &&
-      intent.livemode === (this.config.providerMode === 'stripe_live') &&
-      intent.metadata.slice_movement_id === input.movementId &&
-      intent.metadata.slice_currency === 'GBP' &&
-      intent.metadata.slice_funding_rail === 'card';
-    if (!validIntent || !intent.client_secret) {
+    if (!this.isExpectedPaymentIntent(intent, input) || !intent.client_secret) {
       throw new ConflictException({
         code: 'CARD_PAYMENT_NOT_RESUMABLE',
         message:
@@ -205,6 +196,86 @@ export class StripeCardFundingService {
       clientSecret: intent.client_secret,
       publishableKey: this.stripeFactory.publishableKey(),
     };
+  }
+
+  /**
+   * Cancels only the original, still-unconfirmed PaymentIntent. This is kept
+   * separate from the frontend close action: closing a form retains the
+   * payment for recovery, while this operation intentionally abandons it.
+   */
+  async cancelPaymentIntent(input: {
+    movementId: string;
+    amountMinor: string;
+    providerReference: string;
+    idempotencyKey: string;
+  }) {
+    if (this.config.providerMode === 'local') {
+      throw new ConflictException({
+        code: 'CARD_PAYMENT_NOT_CANCELLABLE',
+        message:
+          'This card payment is no longer available to cancel. Refresh your Wallet to see its latest status.',
+      });
+    }
+    let stripe: Stripe;
+    let intent: Stripe.PaymentIntent;
+    try {
+      stripe = this.stripeFactory.get();
+      intent = await stripe.paymentIntents.retrieve(input.providerReference);
+    } catch {
+      throw new ServiceUnavailableException({
+        code: 'STRIPE_CARD_FUNDING_CANCEL_FAILED',
+        message:
+          'We could not confirm whether this card payment can be cancelled. Please try again shortly.',
+      });
+    }
+    if (!this.isExpectedPaymentIntent(intent, input)) {
+      throw new ConflictException({
+        code: 'CARD_PAYMENT_NOT_CANCELLABLE',
+        message:
+          'This card payment is no longer available to cancel. Refresh your Wallet to see its latest status.',
+      });
+    }
+    if (intent.status === 'canceled') return { replayed: true };
+    if (
+      ![
+        'requires_payment_method',
+        'requires_confirmation',
+        'requires_action',
+      ].includes(intent.status)
+    ) {
+      throw new ConflictException({
+        code: 'CARD_PAYMENT_NOT_CANCELLABLE',
+        message:
+          'This card payment is already being processed or is no longer available. Refresh your Wallet to see its latest status.',
+      });
+    }
+    let cancelled: Stripe.PaymentIntent;
+    try {
+      cancelled = await stripe.paymentIntents.cancel(
+        input.providerReference,
+        {},
+        {
+          idempotencyKey: `slice-card-cancel:${this.stripeFactory.environment()}:${input.movementId}:${this.crypto.hash(input.idempotencyKey)}`,
+        },
+      );
+    } catch {
+      throw new ServiceUnavailableException({
+        code: 'STRIPE_CARD_FUNDING_CANCEL_FAILED',
+        message:
+          'We could not cancel this card payment. No money has been added to your Wallet.',
+      });
+    }
+    if (
+      cancelled.id !== input.providerReference ||
+      cancelled.status !== 'canceled'
+    ) {
+      throw new ConflictException({
+        code: 'CARD_PAYMENT_NOT_CANCELLABLE',
+        message:
+          'This card payment is no longer available to cancel. Refresh your Wallet to see its latest status.',
+      });
+    }
+    return { replayed: false };
   }
 
   /**
@@ -244,6 +315,26 @@ export class StripeCardFundingService {
       // A payment can still settle safely without an optional display label.
       // Reconciliation retains the provider record separately.
     }
+  }
+
+  private isExpectedPaymentIntent(
+    intent: Stripe.PaymentIntent,
+    input: {
+      movementId: string;
+      amountMinor: string;
+      providerReference: string;
+    },
+  ) {
+    const expectedAmount = BigInt(input.amountMinor);
+    return (
+      intent.id === input.providerReference &&
+      intent.amount === Number(expectedAmount) &&
+      intent.currency.toLowerCase() === 'gbp' &&
+      intent.livemode === (this.config.providerMode === 'stripe_live') &&
+      intent.metadata.slice_movement_id === input.movementId &&
+      intent.metadata.slice_currency === 'GBP' &&
+      intent.metadata.slice_funding_rail === 'card'
+    );
   }
 
   private async customerFor(userId: string, stripe: Stripe) {

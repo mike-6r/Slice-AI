@@ -374,6 +374,7 @@ const metadataKeys: Record<string, readonly string[]> = {
   WALLET_MOVEMENT_CREATED: ['type', 'amountMinor'],
   WALLET_MOVEMENT_UPDATED: ['status', 'reasonCode'],
   WALLET_CARD_FUNDING_RESUMED: ['movementId'],
+  WALLET_CARD_FUNDING_CANCELLED: ['movementId'],
   BACS_RISK_HOLD_RELEASED: ['providerAvailableOn', 'releasePolicy'],
   PROVIDER_WEBHOOK_ACCEPTED: ['provider', 'eventType'],
   MEMBERSHIP_STATUS_SYNCED: ['status', 'source'],

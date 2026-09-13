@@ -150,6 +150,106 @@ describe('StripeCardFundingService', () => {
     expect(paymentIntentsCreate).not.toHaveBeenCalled();
   });
 
+  it('cancels only the original unconfirmed PaymentIntent with a derived idempotency key', async () => {
+    const paymentIntentsCancel = jest
+      .fn<() => Promise<unknown>>()
+      .mockResolvedValue({
+        id: 'pi_test_card_123',
+        status: 'canceled',
+      });
+    const paymentIntentsRetrieve = jest
+      .fn<() => Promise<unknown>>()
+      .mockResolvedValue({
+        id: 'pi_test_card_123',
+        amount: 1250,
+        currency: 'gbp',
+        livemode: false,
+        status: 'requires_payment_method',
+        metadata: {
+          slice_movement_id: 'movement-1',
+          slice_currency: 'GBP',
+          slice_funding_rail: 'card',
+        },
+      });
+    const service = new StripeCardFundingService(
+      {} as never,
+      { hash: () => 'safe-idempotency-hash' } as never,
+      {
+        get: () => ({
+          paymentIntents: {
+            retrieve: paymentIntentsRetrieve,
+            cancel: paymentIntentsCancel,
+          },
+        }),
+        provider: () => 'STRIPE_SANDBOX',
+        environment: () => 'SANDBOX',
+      } as never,
+      config as never,
+    );
+
+    await expect(
+      service.cancelPaymentIntent({
+        movementId: 'movement-1',
+        amountMinor: '1250',
+        providerReference: 'pi_test_card_123',
+        idempotencyKey: 'user-request-key',
+      }),
+    ).resolves.toEqual({ replayed: false });
+
+    expect(paymentIntentsCancel).toHaveBeenCalledWith(
+      'pi_test_card_123',
+      {},
+      expect.objectContaining({
+        idempotencyKey:
+          'slice-card-cancel:SANDBOX:movement-1:safe-idempotency-hash',
+      }),
+    );
+  });
+
+  it('does not cancel a card payment Stripe has already processed', async () => {
+    const paymentIntentsCancel = jest.fn<() => Promise<unknown>>();
+    const service = new StripeCardFundingService(
+      {} as never,
+      { hash: () => 'safe-idempotency-hash' } as never,
+      {
+        get: () => ({
+          paymentIntents: {
+            retrieve: jest.fn<() => Promise<unknown>>().mockResolvedValue({
+              id: 'pi_test_card_123',
+              amount: 1250,
+              currency: 'gbp',
+              livemode: false,
+              status: 'succeeded',
+              metadata: {
+                slice_movement_id: 'movement-1',
+                slice_currency: 'GBP',
+                slice_funding_rail: 'card',
+              },
+            }),
+            cancel: paymentIntentsCancel,
+          },
+        }),
+        provider: () => 'STRIPE_SANDBOX',
+        environment: () => 'SANDBOX',
+      } as never,
+      config as never,
+    );
+
+    await expect(
+      service.cancelPaymentIntent({
+        movementId: 'movement-1',
+        amountMinor: '1250',
+        providerReference: 'pi_test_card_123',
+        idempotencyKey: 'user-request-key',
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'CARD_PAYMENT_NOT_CANCELLABLE',
+      }),
+    });
+    expect(paymentIntentsCancel).not.toHaveBeenCalled();
+  });
+
   it('refuses to reopen a card payment Stripe has already processed', async () => {
     const service = new StripeCardFundingService(
       {} as never,

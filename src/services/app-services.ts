@@ -159,6 +159,8 @@ export class ProviderService {
     this.repositories.providers.createCardDeposit(input);
   resumeCardDeposit = (movementId: string) =>
     this.repositories.providers.resumeCardDeposit(movementId);
+  cancelCardDeposit = (movementId: string) =>
+    this.repositories.providers.cancelCardDeposit(movementId);
   createWithdrawal = (input: {
     amountMinor: string;
     destinationReference?: string;

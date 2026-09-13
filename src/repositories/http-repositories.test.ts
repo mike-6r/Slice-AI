@@ -728,6 +728,33 @@ describe("HTTP catalogue mapping", () => {
     });
   });
 
+  it("cancels a pending card deposit through its dedicated idempotent endpoint", async () => {
+    const request = vi.fn().mockResolvedValue({
+      id: "movement-1",
+      type: "DEPOSIT",
+      amountMinor: "1250",
+      currency: "GBP",
+      status: "CANCELLED",
+      createdAt: "2026-08-08T00:00:00.000Z",
+      updatedAt: "2026-08-08T00:01:00.000Z",
+      replayed: false,
+    });
+    const repositories = createHttpRepositories({ get: vi.fn(), request } as unknown as ApiClient);
+
+    await expect(repositories.providers.cancelCardDeposit("movement-1")).resolves.toMatchObject({
+      id: "movement-1",
+      status: "CANCELLED",
+    });
+
+    expect(request).toHaveBeenCalledWith(
+      "/wallet/card-deposits/movement-1/cancel",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ "Idempotency-Key": expect.any(String) }),
+      }),
+    );
+  });
+
   it("maps only the safe persisted bank projection and never fabricates institution data", async () => {
     const get = vi.fn().mockResolvedValue({
       items: [

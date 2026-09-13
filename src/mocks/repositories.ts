@@ -1557,6 +1557,9 @@ export const mockRepositories: AppRepositories = {
     async resumeCardDeposit() {
       throw new Error("Card funding is unavailable in explicit mock mode.");
     },
+    async cancelCardDeposit() {
+      throw new Error("Card funding is unavailable in explicit mock mode.");
+    },
     async createWithdrawal({ amountMinor }) {
       return {
         id: `mock-withdrawal-${Date.now()}`,

@@ -96495,8 +96495,13 @@ body:has(.portfolio-page)
   font-size: 0.66rem;
   line-height: 1.45;
 }
-.wallet-detail__resume button {
+.wallet-detail__resume-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   grid-column: 1 / -1;
+  gap: 0.55rem;
+}
+.wallet-detail__resume-button {
   display: inline-flex;
   min-height: 2.45rem;
   align-items: center;
@@ -96509,13 +96514,88 @@ body:has(.portfolio-page)
   font-size: 0.66rem;
   font-weight: 800;
 }
-.wallet-detail__resume button svg {
+.wallet-detail__resume-button svg {
   width: 0.84rem;
   height: 0.84rem;
 }
-.wallet-detail__resume button:disabled {
+.wallet-detail__resume-button:disabled {
   cursor: not-allowed;
   opacity: 0.62;
+}
+.wallet-detail__cancel-button,
+.wallet-detail__cancel-keep,
+.wallet-detail__cancel-confirm {
+  min-height: 2.45rem;
+  border-radius: 0.45rem;
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+.wallet-detail__cancel-button,
+.wallet-detail__cancel-keep {
+  border: 1px solid rgba(151, 172, 177, 0.4);
+  background: rgba(7, 21, 25, 0.42);
+  color: #bdd0ce;
+}
+.wallet-detail__cancel-button {
+  padding: 0.55rem 0.8rem;
+}
+.wallet-detail__cancel-button:hover:not(:disabled),
+.wallet-detail__cancel-keep:hover:not(:disabled) {
+  border-color: rgba(213, 230, 226, 0.66);
+  color: #eff9f6;
+}
+.wallet-detail__cancel-confirmation {
+  grid-column: 1 / -1;
+  padding: 0.75rem;
+  border: 1px solid rgba(243, 143, 94, 0.42);
+  border-radius: 0.5rem;
+  background: rgba(93, 41, 19, 0.19);
+}
+.wallet-detail__cancel-confirmation > strong {
+  color: #ffd1b0;
+  font-size: 0.7rem;
+}
+.wallet-detail__cancel-confirmation > p {
+  margin: 0.3rem 0 0;
+  color: #dabfaf;
+  font-size: 0.63rem;
+  line-height: 1.45;
+}
+.wallet-detail__cancel-confirmation > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+}
+.wallet-detail__cancel-keep,
+.wallet-detail__cancel-confirm {
+  padding: 0.5rem 0.68rem;
+}
+.wallet-detail__cancel-confirm {
+  border: 1px solid rgba(255, 128, 112, 0.62);
+  background: #cf554c;
+  color: #fff7f5;
+}
+.wallet-detail__cancel-confirm:hover:not(:disabled) {
+  background: #e66359;
+}
+.wallet-detail__cancel-button:disabled,
+.wallet-detail__cancel-keep:disabled,
+.wallet-detail__cancel-confirm:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+@media (max-width: 560px) {
+  .wallet-detail__resume-actions {
+    grid-template-columns: 1fr;
+  }
+  .wallet-detail__cancel-button {
+    width: 100%;
+  }
+  .wallet-detail__cancel-confirmation > div {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
 }
 .wallet-detail__resume-error {
   grid-column: 1 / -1;

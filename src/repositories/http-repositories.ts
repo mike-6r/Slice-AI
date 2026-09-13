@@ -7821,6 +7821,17 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           ),
         );
       },
+      async cancelCardDeposit(movementId) {
+        return mapMovement(
+          await client.request<unknown>(
+            `/wallet/card-deposits/${encodeURIComponent(movementId)}/cancel`,
+            {
+              method: "POST",
+              headers: { "Idempotency-Key": idempotencyKey() },
+            },
+          ),
+        );
+      },
       async createWithdrawal(input) {
         return mapMovement(
           await client.request<unknown>("/wallet/withdrawals", {

@@ -318,6 +318,75 @@ export class WalletMovementService {
     };
   }
 
+  /**
+   * An authenticated owner can abandon only a card PaymentIntent that Stripe
+   * still confirms is unsubmitted. Card numbers and payment method data never
+   * pass through this operation, and a payment that has started processing is
+   * deliberately left to verified provider reconciliation.
+   */
+  async cancelCardDeposit(
+    actor: Actor,
+    movementId: string,
+    requestId: string,
+    idempotencyKey: string,
+  ) {
+    const cardFundingService = this.cardFunding;
+    if (!cardFundingService) {
+      throw new ConflictException({
+        code: 'CARD_PAYMENT_NOT_CANCELLABLE',
+        message:
+          'This card payment is no longer available to cancel. Refresh your Wallet to see its latest status.',
+      });
+    }
+    // A missed provider event may have already settled the payment. Resolve
+    // that before asking Stripe to cancel so settled money is never reversed.
+    await this.reconcilePendingStripeDeposits(
+      'card-funding-cancel',
+      actor.userId,
+    );
+    const movement = await this.db.moneyMovement.findFirst({
+      where: {
+        id: movementId,
+        userId: actor.userId,
+        type: 'DEPOSIT',
+        rail: 'CARD',
+      },
+    });
+    if (!movement) {
+      throw new NotFoundException({
+        code: 'CARD_PAYMENT_NOT_FOUND',
+        message: 'Card payment was not found.',
+      });
+    }
+    if (movement.status !== 'PENDING_PROVIDER') {
+      throw new ConflictException({
+        code: 'CARD_PAYMENT_NOT_CANCELLABLE',
+        message:
+          'This card payment is already being processed or is no longer available. Refresh your Wallet to see its latest status.',
+      });
+    }
+    const providerReference = this.decryptMovementReference(movement);
+    if (!providerReference?.startsWith('pi_')) {
+      throw new ConflictException({
+        code: 'CARD_PAYMENT_NOT_CANCELLABLE',
+        message:
+          'This card payment is no longer available to cancel. Refresh your Wallet to see its latest status.',
+      });
+    }
+    await cardFundingService.cancelPaymentIntent({
+      movementId: movement.id,
+      amountMinor: movement.amountMinor.toString(),
+      providerReference,
+      idempotencyKey,
+    });
+    return this.cancelFromProvider({
+      movementId: movement.id,
+      reasonCode: 'USER_CANCELLED_CARD_PAYMENT',
+      requestId,
+      actor,
+    });
+  }
+
   async createWithdrawal(
     actor: Actor,
     amountMinor: string,
@@ -1245,6 +1314,7 @@ export class WalletMovementService {
     movementId: string;
     reasonCode: string;
     requestId: string;
+    actor?: Actor;
   }) {
     return this.db.$transaction(async (db) => {
       await db.$queryRaw`SELECT id FROM "MoneyMovement" WHERE id = ${input.movementId} FOR UPDATE`;
@@ -1286,6 +1356,21 @@ export class WalletMovementService {
           reasonCode: input.reasonCode,
         },
       });
+      if (input.actor) {
+        await createIdentityTransaction(db).audit.append({
+          id: randomUUID(),
+          actorUserId: input.actor.userId,
+          actorType: 'USER',
+          action: 'WALLET_CARD_FUNDING_CANCELLED',
+          resourceType: 'money-movement',
+          resourceId: updated.id,
+          requestId: input.requestId,
+          sessionId: input.actor.sessionId as never,
+          result: 'SUCCESS',
+          metadata: { movementId: updated.id },
+          createdAt: new Date(),
+        });
+      }
       return this.safe(updated, false);
     });
   }

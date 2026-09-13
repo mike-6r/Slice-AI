@@ -159,6 +159,22 @@ export class ProvidersController {
       req.requestId ?? 'unknown',
     );
   }
+  @Post('wallet/card-deposits/:movementId/cancel')
+  @UseGuards(AccessTokenGuard)
+  async cancelCardDeposit(
+    @Param('movementId') movementId: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.movements.cancelCardDeposit(
+        req.actor!,
+        movementId,
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
   @Post('wallet/withdrawals')
   @UseGuards(AccessTokenGuard)
   async withdrawal(

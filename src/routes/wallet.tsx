@@ -258,6 +258,14 @@ export function Wallet() {
       refreshWallet();
     },
   });
+  const cancelCardFunding = useMutation({
+    mutationFn: (movementId: string) => services.providers.cancelCardDeposit(movementId),
+    onSuccess: () => {
+      setCardFundingSession(null);
+      refreshWallet();
+      toast.success("Card payment cancelled. No money was added to your Wallet.");
+    },
+  });
   const recentAuth = useMutation({
     mutationFn: (password: string) => services.repositories.account.confirmRecentAuth(password),
     onSuccess: () => {
@@ -344,6 +352,7 @@ export function Wallet() {
             setFilter={setMovementFilter}
             onTimelineSelect={setTimelineMovement}
             onResumeCardFunding={(movementId) => resumeCardFunding.mutateAsync(movementId)}
+            onCancelCardFunding={(movementId) => cancelCardFunding.mutateAsync(movementId)}
           />
           <div className="wallet-side-stack">
             <SettlementTimelinePanel
@@ -2027,6 +2036,7 @@ function MovementsPanel({
   setFilter,
   onTimelineSelect,
   onResumeCardFunding,
+  onCancelCardFunding,
 }: {
   query: UseQueryResult<WalletMovementPage>;
   demoFundingCount: number;
@@ -2034,6 +2044,7 @@ function MovementsPanel({
   setFilter: (value: WalletMovementFilter) => void;
   onTimelineSelect: (item: WalletMovementView) => void;
   onResumeCardFunding: (movementId: string) => Promise<CardFundingSession>;
+  onCancelCardFunding: (movementId: string) => Promise<WalletMovementView>;
 }) {
   const items = filterWalletMovements(query.data?.items ?? [], filter);
   const [selected, setSelected] = useState<WalletMovementView | null>(null);
@@ -2125,6 +2136,7 @@ function MovementsPanel({
           item={selected}
           onClose={() => setSelected(null)}
           onResumeCardFunding={onResumeCardFunding}
+          onCancelCardFunding={onCancelCardFunding}
         />
       ) : null}
     </WalletPanel>
@@ -2250,14 +2262,19 @@ function MovementDetail({
   item,
   onClose,
   onResumeCardFunding,
+  onCancelCardFunding,
 }: {
   item: WalletMovementView;
   onClose: () => void;
   onResumeCardFunding: (movementId: string) => Promise<CardFundingSession>;
+  onCancelCardFunding: (movementId: string) => Promise<WalletMovementView>;
 }) {
   const services = useAppServices();
   const [resumeError, setResumeError] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [confirmCancellation, setConfirmCancellation] = useState(false);
   const [resuming, setResuming] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const detail = useQuery({
     queryKey: ["providers", "movement", item.id],
     queryFn: () => services.providers.movement(item.id),
@@ -2283,8 +2300,29 @@ function MovementDetail({
       setResuming(false);
     }
   };
+  const cancelCardPayment = async () => {
+    setCancelling(true);
+    setCancelError(null);
+    try {
+      await onCancelCardFunding(movement.id);
+      onClose();
+    } catch (error) {
+      setCancelError(
+        error instanceof ApiError
+          ? error.message
+          : "We could not cancel this card payment. No money has been added to your Wallet.",
+      );
+    } finally {
+      setCancelling(false);
+    }
+  };
+  const cardFundingBusy = resuming || cancelling;
   return (
-    <div className="wallet-detail-backdrop" role="presentation" onClick={onClose}>
+    <div
+      className="wallet-detail-backdrop"
+      role="presentation"
+      onClick={cardFundingBusy ? undefined : onClose}
+    >
       <section
         className="wallet-detail"
         role="dialog"
@@ -2299,7 +2337,12 @@ function MovementDetail({
               {movement.type === "DEPOSIT" ? "Deposit" : "Withdrawal"}
             </h3>
           </div>
-          <button type="button" aria-label="Close movement detail" onClick={onClose}>
+          <button
+            type="button"
+            aria-label="Close movement detail"
+            onClick={onClose}
+            disabled={cardFundingBusy}
+          >
             ×
           </button>
         </div>
@@ -2391,20 +2434,70 @@ function MovementDetail({
           </section>
           {canResumeCardPayment ? (
             <section className="wallet-detail__resume">
-              <p className="wallet-detail__section-label">Continue payment</p>
+              <p className="wallet-detail__section-label">Secure card payment</p>
               <strong>Finish your secure card payment</strong>
               <p>
                 This pending payment is still reserved with Stripe. Continue with the same secure
                 payment form — no second deposit will be created.
               </p>
-              <button type="button" onClick={() => void resumeCardPayment()} disabled={resuming}>
-                <CreditCard aria-hidden="true" />
-                {resuming ? "Opening secure payment…" : "Continue secure card payment"}
-                <ArrowRight aria-hidden="true" />
-              </button>
+              <div className="wallet-detail__resume-actions">
+                <button
+                  type="button"
+                  className="wallet-detail__resume-button"
+                  onClick={() => void resumeCardPayment()}
+                  disabled={cardFundingBusy}
+                >
+                  <CreditCard aria-hidden="true" />
+                  {resuming ? "Opening secure payment…" : "Continue secure card payment"}
+                  <ArrowRight aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="wallet-detail__cancel-button"
+                  onClick={() => {
+                    setCancelError(null);
+                    setConfirmCancellation(true);
+                  }}
+                  disabled={cardFundingBusy}
+                >
+                  Cancel payment
+                </button>
+              </div>
+              {confirmCancellation ? (
+                <div className="wallet-detail__cancel-confirmation" role="alert">
+                  <strong>Cancel this payment?</strong>
+                  <p>
+                    Stripe will cancel this unconfirmed {formatWalletMoney(movement.amountMinor)}
+                    payment. No money will be added to your Wallet.
+                  </p>
+                  <div>
+                    <button
+                      type="button"
+                      className="wallet-detail__cancel-keep"
+                      onClick={() => setConfirmCancellation(false)}
+                      disabled={cancelling}
+                    >
+                      Keep payment
+                    </button>
+                    <button
+                      type="button"
+                      className="wallet-detail__cancel-confirm"
+                      onClick={() => void cancelCardPayment()}
+                      disabled={cancelling}
+                    >
+                      {cancelling ? "Cancelling…" : "Yes, cancel payment"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               {resumeError ? (
                 <p className="wallet-detail__resume-error" role="alert">
                   {resumeError}
+                </p>
+              ) : null}
+              {cancelError ? (
+                <p className="wallet-detail__resume-error" role="alert">
+                  {cancelError}
                 </p>
               ) : null}
             </section>
