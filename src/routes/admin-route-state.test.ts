@@ -8,30 +8,30 @@ import {
 } from "./-admin-route-state";
 
 describe("admin route state", () => {
-  it("preserves legacy section aliases and their workspace tabs", () => {
-    expect(normalizeAdminSearch({ section: "compliance", q: "case-1" })).toEqual({
-      section: "support",
+  it("migrates legacy deep links into the five permanent destinations", () => {
+    expect(normalizeAdminSearch({ section: "compliance", q: "case-1" })).toMatchObject({
+      section: "customers",
+      view: "verification-compliance",
       tab: "compliance",
       q: "case-1",
     });
-    expect(normalizeAdminSearch({ section: "audit" })).toEqual({
-      section: "health",
+    expect(normalizeAdminSearch({ section: "audit" })).toMatchObject({
+      section: "platform",
+      view: "audit-settings",
       tab: "audit",
     });
   });
 
-  it("keeps the admin pipeline targets and operation tabs stable", () => {
-    expect(pipelineSection("received")).toBe("intake");
-    expect(pipelineSection("verified")).toBe("assetOperations");
+  it("routes lifecycle stages through the unified Assets destination", () => {
+    expect(pipelineSection("received")).toBe("assets");
+    expect(pipelineSection("verified")).toBe("assets");
     expect(operationsTab("valued")).toBe("valuation");
     expect(operationsTab("unknown")).toBe("verification");
   });
 
-  it("selects exactly one Admin navigation item for Asset Operations", () => {
-    const items = ["intake", "collectibles", "assetOperations"] as const;
-    expect(items.filter((item) => isAdminNavItemActive("assetOperations", item))).toEqual([
-      "assetOperations",
-    ]);
+  it("selects exactly one permanent Admin navigation destination", () => {
+    const items = ["home", "customers", "assets", "money", "platform"] as const;
+    expect(items.filter((item) => isAdminNavItemActive("assets", item))).toEqual(["assets"]);
   });
 
   it("preserves catalogue filters in URL state", () => {
@@ -47,7 +47,8 @@ describe("admin route state", () => {
         collector: "demo-collector",
       }),
     ).toMatchObject({
-      section: "collectibles",
+      section: "assets",
+      view: "catalogue",
       catalogueCategory: "Pokémon",
       physicalState: "CUSTODY_READY",
       verification: "VERIFIED",
@@ -68,7 +69,8 @@ describe("admin route state", () => {
         cataloguePreview: "asset-123",
       }),
     ).toMatchObject({
-      section: "collectibles",
+      section: "assets",
+      view: "catalogue",
       workType: "DEMO_QA",
       custody: "READY_FOR_CUSTODY",
       ownership: "NOT_CONFIGURED",
@@ -85,7 +87,8 @@ describe("admin route state", () => {
         operationsStage: "VALUATION",
       }),
     ).toMatchObject({
-      section: "assetOperations",
+      section: "assets",
+      view: "valuation-launch",
       operationsSelected: "asset-123",
       operationsAttention: "REQUIRES_ATTENTION",
       operationsStage: "VALUATION",
@@ -105,7 +108,8 @@ describe("admin route state", () => {
         accountPage: "2",
       }),
     ).toMatchObject({
-      section: "users",
+      section: "customers",
+      view: "directory",
       accountQ: "demo",
       accountType: "COLLECTOR",
       accountAttention: "REQUIRED",
@@ -126,7 +130,8 @@ describe("admin route state", () => {
         accountPage: "2",
       }),
     ).toMatchObject({
-      section: "users",
+      section: "customers",
+      view: "directory",
       user: "user-demo-1",
       tab: "History",
       accountQ: "demo",
@@ -144,7 +149,8 @@ describe("admin route state", () => {
         status: "VERIFICATION",
       }),
     ).toMatchObject({
-      section: "intake",
+      section: "assets",
+      view: "intake-custody",
       intake: "submission-123",
       intakeTab: "verification",
       q: "Pikachu",
@@ -160,7 +166,8 @@ describe("admin route state", () => {
         locationTab: "history",
       }),
     ).toMatchObject({
-      section: "intakeLocations",
+      section: "assets",
+      view: "intake-custody",
       location: "beta-test-uk-intake",
       locationTab: "history",
     });

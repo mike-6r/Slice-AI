@@ -129,7 +129,7 @@ export function AdminAssetOperations(props: Props) {
     );
 
   const openItem = (item: AssetOperationsBoardItem) =>
-    props.update({ section: "assetOperations", asset: item.id, tab: "overview" });
+    props.update({ section: "assets", view: "valuation-launch", asset: item.id, tab: "overview" });
   const clear = () =>
     props.update({
       q: undefined,
@@ -360,7 +360,7 @@ export function AdminAssetOperations(props: Props) {
               <OperationalInsights
                 data={board.data}
                 onOpen={(itemId) =>
-                  props.update({ section: "assetOperations", asset: itemId, tab: "overview" })
+                  props.update({ section: "assets", view: "valuation-launch", asset: itemId, tab: "overview" })
                 }
                 onReviewBlockers={() =>
                   props.update({

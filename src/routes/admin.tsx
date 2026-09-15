@@ -79,10 +79,10 @@ import { queryKeys } from "@/queries/keys";
 import { ApiError } from "@/api/http-client";
 import {
   compactAdminAccountFilters,
-  isAdminNavItemActive,
   normalizeAdminSearch,
   operationsTab,
   pipelineSection,
+  type AdminDestination,
   type AdminSearch,
   type AdminSection,
 } from "./-admin-route-state";
@@ -109,26 +109,73 @@ export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
-type AdminNavItem = { id: AdminSection; label: string; icon: typeof LayoutDashboard };
+type AdminNavItem = {
+  id: AdminDestination;
+  label: string;
+  purpose: string;
+  icon: typeof LayoutDashboard;
+  views: Array<{ id: string; label: string }>;
+};
 
 const navItems: AdminNavItem[] = [
-  { id: "control", label: "Overview", icon: LayoutDashboard },
-  { id: "users", label: "Accounts", icon: Users },
-  { id: "moderation", label: "Review Queue", icon: ClipboardCheck },
-  { id: "intake", label: "Physical Intake", icon: Inbox },
-  { id: "collectibles", label: "Collectibles", icon: Tag },
-  { id: "assetOperations", label: "Asset Operations", icon: Gauge },
-  { id: "memberships", label: "Memberships", icon: Crown },
-  { id: "payments", label: "Finance & Trading", icon: WalletCards },
-  { id: "support", label: "Trust & Support", icon: LifeBuoy },
-  { id: "health", label: "Platform Operations", icon: HeartPulse },
-];
-
-const adminNavGroups: Array<{ label: string; items: AdminNavItem[] }> = [
-  { label: "Workspace", items: navItems.slice(0, 1) },
-  { label: "Operations", items: navItems.slice(1, 6) },
-  { label: "Business", items: navItems.slice(6, 9) },
-  { label: "Platform", items: navItems.slice(9) },
+  {
+    id: "home",
+    label: "Home",
+    purpose: "Triage work that needs an administrator now.",
+    icon: LayoutDashboard,
+    views: [
+      { id: "action-queue", label: "Action Queue" },
+      { id: "operational-summary", label: "Operational Summary" },
+    ],
+  },
+  {
+    id: "customers",
+    label: "Customers",
+    purpose: "The authoritative customer account, compliance, membership, and support workspace.",
+    icon: Users,
+    views: [
+      { id: "directory", label: "Directory" },
+      { id: "verification-compliance", label: "Verification & Compliance" },
+      { id: "memberships", label: "Memberships" },
+      { id: "support", label: "Support" },
+    ],
+  },
+  {
+    id: "assets",
+    label: "Assets",
+    purpose: "One lifecycle workspace for every collectible from submission to live market.",
+    icon: PackageCheck,
+    views: [
+      { id: "pipeline", label: "Pipeline" },
+      { id: "intake-custody", label: "Intake & Custody" },
+      { id: "catalogue", label: "Catalogue" },
+      { id: "valuation-launch", label: "Valuation & Launch" },
+    ],
+  },
+  {
+    id: "money",
+    label: "Money",
+    purpose: "The only place to inspect and act on customer, provider, and Slice money records.",
+    icon: WalletCards,
+    views: [
+      { id: "wallets-movements", label: "Wallets & Movements" },
+      { id: "trading", label: "Trading" },
+      { id: "reconciliation", label: "Reconciliation" },
+      { id: "adjustments", label: "Adjustments" },
+    ],
+  },
+  {
+    id: "platform",
+    label: "Platform",
+    purpose: "Health, delivery, integrations, global audit, and authoritative settings.",
+    icon: HeartPulse,
+    views: [
+      { id: "health", label: "Health" },
+      { id: "delivery", label: "Delivery" },
+      { id: "integrations", label: "Integrations" },
+      { id: "audit-settings", label: "Audit & Settings" },
+    ],
+  },
 ];
 
 function AdminPage() {
@@ -141,9 +188,11 @@ function AdminPage() {
 
 function AdminConsole() {
   const services = useAppServices();
+  const queryClient = useQueryClient();
   const navigate = useNavigate({ from: Route.fullPath });
   const {
     section,
+    view: selectedView,
     tab: selectedUserTab,
     asset: selectedAsset,
     cataloguePreview,
@@ -210,6 +259,30 @@ function AdminConsole() {
     accountPage: accountPageParam,
     financeDataClass: financeDataClassParam,
   } = Route.useSearch();
+  const destination = section as AdminDestination;
+  const destinationMeta = navItems.find((item) => item.id === destination) ?? navItems[0];
+  const view = destinationMeta.views.some((item) => item.id === selectedView)
+    ? selectedView!
+    : destinationMeta.views[0].id;
+  const isHome = destination === "home";
+  const isCustomers = destination === "customers";
+  const isAssets = destination === "assets";
+  const isMoney = destination === "money";
+  const isPlatform = destination === "platform";
+  const isCustomerDirectory = isCustomers && view === "directory";
+  const isCustomerCompliance = isCustomers && view === "verification-compliance";
+  const isCustomerMemberships = isCustomers && view === "memberships";
+  const isCustomerSupport = isCustomers && view === "support";
+  const isAssetPipeline = isAssets && view === "pipeline";
+  const isAssetIntake = isAssets && view === "intake-custody";
+  const isAssetCatalogue = isAssets && view === "catalogue";
+  const isAssetLaunch = isAssets && view === "valuation-launch";
+  const isMoneyWallets = isMoney && view === "wallets-movements";
+  const isMoneyTrading = isMoney && view === "trading";
+  const isPlatformHealth = isPlatform && view === "health";
+  const isPlatformDelivery = isPlatform && view === "delivery";
+  const isPlatformIntegrations = isPlatform && view === "integrations";
+  const isPlatformAuditSettings = isPlatform && view === "audit-settings";
   const { user: selectedUser } = Route.useSearch();
   const membershipStatus = [
     "INCOMPLETE",
@@ -234,7 +307,15 @@ function AdminConsole() {
     "reconciliation",
     "adjustments",
   ];
-  const financeTab = financeTabs.includes(selectedUserTab ?? "") ? selectedUserTab! : "wallets";
+  const financeTab = financeTabs.includes(selectedUserTab ?? "")
+    ? selectedUserTab!
+    : isMoneyTrading
+      ? "orders"
+      : view === "reconciliation"
+        ? "reconciliation"
+        : view === "adjustments"
+          ? "adjustments"
+          : "wallets";
   const financeStatuses: Record<string, string[]> = {
     wallets: ["ACTIVE", "FROZEN", "CLOSED"],
     movements: [
@@ -269,7 +350,11 @@ function AdminConsole() {
       ? financeDataClassParam
       : "OPERATIONAL";
   const trustTabs = ["compliance", "restrictions", "tickets", "escalations"];
-  const trustTab = trustTabs.includes(selectedUserTab ?? "") ? selectedUserTab! : "compliance";
+  const trustTab = trustTabs.includes(selectedUserTab ?? "")
+    ? selectedUserTab!
+    : isCustomerSupport
+      ? "tickets"
+      : "compliance";
   const trustStatuses: Record<string, string[]> = {
     compliance: ["PENDING", "REVIEW", "MANUAL_REVIEW", "SUSPENDED"],
     restrictions: ["ACTIVE", "RELEASED"],
@@ -303,7 +388,15 @@ function AdminConsole() {
     "feature-flags",
     "settings",
   ];
-  const platformTab = platformTabs.includes(selectedUserTab ?? "") ? selectedUserTab! : "health";
+  const platformTab = platformTabs.includes(selectedUserTab ?? "")
+    ? selectedUserTab!
+    : isPlatformDelivery
+      ? "jobs"
+      : isPlatformIntegrations
+        ? "integrations"
+        : isPlatformAuditSettings
+          ? "audit"
+          : "health";
   const platformStatuses: Record<string, string[]> = {
     jobs: ["PENDING", "PROCESSING", "DELIVERED", "FAILED", "DEAD_LETTER"],
     webhooks: ["ACCEPTED", "PROCESSING", "PROCESSED", "FAILED", "REJECTED"],
@@ -446,7 +539,7 @@ function AdminConsole() {
     ],
     queryFn: () =>
       services.repositories.reviews.listQueue(
-        section === "moderation"
+        isAssetPipeline
           ? {
               q: reviewQuery,
               status: ["SUBMITTED", "IN_REVIEW"].includes(reviewStatus ?? "")
@@ -499,19 +592,19 @@ function AdminConsole() {
             }
           : { limit: 100 },
       ),
-    enabled: section === "control" || section === "moderation",
+    enabled: isHome || isAssetPipeline,
     staleTime: 30_000,
   });
   const operations = useQuery({
     queryKey: ["admin", "operations"],
     queryFn: () => services.repositories.lifecycle.listOperations(),
-    enabled: section === "control" || section === "moderation",
+    enabled: isHome || isAssetPipeline,
     staleTime: 30_000,
   });
   const operational = useQuery({
     queryKey: ["admin", "operations", "overview"],
     queryFn: () => services.repositories.admin.getOperationsOverview(),
-    enabled: ["control", "intake", "valuations", "custody", "marketplace"].includes(section),
+    enabled: isHome || isAssetIntake || isAssetLaunch,
     staleTime: 30_000,
   });
   const intake = useQuery({
@@ -530,7 +623,7 @@ function AdminConsole() {
     ],
     queryFn: () =>
       services.repositories.admin.listIntake(
-        section === "intake"
+        isAssetIntake
           ? {
               q: selectedIntake ?? reviewQuery,
               status: selectedIntake ? undefined : reviewStatus,
@@ -545,7 +638,7 @@ function AdminConsole() {
             }
           : { limit: 100 },
       ),
-    enabled: section === "intake",
+    enabled: isAssetIntake,
     staleTime: 30_000,
   });
   const memberships = useQuery({
@@ -579,19 +672,19 @@ function AdminConsole() {
           : "ALL",
         needsAction: membershipNeedsAction === "true",
       }),
-    enabled: section === "memberships" && !selectedMembership,
+    enabled: isCustomerMemberships && !selectedMembership,
     staleTime: 30_000,
   });
   const membershipDetail = useQuery({
     queryKey: ["admin", "membership-detail", selectedMembership],
     queryFn: () => services.repositories.admin.getMembershipDetail(selectedMembership!),
-    enabled: section === "memberships" && Boolean(selectedMembership),
+    enabled: isCustomerMemberships && Boolean(selectedMembership),
     staleTime: 30_000,
   });
   const financeDashboard = useQuery({
     queryKey: ["admin", "finance", "dashboard"],
     queryFn: () => services.repositories.admin.getFinanceDashboard(),
-    enabled: section === "payments",
+    enabled: isMoney,
     staleTime: 20_000,
   });
   const financeRecords = useQuery({
@@ -615,13 +708,13 @@ function AdminConsole() {
         page: Math.max(1, Number(reviewPageParam ?? 1)),
         pageSize: Math.min(100, Math.max(1, Number(reviewPageSizeParam ?? 10))),
       }),
-    enabled: section === "payments",
+    enabled: isMoney,
     staleTime: 20_000,
   });
   const trustSupportDashboard = useQuery({
     queryKey: ["admin", "trust-support", "dashboard"],
     queryFn: () => services.repositories.admin.getTrustSupportDashboard(),
-    enabled: section === "support",
+    enabled: isCustomerSupport,
     staleTime: 20_000,
   });
   const trustSupportRecords = useQuery({
@@ -647,19 +740,19 @@ function AdminConsole() {
         page: Math.max(1, Number(reviewPageParam ?? 1)),
         pageSize: Math.min(100, Math.max(1, Number(reviewPageSizeParam ?? 10))),
       }),
-    enabled: section === "support",
+    enabled: isCustomerSupport,
     staleTime: 20_000,
   });
   const riskOperations = useQuery({
     queryKey: ["admin", "risk-operations"],
     queryFn: () => services.repositories.admin.getRiskOperations(),
-    enabled: ["control", "compliance"].includes(section),
+    enabled: isHome || isCustomerCompliance || isPlatformAuditSettings || isPlatformIntegrations,
     staleTime: 30_000,
   });
   const platformDashboard = useQuery({
     queryKey: ["admin", "platform", "dashboard"],
     queryFn: () => services.repositories.admin.getPlatformDashboard(),
-    enabled: section === "health",
+    enabled: isPlatform,
     staleTime: 20_000,
   });
   const platformRecords = useQuery({
@@ -681,19 +774,19 @@ function AdminConsole() {
         page: Math.max(1, Number(reviewPageParam ?? 1)),
         pageSize: Math.min(100, Math.max(1, Number(reviewPageSizeParam ?? 10))),
       }),
-    enabled: section === "health" && platformTab !== "health",
+    enabled: isPlatform && platformTab !== "health",
     staleTime: 20_000,
   });
   const complianceDetail = useQuery({
     queryKey: ["admin", "compliance", selectedComplianceCase],
     queryFn: () => services.repositories.admin.getComplianceCase(selectedComplianceCase!),
-    enabled: section === "compliance" && Boolean(selectedComplianceCase),
+    enabled: isCustomerCompliance && Boolean(selectedComplianceCase),
     staleTime: 30_000,
   });
   const overview = useQuery({
     queryKey: ["admin", "overview"],
     queryFn: () => services.repositories.admin.getOverview(),
-    enabled: section === "control" || section === "compliance",
+    enabled: isHome || isCustomerCompliance,
     staleTime: 30_000,
   });
   const users = useQuery({
@@ -716,19 +809,19 @@ function AdminConsole() {
         page: accountPage,
         pageSize: accountPageSize,
       }),
-    enabled: section === "users",
+    enabled: isCustomerDirectory,
     staleTime: 30_000,
   });
   const userDetail = useQuery({
     queryKey: ["admin", "user", selectedUser],
     queryFn: () => services.repositories.admin.getUser(selectedUser!),
-    enabled: section === "users" && Boolean(selectedUser),
+    enabled: isCustomerDirectory && Boolean(selectedUser),
     staleTime: 30_000,
   });
   const compliance = useQuery({
     queryKey: ["admin", "compliance"],
     queryFn: () => services.repositories.admin.listComplianceCases({ limit: 50 }),
-    enabled: section === "compliance",
+    enabled: isCustomerCompliance,
     staleTime: 30_000,
   });
   const globalSearch = useQuery({
@@ -738,20 +831,30 @@ function AdminConsole() {
     staleTime: 15_000,
   });
   const select = (next: AdminSection, tab?: string) => {
+    const target = normalizeAdminSearch({ section: next, tab });
     void navigate({
-      search: { section: next, user: undefined, asset: undefined, tab },
+      search: {
+        section: target.section,
+        view: target.view,
+        user: undefined,
+        asset: undefined,
+        tab: target.tab,
+      },
       replace: true,
     });
     setMobileOpen(false);
   };
   const updateReviewSearch = (patch: Partial<AdminSearch>) => {
     void navigate({
-      search: (current) => ({ ...current, section: "moderation", ...patch }),
+      search: (current) => ({ ...current, section: "assets", view: "pipeline", ...patch }),
       replace: true,
     });
   };
   const openUser = (id: string) => {
-    void navigate({ search: { section: "users", user: id, tab: undefined }, replace: true });
+    void navigate({
+      search: { section: "customers", view: "directory", user: id, tab: undefined },
+      replace: true,
+    });
   };
   const reviewItems =
     reviews.data?.items.map((item) => ({
@@ -766,7 +869,7 @@ function AdminConsole() {
 
   return (
     <div
-      className={`admin-console-shell${section === "assetOperations" ? " admin-console-shell--asset-operations" : ""}`}
+      className={`admin-console-shell${isAssetLaunch ? " admin-console-shell--asset-operations" : ""}`}
     >
       <aside className={`admin-console-sidebar ${mobileOpen ? "is-open" : ""}`}>
         <div className="admin-console-brand">
@@ -781,23 +884,21 @@ function AdminConsole() {
         </div>
         <p className="admin-console-eyebrow">Admin Console</p>
         <nav className="admin-console-nav" aria-label="Admin Console">
-          {adminNavGroups.map((group) => (
-            <div className="admin-console-nav-group" key={group.label}>
-              <span className="admin-console-nav-label">{group.label}</span>
-              {group.items.map(({ id, label, icon: Icon }) => (
-                <button
-                  type="button"
-                  key={id}
-                  className={isAdminNavItemActive(section, id) ? "is-active" : ""}
-                  aria-current={isAdminNavItemActive(section, id) ? "page" : undefined}
-                  onClick={() => select(id)}
-                >
-                  <Icon aria-hidden="true" />
-                  <span>{label}</span>
-                </button>
-              ))}
-            </div>
-          ))}
+          <div className="admin-console-nav-group">
+            <span className="admin-console-nav-label">Workspace</span>
+            {navItems.map(({ id, label, icon: Icon }) => (
+              <button
+                type="button"
+                key={id}
+                className={destination === id ? "is-active" : ""}
+                aria-current={destination === id ? "page" : undefined}
+                onClick={() => select(id)}
+              >
+                <Icon aria-hidden="true" />
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
         </nav>
         <div className="admin-console-account">
           <div className="admin-console-avatar">{initials(user.data?.profile.displayName)}</div>
@@ -822,7 +923,7 @@ function AdminConsole() {
         />
       ) : null}
       <main
-        className={`admin-console-main${section === "users" ? " admin-console-main--accounts" : ""}${section === "assetOperations" ? " admin-console-main--asset-operations" : ""}${section === "intakeLocations" ? " admin-console-main--intake-locations" : ""}${section === "intake" && selectedIntake ? " admin-console-main--physical-intake-detail" : ""}`}
+        className={`admin-console-main${isCustomerDirectory ? " admin-console-main--accounts" : ""}${isAssetLaunch ? " admin-console-main--asset-operations" : ""}${isAssetIntake && selectedIntake ? " admin-console-main--physical-intake-detail" : ""}`}
       >
         <header className="admin-console-topbar">
           <button
@@ -835,21 +936,25 @@ function AdminConsole() {
           </button>
           <div>
             <p>Admin Console</p>
-            <h1>
-              {section === "intakeLocations"
-                ? "Intake Locations"
-                : navItems.find((item) => item.id === section)?.label}
-            </h1>
+            <h1>{destinationMeta.label}</h1>
+            <span className="admin-console-purpose">{destinationMeta.purpose}</span>
           </div>
           <label className="admin-console-search">
             <Search aria-hidden="true" />
             <input
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
-              placeholder="Search this workspace"
-              aria-label="Search this workspace"
+              placeholder="Search customers, assets, money, or platform"
+              aria-label="Search all admin records"
             />
           </label>
+          <button
+            type="button"
+            className="admin-console-refresh"
+            onClick={() => void queryClient.invalidateQueries({ queryKey: ["admin"] })}
+          >
+            <RefreshCw aria-hidden="true" /> Refresh
+          </button>
           {globalSearch.data?.items.length ? (
             <div className="admin-search-results" role="listbox" aria-label="Admin search results">
               {globalSearch.data.items.map((result) => {
@@ -864,7 +969,7 @@ function AdminConsole() {
                   <Link
                     key={`${result.entityType}-${result.id}`}
                     to="/admin"
-                    search={{ section: "users", user: result.id, tab: undefined }}
+                    search={{ section: "customers", view: "directory", user: result.id, tab: undefined }}
                     onClick={() => {
                       setSearchInput("");
                       setSearch("");
@@ -876,7 +981,7 @@ function AdminConsole() {
                   <Link
                     key={`${result.entityType}-${result.id}`}
                     to="/admin"
-                    search={{ section: "assetOperations", asset: result.id, tab: "overview" }}
+                    search={{ section: "assets", view: "valuation-launch", asset: result.id, tab: "overview" }}
                     onClick={() => {
                       setSearchInput("");
                       setSearch("");
@@ -900,8 +1005,36 @@ function AdminConsole() {
             </div>
           ) : null}
         </header>
-        {section === "control" ? (
+        <nav className="admin-destination-tabs" aria-label={`${destinationMeta.label} views`}>
+          {destinationMeta.views.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={view === item.id ? "is-active" : ""}
+              aria-current={view === item.id ? "page" : undefined}
+              onClick={() =>
+                void navigate({
+                  search: (current) => ({
+                    ...current,
+                    section: destination,
+                    view: item.id,
+                    tab: undefined,
+                    user: undefined,
+                    asset: undefined,
+                    intake: undefined,
+                    location: undefined,
+                  }),
+                  replace: true,
+                })
+              }
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+        {isHome ? (
           <ControlCenterRevamp
+            view={view}
             reviews={reviewItems}
             operations={operationItems}
             attentionOperations={attentionOperations}
@@ -931,8 +1064,23 @@ function AdminConsole() {
             operational={operational.data}
             risk={riskOperations.data}
           />
-        ) : section === "moderation" ? (
+        ) : isAssets && selectedAsset ? (
+          <AdminAssetOperationsDetail
+            assetId={selectedAsset}
+            tab={selectedUserTab}
+            onTab={(next) =>
+              void navigate({ search: (current) => ({ ...current, tab: next }), replace: true })
+            }
+            onBack={() =>
+              void navigate({
+                search: (current) => ({ ...current, asset: undefined, tab: undefined }),
+                replace: true,
+              })
+            }
+          />
+        ) : isAssetPipeline ? (
           <ReviewQueue
+            showPolicy={false}
             data={reviews.data}
             loading={reviews.isLoading}
             failed={reviews.isError}
@@ -957,7 +1105,26 @@ function AdminConsole() {
             }}
             updateSearch={updateReviewSearch}
           />
-        ) : section === "intake" ? (
+        ) : isAssetIntake && selectedLocation ? (
+          <AdminIntakeLocations
+            locationId={selectedLocation === "__directory__" ? undefined : selectedLocation}
+            tab={locationTab}
+            onBack={() =>
+              void navigate({
+                search: (current) => ({
+                  ...current,
+                  location: undefined,
+                  locationTab: undefined,
+                }),
+              })
+            }
+            onOpen={(location, nextTab) =>
+              void navigate({
+                search: (current) => ({ ...current, location, locationTab: nextTab }),
+              })
+            }
+          />
+        ) : isAssetIntake ? (
           <PhysicalIntakeWorkspace
             data={intake.data}
             loading={intake.isLoading}
@@ -977,7 +1144,8 @@ function AdminConsole() {
               void navigate({
                 search: (current) => ({
                   ...current,
-                  section: "intake",
+                  section: "assets",
+                  view: "intake-custody",
                   intake: submissionId,
                   intakeTab: "overview",
                 }),
@@ -1004,87 +1172,17 @@ function AdminConsole() {
               void navigate({
                 search: (current) => ({
                   ...current,
-                  section: "intakeLocations",
+                  section: "assets",
+                  view: "intake-custody",
                   intake: undefined,
                   intakeTab: undefined,
-                }),
-              })
-            }
-          />
-        ) : section === "intakeLocations" ? (
-          <AdminIntakeLocations
-            locationId={selectedLocation}
-            tab={locationTab}
-            onBack={() =>
-              void navigate({
-                search: (current) => ({
-                  ...current,
-                  section: "intake",
-                  location: undefined,
+                  location: "__directory__",
                   locationTab: undefined,
                 }),
               })
             }
-            onOpen={(location, nextTab) =>
-              void navigate({
-                search: (current) => ({
-                  ...current,
-                  section: "intakeLocations",
-                  location,
-                  locationTab: nextTab,
-                }),
-              })
-            }
           />
-        ) : section === "valuations" ? (
-          <OperationsQueueWorkspace
-            title="Valuations"
-            detail="Review assets that need a supported valuation decision before readiness."
-            icon={BadgeCheck}
-            rows={operationItems.filter((item) => item.valuationStatus === "MISSING")}
-            loading={operations.isLoading}
-            failed={operations.isError}
-            retry={() => void operations.refetch()}
-          />
-        ) : section === "custody" ? (
-          <OperationsQueueWorkspace
-            title="Custody & Vaults"
-            detail="Track the authoritative custody and vault readiness projection."
-            icon={Landmark}
-            rows={operationItems.filter((item) => item.custodyStatus !== "SECURED")}
-            loading={operations.isLoading}
-            failed={operations.isError}
-            retry={() => void operations.refetch()}
-          />
-        ) : section === "assetOperations" && selectedAsset ? (
-          <AdminAssetOperationsDetail
-            assetId={selectedAsset}
-            tab={selectedUserTab}
-            onTab={(next) =>
-              void navigate({ search: (current) => ({ ...current, tab: next }), replace: true })
-            }
-            onBack={() =>
-              void navigate({
-                search: (current) => ({ ...current, asset: undefined, tab: undefined }),
-                replace: true,
-              })
-            }
-          />
-        ) : section === "collectibles" && selectedAsset ? (
-          <AdminCollectibleDetail
-            assetId={selectedAsset}
-            tab={selectedUserTab}
-            onTab={(next) =>
-              void navigate({ search: (current) => ({ ...current, tab: next }), replace: true })
-            }
-            onBack={() =>
-              void navigate({
-                search: (current) => ({ ...current, asset: undefined, tab: undefined }),
-                replace: true,
-              })
-            }
-          />
-        ) : section === "collectibles" ? (
+        ) : isAssetCatalogue ? (
           <AdminCollectibleCatalogue
             query={reviewQuery ?? ""}
             status={reviewStatus ?? ""}
@@ -1123,22 +1221,37 @@ function AdminConsole() {
             }
             onOpen={(assetId) =>
               void navigate({
-                search: (current) => ({ ...current, section: "collectibles", asset: assetId }),
+                search: (current) => ({
+                  ...current,
+                  section: "assets",
+                  view: "catalogue",
+                  asset: assetId,
+                }),
                 replace: true,
               })
             }
             onOpenIntake={(submissionId) =>
               void navigate({
-                search: (current) => ({ ...current, section: "intake", intake: submissionId }),
+                search: (current) => ({
+                  ...current,
+                  section: "assets",
+                  view: "intake-custody",
+                  intake: submissionId,
+                }),
               })
             }
             onOpenCollector={(collectorId) =>
               void navigate({
-                search: (current) => ({ ...current, section: "users", user: collectorId }),
+                search: (current) => ({
+                  ...current,
+                  section: "customers",
+                  view: "directory",
+                  user: collectorId,
+                }),
               })
             }
           />
-        ) : section === "assetOperations" ? (
+        ) : isAssetLaunch ? (
           <AdminAssetOperations
             tab={selectedUserTab}
             selectedId={operationsSelected}
@@ -1154,7 +1267,7 @@ function AdminConsole() {
               void navigate({ search: (current) => ({ ...current, ...patch }), replace: true })
             }
           />
-        ) : section === "memberships" && selectedMembership ? (
+        ) : isCustomerMemberships && selectedMembership ? (
           <AdminMembershipDetail
             data={membershipDetail.data}
             loading={membershipDetail.isLoading}
@@ -1170,7 +1283,8 @@ function AdminConsole() {
               void navigate({
                 search: (current) => ({
                   ...current,
-                  section: "users",
+                  section: "customers",
+                  view: "directory",
                   user: membershipDetail.data?.collector.id,
                   membership: undefined,
                   tab: "membership",
@@ -1182,7 +1296,8 @@ function AdminConsole() {
               void navigate({
                 search: (current) => ({
                   ...current,
-                  section: "health",
+                  section: "platform",
+                  view: "audit-settings",
                   tab: "audit",
                   q: selectedMembership,
                   membership: undefined,
@@ -1191,7 +1306,7 @@ function AdminConsole() {
               })
             }
           />
-        ) : section === "memberships" ? (
+        ) : isCustomerMemberships ? (
           <AdminMemberships
             data={memberships.data}
             loading={memberships.isLoading}
@@ -1215,7 +1330,7 @@ function AdminConsole() {
               })
             }
           />
-        ) : section === "users" ? (
+        ) : isCustomerDirectory ? (
           <AccountsWorkspace
             users={users.data?.items ?? []}
             loading={users.isLoading}
@@ -1227,12 +1342,12 @@ function AdminConsole() {
             userTab={selectedUserTab}
             setUserTab={(tab) => {
               void navigate({
-                search: { section: "users", user: selectedUser, tab },
+                search: { section: "customers", view: "directory", user: selectedUser, tab },
                 replace: true,
               });
             }}
             openUser={openUser}
-            clearUser={() => select("users")}
+            clearUser={() => select("customers")}
             page={accountPage}
             pageSize={accountPageSize}
             setPageSize={(value) => {
@@ -1348,7 +1463,7 @@ function AdminConsole() {
             filtersOpen={accountFiltersOpen}
             setFiltersOpen={setAccountFiltersOpen}
           />
-        ) : section === "compliance" ? (
+        ) : isCustomerCompliance ? (
           <ComplianceWorkspace
             cases={compliance.data?.items ?? []}
             loading={compliance.isLoading || overview.isLoading}
@@ -1367,7 +1482,7 @@ function AdminConsole() {
             openDetail={setSelectedComplianceCase}
             closeDetail={() => setSelectedComplianceCase(undefined)}
           />
-        ) : section === "payments" ? (
+        ) : isMoney ? (
           <AdminFinanceTrading
             dashboard={financeDashboard.data}
             records={financeRecords.data}
@@ -1383,6 +1498,7 @@ function AdminConsole() {
             status={financeStatus ?? ""}
             dataClass={financeDataClass}
             page={Math.max(1, Number(reviewPageParam ?? 1))}
+            simplified
             update={(patch) =>
               void navigate({
                 search: (current) => ({ ...current, ...patch }),
@@ -1390,7 +1506,7 @@ function AdminConsole() {
               })
             }
           />
-        ) : section === "support" ? (
+        ) : isCustomerSupport ? (
           <AdminTrustSupport
             dashboard={trustSupportDashboard.data}
             records={trustSupportRecords.data}
@@ -1407,11 +1523,12 @@ function AdminConsole() {
             type={trustType ?? ""}
             priority={trustPriority ?? ""}
             page={Math.max(1, Number(reviewPageParam ?? 1))}
+            supportOnly
             update={(patch) =>
               void navigate({ search: (current) => ({ ...current, ...patch }), replace: true })
             }
           />
-        ) : section === "health" ? (
+        ) : isPlatform ? (
           <AdminPlatformOperations
             dashboard={platformDashboard.data}
             records={platformRecords.data}
@@ -1426,32 +1543,13 @@ function AdminConsole() {
             query={reviewQuery ?? ""}
             status={platformStatus ?? ""}
             page={Math.max(1, Number(reviewPageParam ?? 1))}
+            simplified
             update={(patch) =>
               void navigate({ search: (current) => ({ ...current, ...patch }), replace: true })
             }
           />
-        ) : section === "audit" ? (
-          <AuditWorkspace
-            risk={riskOperations.data}
-            loading={riskOperations.isLoading}
-            failed={riskOperations.isError}
-            retry={() => void riskOperations.refetch()}
-          />
-        ) : section === "flags" ? (
-          <UnavailablePage
-            title="Feature Flags"
-            detail="No authoritative feature flag read is configured for this environment."
-            icon={Flag}
-          />
-        ) : section === "integrations" ? (
-          <Integrations
-            risk={riskOperations.data}
-            riskLoading={riskOperations.isLoading}
-            riskFailed={riskOperations.isError}
-            retryRisk={() => void riskOperations.refetch()}
-          />
         ) : (
-          <AdminSettings select={select} />
+          <AdminState title="Admin workspace unavailable" detail="Select a workspace from the admin navigation." />
         )}
       </main>
     </div>
@@ -3260,15 +3358,15 @@ function PhysicalIntakeDetailPage({
             {row.assetId ? (
               <Link
                 to="/admin"
-                search={{ section: "assetOperations", asset: row.assetId, tab: "overview" }}
+                search={{ section: "assets", view: "valuation-launch", asset: row.assetId, tab: "overview" }}
               >
                 Open collectible <span>↗</span>
               </Link>
             ) : null}
-            <Link to="/admin" search={{ section: "users", user: row.collector.id }}>
+            <Link to="/admin" search={{ section: "customers", view: "directory", user: row.collector.id }}>
               Collector account <span>↗</span>
             </Link>
-            <Link to="/admin" search={{ section: "intake" }}>
+            <Link to="/admin" search={{ section: "assets", view: "intake-custody" }}>
               Asset operations <span>↗</span>
             </Link>
             {detail?.projection?.deepLinks.audit ? (
@@ -4253,7 +4351,7 @@ function IntakeMovementTab({
           <button type="button" className="admin-secondary-button" onClick={onOpenException}>
             Add movement exception
           </button>
-          <Link to="/admin" search={{ section: "intake", location: row.vault?.id }}>
+          <Link to="/admin" search={{ section: "assets", view: "intake-custody", location: row.vault?.id }}>
             Manage destinations ↗
           </Link>
         </div>
@@ -4589,7 +4687,7 @@ function IntakeActivityPreview({ detail }: { detail: AdminIntakeDetail | undefin
           <p className="admin-console-eyebrow">Recent physical activity</p>
           <h2>Latest events</h2>
         </div>
-        <Link to="/admin" search={{ section: "intake", intakeTab: "history" }}>
+        <Link to="/admin" search={{ section: "assets", view: "intake-custody", intakeTab: "history" }}>
           View history ↗
         </Link>
       </div>
@@ -4652,7 +4750,7 @@ function IntakeHistoryTab({ detail }: { detail: AdminIntakeDetail | undefined })
           Technical audit remains available through the Audit workspace and is not mixed into the
           physical operator timeline.
         </p>
-        <Link to="/admin" search={{ section: "audit" }}>
+        <Link to="/admin" search={{ section: "platform", view: "audit-settings", tab: "audit" }}>
           Open Audit Log ↗
         </Link>
       </details>
@@ -5053,12 +5151,13 @@ function ControlCenter({
 }
 
 function ControlCenterRevamp({
+  view,
   loading,
   failed,
   retry,
   select,
   operational,
-}: Parameters<typeof ControlCenter>[0]) {
+}: Parameters<typeof ControlCenter>[0] & { view: string }) {
   if (loading)
     return (
       <AdminState title="Loading Control Center" detail="Reading safe operational projections." />
@@ -5071,7 +5170,7 @@ function ControlCenterRevamp({
         retry={retry}
       />
     );
-  const center = operational?.controlCenter;
+  const center = operational?.controlCenter!;
   if (!center)
     return (
       <AdminState
@@ -5107,6 +5206,108 @@ function ControlCenterRevamp({
       item: center.summary.platformIncidents,
     },
   ] as const;
+  if (view === "action-queue") {
+    return (
+      <section className="admin-home-workspace admin-list-workspace">
+        <header className="admin-list-workspace__heading">
+          <div>
+            <p className="admin-console-eyebrow">Home · Action Queue</p>
+            <h2>Work that needs a decision.</h2>
+            <span>One priority queue. Open an item to continue in its authoritative workspace.</span>
+          </div>
+          <button type="button" className="admin-inline-action" onClick={retry}>
+            <RefreshCw aria-hidden="true" /> Refresh queue
+          </button>
+        </header>
+        <section className="admin-panel admin-home-action-queue">
+          <div className="admin-home-action-queue__head" aria-hidden="true">
+            <span>Severity</span>
+            <span>Domain</span>
+            <span>Record & issue</span>
+            <span>Age</span>
+            <span>Next actor</span>
+            <span />
+          </div>
+          {center.priorityWork.length ? (
+            <div className="admin-priority-list">
+              {center.priorityWork.map((item) => (
+                <article className="admin-priority-row" key={item.id}>
+                  <span
+                    className={`admin-priority-severity is-${item.severity.toLowerCase()}`}
+                    aria-label={`${item.severity} severity`}
+                  />
+                  <div className="admin-priority-type">{item.type}</div>
+                  <div className="admin-priority-main">
+                    <strong title={item.title}>{item.title}</strong>
+                    <small>{item.context}</small>
+                  </div>
+                  <div className="admin-priority-age">{item.age}</div>
+                  <div className="admin-priority-owner">{item.owner ?? "Unassigned"}</div>
+                  <button type="button" onClick={() => open(item.target)}>
+                    Open action <ArrowRight aria-hidden="true" />
+                  </button>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <AdminEmpty detail="No action items are waiting." />
+          )}
+        </section>
+      </section>
+    );
+  }
+  return (
+    <section className="admin-home-workspace admin-list-workspace">
+      <header className="admin-list-workspace__heading">
+        <div>
+          <p className="admin-console-eyebrow">Home · Operational Summary</p>
+          <h2>What needs attention across Slice.</h2>
+          <span>Counts are links to the responsible workspace, never a second operational dashboard.</span>
+        </div>
+        <small className="admin-home-refreshed">Last refreshed {age(center.lastRefreshedAt)}</small>
+      </header>
+      <div className="admin-control-summary-grid admin-home-summary-grid">
+        {summaryCards.map(({ key, label, icon: Icon, item }) => (
+          <button
+            type="button"
+            className={`admin-control-summary admin-control-summary--${item.severity.toLowerCase()}`}
+            key={key}
+            onClick={() => open(item.target)}
+          >
+            <span className="admin-control-summary-icon"><Icon aria-hidden="true" /></span>
+            <span className="admin-control-summary-copy">
+              <small>{label}</small>
+              <strong>{item.count ?? "—"}</strong>
+              <em>{item.subtitle}</em>
+            </span>
+            <ArrowRight aria-hidden="true" />
+          </button>
+        ))}
+      </div>
+      <section className="admin-panel admin-home-system-strip">
+        <div>
+          <span>Customer verification</span>
+          <strong>{center.summary.staffDecisions.count ?? "—"}</strong>
+          <button type="button" onClick={() => select("compliance")}>Open Customers</button>
+        </div>
+        <div>
+          <span>Asset pipeline</span>
+          <strong>{center.summary.needsAction.count ?? "—"}</strong>
+          <button type="button" onClick={() => select("moderation")}>Open Assets</button>
+        </div>
+        <div>
+          <span>Money exceptions</span>
+          <strong>{center.summary.financialRisk.count ?? "—"}</strong>
+          <button type="button" onClick={() => select("payments")}>Open Money</button>
+        </div>
+        <div>
+          <span>Platform health</span>
+          <strong>{center.summary.platformIncidents.count ?? "—"}</strong>
+          <button type="button" onClick={() => select("health")}>Open Platform</button>
+        </div>
+      </section>
+    </section>
+  );
   return (
     <div className="admin-console-content admin-list-workspace admin-control-center">
       <section className="admin-console-heading admin-list-workspace__heading admin-console-heading--overview">
@@ -5413,6 +5614,7 @@ type ReviewQueueFilters = {
 };
 
 function ReviewQueue({
+  showPolicy = true,
   data,
   loading,
   failed,
@@ -5422,6 +5624,7 @@ function ReviewQueue({
   filters,
   updateSearch,
 }: {
+  showPolicy?: boolean;
   data: SubmissionReviewQueueResponse | undefined;
   loading: boolean;
   failed: boolean;
@@ -5447,6 +5650,7 @@ function ReviewQueue({
   const qualificationPolicy = useQuery({
     queryKey: ["admin", "qualification-policy"],
     queryFn: () => services.repositories.reviews.getQualificationPolicy(),
+    enabled: showPolicy,
   });
   const updateQualificationPolicy = useMutation({
     mutationFn: (input: {
@@ -5608,7 +5812,7 @@ function ReviewQueue({
         onRerun={(id) => rerun.mutate(id)}
         rerunning={rerun.isPending}
       />
-      {qualificationPolicy.data ? (
+      {showPolicy && qualificationPolicy.data ? (
         <section
           className="admin-panel admin-review-policy-panel"
           aria-label="Automated qualification policy"
@@ -6555,7 +6759,7 @@ function AccountsWorkspace({
   const selectTab = (value: string) => {
     const next = {
       ...filters,
-      type: ["COLLECTOR", "INVESTOR", "STAFF", "ADMIN"].includes(value) ? value : "",
+      type: ["COLLECTOR", "INVESTOR", "ADMIN"].includes(value) ? value : "",
       status:
         value === "SUSPENDED" || value === "RESTRICTED"
           ? ({ SUSPENDED: "SUSPENDED", RESTRICTED: "RESTRICTED" }[value] ?? "")
@@ -6629,9 +6833,9 @@ function AccountsWorkspace({
     <div className="admin-console-content admin-list-workspace admin-accounts-content admin-accounts-revamp">
       <section className="admin-console-heading admin-list-workspace__heading admin-accounts-heading">
         <div>
-          <p className="admin-console-eyebrow">Admin Console / Accounts</p>
-          <h2>Accounts</h2>
-          <span>Manage account access, financial state, compliance and platform permissions.</span>
+          <p className="admin-console-eyebrow">Customers / Directory</p>
+          <h2>Customers</h2>
+          <span>One authoritative record for access, product roles, compliance, membership, and support.</span>
         </div>
         <button type="button" className="admin-accounts-export" onClick={exportCurrentPage}>
           <Download aria-hidden="true" /> Export
@@ -6677,10 +6881,9 @@ function AccountsWorkspace({
               aria-label="Account categories"
             >
               {[
-                ["", "All Accounts"],
+                ["", "All customers"],
                 ["COLLECTOR", "Collectors"],
                 ["INVESTOR", "Investors"],
-                ["STAFF", "Staff"],
                 ["ADMIN", "Admins"],
                 ["NEEDS_REVIEW", "Needs Review"],
                 ["RESTRICTED", "Restricted"],
@@ -6787,15 +6990,12 @@ function AccountsWorkspace({
               ]}
             />
             <AdminSelect
-              label="Role"
+              label="Admin access"
               value={draftFilters.role}
               onChange={(value) => updateDraft("role", value)}
               options={[
-                ["", "Role: All"],
-                ["COLLECTOR", "Collector"],
-                ["ADMIN", "Admin"],
-                ["SUPPORT", "Support"],
-                ["ASSET_REVIEWER", "Asset reviewer"],
+                ["", "Admin access: All"],
+                ["ADMIN", "Administrator"],
               ]}
             />
             <AdminSelect
@@ -8146,13 +8346,13 @@ function ConsolidatedUserDetailExperience({
             <button type="button" onClick={() => setTab("History")}>
               View audit history <ArrowRight aria-hidden="true" />
             </button>
-            <Link to="/admin" search={{ section: "payments", tab: "accounts" }}>
+            <Link to="/admin" search={{ section: "money", view: "wallets-movements", tab: "wallets" }}>
               Open Finance workspace <ArrowRight aria-hidden="true" />
             </Link>
-            <Link to="/admin" search={{ section: "support", tab: "compliance" }}>
+            <Link to="/admin" search={{ section: "customers", view: "verification-compliance", tab: "compliance" }}>
               Open Trust &amp; Support <ArrowRight aria-hidden="true" />
             </Link>
-            <Link to="/admin" search={{ section: "support", tab: "tickets" }}>
+            <Link to="/admin" search={{ section: "customers", view: "support", tab: "tickets" }}>
               Send secure message <ArrowRight aria-hidden="true" />
             </Link>
           </div>
@@ -8210,7 +8410,7 @@ function ConsolidatedUserDetailExperience({
           />
           <Link
             to="/admin"
-            search={{ section: "payments", tab: "wallets" }}
+            search={{ section: "money", view: "wallets-movements", tab: "wallets" }}
             className="admin-detail-link"
           >
             Open authoritative Finance <ArrowRight aria-hidden="true" />
@@ -8811,14 +9011,14 @@ function ConsolidatedUserDetailExperience({
         <div className="admin-account-control-links">
           <Link
             to="/admin"
-            search={{ section: "payments", tab: "wallets" }}
+            search={{ section: "money", view: "wallets-movements", tab: "wallets" }}
             className="admin-detail-link"
           >
             Open Finance workspace <ArrowRight aria-hidden="true" />
           </Link>
           <Link
             to="/admin"
-            search={{ section: "payments", tab: "movements" }}
+            search={{ section: "money", view: "wallets-movements", tab: "movements" }}
             className="admin-detail-link"
           >
             Review money movements <ArrowRight aria-hidden="true" />
@@ -10670,8 +10870,8 @@ function ComplianceWorkspace({
   });
   return (
     <AdminPageSection
-      title="Compliance"
-      detail="Review normalized case status without exposing provider payloads or secrets."
+      title="Verification & Compliance"
+      detail="One case queue for identity, compliance exceptions, and restrictions without exposing provider payloads or secrets."
     >
       <div className="admin-kpi-grid admin-kpi-grid--compact">
         <AdminKpi

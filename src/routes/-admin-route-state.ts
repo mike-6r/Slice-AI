@@ -1,4 +1,6 @@
-export type AdminSection =
+export type AdminDestination = "home" | "customers" | "assets" | "money" | "platform";
+
+export type LegacyAdminSection =
   | "control"
   | "users"
   | "moderation"
@@ -18,8 +20,14 @@ export type AdminSection =
   | "integrations"
   | "settings";
 
+// Keep the historical values type-safe for deep links created before the
+// simplification. `normalizeAdminSearch` always resolves them to one of the
+// five permanent destinations.
+export type AdminSection = AdminDestination | LegacyAdminSection;
+
 export type AdminSearch = {
   section: AdminSection;
+  view?: string;
   user?: string;
   asset?: string;
   cataloguePreview?: string;
@@ -89,48 +97,57 @@ export type AdminSearch = {
   financeDataClass?: string;
 };
 
-const navigableSections: AdminSection[] = [
-  "control",
-  "users",
-  "moderation",
-  "intake",
-  "intakeLocations",
-  "collectibles",
-  "assetOperations",
-  "memberships",
-  "payments",
-  "support",
-  "health",
-];
+const navigableSections: AdminDestination[] = ["home", "customers", "assets", "money", "platform"];
 
-function isAdminSection(value: unknown): value is AdminSection {
-  return typeof value === "string" && navigableSections.includes(value as AdminSection);
+function isAdminSection(value: unknown): value is AdminDestination {
+  return typeof value === "string" && navigableSections.includes(value as AdminDestination);
 }
 
-export function normalizeAdminSection(value: unknown): AdminSection {
-  if (["valuations", "custody", "marketplace"].includes(String(value))) return "collectibles";
-  if (["compliance", "restrictions", "support", "cases", "escalations"].includes(String(value)))
-    return "support";
-  if (
-    [
-      "audit",
-      "flags",
-      "integrations",
-      "settings",
-      "system-health",
-      "jobs",
-      "webhooks",
-      "feature-flags",
-      "maintenance",
-      "deployments",
-    ].includes(String(value))
-  )
-    return "health";
-  return isAdminSection(value) ? value : "control";
+export function normalizeAdminSection(value: unknown): AdminDestination {
+  const section = String(value);
+  if (section === "customers" || ["users", "memberships", "compliance", "support", "restrictions", "cases", "escalations"].includes(section))
+    return "customers";
+  if (section === "assets" || ["moderation", "intake", "intakeLocations", "collectibles", "assetOperations", "valuations", "custody", "marketplace"].includes(section))
+    return "assets";
+  if (section === "money" || section === "payments") return "money";
+  if (section === "platform" || ["health", "audit", "flags", "integrations", "settings", "system-health", "jobs", "webhooks", "feature-flags", "maintenance", "deployments"].includes(section))
+    return "platform";
+  return isAdminSection(value) ? value : "home";
 }
 
 export function isAdminNavItemActive(section: AdminSection, item: AdminSection) {
   return section === item;
+}
+
+function defaultView(section: unknown, tab: unknown): string {
+  const value = String(section);
+  const nestedTab = typeof tab === "string" ? tab : "";
+  if (value === "home" || value === "control") return "action-queue";
+  if (value === "customers" || value === "users") return "directory";
+  if (value === "memberships") return "memberships";
+  if (value === "compliance" || value === "restrictions") return "verification-compliance";
+  if (value === "support" || value === "cases" || value === "escalations") return "support";
+  if (value === "assets" || value === "moderation") return "pipeline";
+  if (value === "intake" || value === "intakeLocations" || value === "custody") return "intake-custody";
+  if (value === "collectibles" || value === "marketplace") return "catalogue";
+  if (value === "assetOperations" || value === "valuations") return "valuation-launch";
+  if (value === "money" || value === "payments") {
+    if (["orders", "executions"].includes(nestedTab)) return "trading";
+    if (nestedTab === "reconciliation") return "reconciliation";
+    if (nestedTab === "adjustments") return "adjustments";
+    return "wallets-movements";
+  }
+  if (value === "platform" || value === "health") {
+    if (["jobs", "webhooks"].includes(nestedTab)) return "delivery";
+    if (nestedTab === "integrations") return "integrations";
+    if (["audit", "settings", "feature-flags"].includes(nestedTab)) return "audit-settings";
+    return "health";
+  }
+  if (["audit", "flags", "settings", "feature-flags", "maintenance"].includes(value))
+    return "audit-settings";
+  if (value === "integrations") return "integrations";
+  if (["jobs", "webhooks", "deployments"].includes(value)) return "delivery";
+  return "action-queue";
 }
 
 function legacyTrustTab(value: unknown) {
@@ -167,6 +184,7 @@ export function normalizeAdminSearch(search: Record<string, unknown>): AdminSear
     typeof search[key] === "string" && search[key].length > 0 ? search[key] : undefined;
   return {
     section: normalizeAdminSection(search.section),
+    view: nonEmptyValue("view") ?? defaultView(search.section, search.tab),
     category: stringValue("category"),
     catalogueCategory: stringValue("catalogueCategory"),
     grader: stringValue("grader"),
@@ -243,9 +261,8 @@ export function compactAdminAccountFilters(filters: Record<string, string>) {
 }
 
 export function pipelineSection(stage: string): AdminSection {
-  if (["draft", "submitted", "inReview"].includes(stage)) return "moderation";
-  if (["accepted", "shipping", "received"].includes(stage)) return "intake";
-  return "assetOperations";
+  void stage;
+  return "assets";
 }
 
 export function operationsTab(stage: string) {

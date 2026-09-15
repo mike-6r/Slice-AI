@@ -36,6 +36,7 @@ type Props = {
   query: string;
   status: string;
   page: number;
+  simplified?: boolean;
   update: (patch: Record<string, string | undefined>) => void;
 };
 
@@ -194,6 +195,7 @@ export function AdminPlatformOperations({
   query,
   status,
   page,
+  simplified = false,
   update,
 }: Props) {
   const activeTab: PlatformTab = tabs.some((item) => item.id === rawTab)
@@ -212,6 +214,13 @@ export function AdminPlatformOperations({
   const activeStatus = statuses[activeTab].includes(status) ? status : "";
   const loading = dashboardLoading || (activeTab !== "health" && recordsLoading);
   const pageInfo = records?.pagination ?? { page, pageSize: 10, total: 0, totalPages: 0 };
+  const visibleTabs = !simplified
+    ? tabs
+    : activeTab === "jobs" || activeTab === "webhooks"
+      ? tabs.filter((item) => item.id === "jobs" || item.id === "webhooks")
+      : activeTab === "audit" || activeTab === "settings" || activeTab === "feature-flags"
+        ? tabs.filter((item) => item.id === "audit" || item.id === "settings")
+        : [];
   return (
     <section className="admin-platform-page admin-list-workspace">
       <header className="admin-platform-header admin-list-workspace__heading">
@@ -219,16 +228,18 @@ export function AdminPlatformOperations({
           <p className="admin-platform-breadcrumb">
             Admin Console <span>›</span> Platform Dashboard
           </p>
-          <h2>Platform Operations</h2>
-          <p>System health, jobs, integrations, and platform configuration.</p>
+          <h2>{simplified ? "Platform" : "Platform Operations"}</h2>
+          <p>System health, delivery, integrations, and authoritative platform controls.</p>
         </div>
         <div className="admin-platform-header-actions">
           <button type="button" onClick={retry}>
             <RefreshCw aria-hidden="true" /> Refresh
           </button>
-          <button type="button" className="primary" onClick={() => selectTab("settings")}>
-            <Settings2 aria-hidden="true" /> Platform Settings
-          </button>
+          {!simplified ? (
+            <button type="button" className="primary" onClick={() => selectTab("settings")}>
+              <Settings2 aria-hidden="true" /> Platform Settings
+            </button>
+          ) : null}
         </div>
       </header>
       <div className="admin-platform-kpis">
@@ -256,15 +267,17 @@ export function AdminPlatformOperations({
           icon={<AlertTriangle />}
           tone="gold"
         />
-        <Kpi
-          label="Pending changes"
-          value={dashboard?.kpis.pendingChanges}
-          icon={<Flag />}
-          tone="purple"
-        />
+        {dashboard?.kpis.pendingChanges !== null && dashboard?.kpis.pendingChanges !== undefined ? (
+          <Kpi
+            label="Pending changes"
+            value={dashboard.kpis.pendingChanges}
+            icon={<Flag />}
+            tone="purple"
+          />
+        ) : null}
       </div>
-      <div className="admin-platform-tabs">
-        {tabs.map((item) => (
+      {visibleTabs.length ? <div className="admin-platform-tabs">
+        {visibleTabs.map((item) => (
           <button
             key={item.id}
             type="button"
@@ -274,7 +287,7 @@ export function AdminPlatformOperations({
             {item.label}
           </button>
         ))}
-      </div>
+      </div> : null}
       {failed ? (
         <Empty
           title="Platform operations unavailable"
@@ -288,7 +301,7 @@ export function AdminPlatformOperations({
           <span />
         </div>
       ) : activeTab === "health" ? (
-        <Health dashboard={dashboard} onTab={selectTab} />
+        <Health dashboard={dashboard} onTab={selectTab} simplified={simplified} />
       ) : (
         <Records
           tab={activeTab}
@@ -332,9 +345,11 @@ function Kpi({
 function Health({
   dashboard,
   onTab,
+  simplified,
 }: {
   dashboard?: AdminPlatformDashboard;
   onTab: (tab: PlatformTab) => void;
+  simplified: boolean;
 }) {
   if (!dashboard)
     return (
@@ -420,39 +435,31 @@ function Health({
             <p className="admin-platform-muted">No provider status records.</p>
           )}
         </div>
-        <div className="admin-platform-card">
-          <div className="admin-platform-card-heading">
-            <h3>Feature flags</h3>
-            <span>{dashboard.featureFlags.available ? "Available" : "Unavailable"}</span>
+        {!simplified && dashboard.featureFlags.available ? (
+          <div className="admin-platform-card">
+            <div className="admin-platform-card-heading">
+              <h3>Feature flags</h3>
+              <span>Available</span>
+            </div>
+            <p className="admin-platform-muted">{dashboard.featureFlags.message}</p>
           </div>
-          <p className="admin-platform-muted">{dashboard.featureFlags.message}</p>
-        </div>
-        <div className="admin-platform-card">
-          <div className="admin-platform-card-heading">
-            <h3>Quick actions</h3>
+        ) : null}
+        {!simplified ? (
+          <div className="admin-platform-card">
+            <div className="admin-platform-card-heading">
+              <h3>Quick actions</h3>
+            </div>
+            <button type="button" className="admin-platform-action" onClick={retryAction(onTab, "jobs")}>
+              View all jobs <span>→</span>
+            </button>
+            <button type="button" className="admin-platform-action" onClick={retryAction(onTab, "webhooks")}>
+              View webhooks <span>→</span>
+            </button>
+            <button type="button" className="admin-platform-action" onClick={retryAction(onTab, "audit")}>
+              View audit logs <span>→</span>
+            </button>
           </div>
-          <button
-            type="button"
-            className="admin-platform-action"
-            onClick={retryAction(onTab, "jobs")}
-          >
-            View all jobs <span>→</span>
-          </button>
-          <button
-            type="button"
-            className="admin-platform-action"
-            onClick={retryAction(onTab, "webhooks")}
-          >
-            View webhooks <span>→</span>
-          </button>
-          <button
-            type="button"
-            className="admin-platform-action"
-            onClick={retryAction(onTab, "audit")}
-          >
-            View audit logs <span>→</span>
-          </button>
-        </div>
+        ) : null}
       </aside>
     </div>
   );

@@ -32,6 +32,7 @@ type Props = {
   type: string;
   priority: string;
   page: number;
+  supportOnly?: boolean;
   update: (patch: Record<string, string | undefined>) => void;
 };
 
@@ -111,9 +112,12 @@ export function AdminTrustSupport({
   type,
   priority,
   page,
+  supportOnly = false,
   update,
 }: Props) {
-  const activeTab: TrustTab = tabs.some((item) => item.id === rawTab)
+  const activeTab: TrustTab = supportOnly
+    ? "tickets"
+    : tabs.some((item) => item.id === rawTab)
     ? (rawTab as TrustTab)
     : "compliance";
   const [search, setSearch] = useState(query);
@@ -130,7 +134,8 @@ export function AdminTrustSupport({
   const activePriority = ["LOW", "NORMAL", "HIGH", "URGENT"].includes(priority) ? priority : "";
   const openUser = (id: string) =>
     update({
-      section: "users",
+      section: "customers",
+      view: "directory",
       user: id,
       tab: "Compliance",
       q: undefined,
@@ -179,13 +184,13 @@ export function AdminTrustSupport({
       <header className="admin-trust-header admin-list-workspace__heading">
         <div>
           <p className="admin-trust-breadcrumb">
-            Trust &amp; Support <span>›</span> Trust &amp; Support Overview
+            {supportOnly ? "Customers" : "Trust & Support"} <span>›</span> {supportOnly ? "Support" : "Trust & Support Overview"}
           </p>
-          <h2>Trust &amp; Support</h2>
-          <p>Monitor compliance cases, restrictions, and support activity across the platform.</p>
+          <h2>{supportOnly ? "Support" : "Trust & Support"}</h2>
+          <p>{supportOnly ? "Customer tickets and escalations that need an administrator response." : "Monitor compliance cases, restrictions, and support activity across the platform."}</p>
         </div>
       </header>
-      <div className="admin-trust-kpis">
+      {!supportOnly ? <div className="admin-trust-kpis">
         <TrustKpi
           icon={<ShieldCheck />}
           label="Open compliance cases"
@@ -216,10 +221,10 @@ export function AdminTrustSupport({
           value={dashboard?.kpis.escalations ?? 0}
           tone="purple"
         />
-      </div>
+      </div> : null}
       <div className="admin-trust-layout">
         <div className="admin-trust-main-card">
-          <nav className="admin-trust-tabs" aria-label="Trust and Support sections">
+          {!supportOnly ? <nav className="admin-trust-tabs" aria-label="Trust and Support sections">
             {tabs.map((item) => (
               <button
                 className={item.id === activeTab ? "active" : ""}
@@ -230,7 +235,7 @@ export function AdminTrustSupport({
                 {item.label}
               </button>
             ))}
-          </nav>
+          </nav> : null}
           <div className="admin-trust-toolbar">
             <label className="admin-trust-search">
               <Search size={15} />
@@ -297,7 +302,7 @@ export function AdminTrustSupport({
           )}
           {activeTab && records ? <TrustPagination info={pageInfo} update={update} /> : null}
         </div>
-        <aside className="admin-trust-rail">
+        {!supportOnly ? <aside className="admin-trust-rail">
           <section className="admin-trust-side-card">
             <div className="admin-trust-side-heading">
               <h3>Trust &amp; Support Overview</h3>
@@ -352,7 +357,7 @@ export function AdminTrustSupport({
               </div>
             ))}
           </section>
-        </aside>
+        </aside> : null}
       </div>
     </section>
   );

@@ -936,36 +936,12 @@ type ReviewShellUser = {
 };
 
 function ReviewShell({ children, user }: { children: ReactNode; user?: ReviewShellUser }) {
-  const navGroups: Array<{
-    label: string;
-    items: Array<{ label: string; section: AdminSection; icon: LucideIcon }>;
-  }> = [
-    {
-      label: "Workspace",
-      items: [{ label: "Overview", section: "control", icon: LayoutDashboard }],
-    },
-    {
-      label: "Operations",
-      items: [
-        { label: "Accounts", section: "users", icon: Users },
-        { label: "Review Queue", section: "moderation", icon: ClipboardCheck },
-        { label: "Physical Intake", section: "intake", icon: Inbox },
-        { label: "Collectibles", section: "collectibles", icon: Tag },
-        { label: "Asset Operations", section: "assetOperations", icon: Activity },
-      ],
-    },
-    {
-      label: "Business",
-      items: [
-        { label: "Memberships", section: "memberships", icon: Users },
-        { label: "Finance & Trading", section: "payments", icon: WalletCards },
-        { label: "Trust & Support", section: "support", icon: MessageSquarePlus },
-      ],
-    },
-    {
-      label: "Platform",
-      items: [{ label: "Platform Operations", section: "health", icon: HeartPulse }],
-    },
+  const navItems: Array<{ label: string; section: AdminSection; view: string; icon: LucideIcon }> = [
+    { label: "Home", section: "home", view: "action-queue", icon: LayoutDashboard },
+    { label: "Customers", section: "customers", view: "directory", icon: Users },
+    { label: "Assets", section: "assets", view: "pipeline", icon: ClipboardCheck },
+    { label: "Money", section: "money", view: "wallets-movements", icon: WalletCards },
+    { label: "Platform", section: "platform", view: "health", icon: HeartPulse },
   ];
   const name = user?.profile.displayName ?? "Admin account";
   return (
@@ -975,23 +951,21 @@ function ReviewShell({ children, user }: { children: ReactNode; user?: ReviewShe
           <span className="admin-review-sidebar-mark">ADMIN CONSOLE</span>
         </div>
         <nav className="admin-console-nav" aria-label="Admin Console">
-          {navGroups.map((group) => (
-            <div className="admin-console-nav-group" key={group.label}>
-              <span className="admin-console-nav-label">{group.label}</span>
-              {group.items.map(({ label: itemLabel, section, icon: Icon }) => (
-                <Link
-                  key={section}
-                  to="/admin"
-                  search={{ section }}
-                  className={section === "moderation" ? "is-active" : undefined}
-                  activeOptions={{ exact: true }}
-                >
-                  <Icon aria-hidden="true" />
-                  <span>{itemLabel}</span>
-                </Link>
-              ))}
-            </div>
-          ))}
+          <div className="admin-console-nav-group">
+            <span className="admin-console-nav-label">Workspace</span>
+            {navItems.map(({ label, section, view, icon: Icon }) => (
+              <Link
+                key={section}
+                to="/admin"
+                search={{ section, view }}
+                className={section === "assets" ? "is-active" : undefined}
+                activeOptions={{ exact: true }}
+              >
+                <Icon aria-hidden="true" />
+                <span>{label}</span>
+              </Link>
+            ))}
+          </div>
         </nav>
         <div className="admin-console-account">
           <div className="admin-console-avatar">{initialsForName(name)}</div>
@@ -1035,7 +1009,7 @@ function ReviewWorkspaceToolbar({
         <h1 className="sr-only">Submission Review</h1>
       </div>
       <div className="admin-review-toolbar-actions">
-        <Link className="admin-review-back-link" to="/admin" search={{ section: "moderation" }}>
+        <Link className="admin-review-back-link" to="/admin" search={{ section: "assets", view: "pipeline" }}>
           <ArrowLeft aria-hidden="true" /> Back to queue
         </Link>
         <div className="admin-review-nav-actions" aria-label="Review queue navigation">
@@ -2560,19 +2534,19 @@ function DecisionRail({
       </section>
       <section className="admin-panel-card admin-review-links-card">
         <h2>Quick links</h2>
-        <Link to="/admin" search={{ section: "users" }}>
+        <Link to="/admin" search={{ section: "customers", view: "directory" }}>
           <Users aria-hidden="true" /> Collector account <span>↗</span>
         </Link>
-        <Link to="/admin" search={{ section: "collectibles", asset: detail.assetId ?? undefined }}>
+        <Link to="/admin" search={{ section: "assets", view: "catalogue", asset: detail.assetId ?? undefined }}>
           <Tag aria-hidden="true" /> Canonical collectible (if created) <span>↗</span>
         </Link>
-        <Link to="/admin" search={{ section: "intake" }}>
+        <Link to="/admin" search={{ section: "assets", view: "intake-custody" }}>
           <Inbox aria-hidden="true" /> Physical intake (if created) <span>↗</span>
         </Link>
-        <Link to="/admin" search={{ section: "moderation" }}>
+        <Link to="/admin" search={{ section: "assets", view: "pipeline" }}>
           <ClipboardCheck aria-hidden="true" /> Review queue <span>↗</span>
         </Link>
-        <Link to="/admin" search={{ section: "health", tab: "audit" }}>
+        <Link to="/admin" search={{ section: "platform", view: "audit-settings", tab: "audit" }}>
           <FileClock aria-hidden="true" /> Audit log <span>↗</span>
         </Link>
       </section>
@@ -3005,11 +2979,11 @@ function PostApproval({
             <Link
               className="button-secondary"
               to="/admin"
-              search={{ section: "collectibles", asset: detail.assetId }}
+              search={{ section: "assets", view: "catalogue", asset: detail.assetId }}
             >
               Open Collectible
             </Link>
-            <Link className="button-primary" to="/admin" search={{ section: "intake" }}>
+            <Link className="button-primary" to="/admin" search={{ section: "assets", view: "intake-custody" }}>
               Open Physical Intake
             </Link>
           </>

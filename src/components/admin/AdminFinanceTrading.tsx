@@ -31,6 +31,7 @@ type Props = {
   status: string;
   dataClass: "OPERATIONAL" | "QA_DEMO" | "ALL";
   page: number;
+  simplified?: boolean;
   update: (patch: Record<string, string | undefined>) => void;
 };
 
@@ -175,6 +176,7 @@ export function AdminFinanceTrading({
   status,
   dataClass,
   page,
+  simplified = false,
   update,
 }: Props) {
   const activeTab: FinanceTab = tabs.some((entry) => entry.id === rawTab)
@@ -194,7 +196,8 @@ export function AdminFinanceTrading({
   const openUser = useCallback(
     (id: string, detailTab = "wallet") =>
       update({
-        section: "users",
+        section: "customers",
+        view: "directory",
         user: id,
         tab: detailTab,
         q: undefined,
@@ -205,6 +208,13 @@ export function AdminFinanceTrading({
   );
   const selectTab = (next: FinanceTab) => update({ tab: next, status: undefined, page: "1" });
   const pageInfo = records?.pagination ?? { page, pageSize: 10, total: 0, totalPages: 0 };
+  const visibleTabs = !simplified
+    ? tabs
+    : activeTab === "wallets" || activeTab === "movements"
+      ? tabs.filter((item) => item.id === "wallets" || item.id === "movements")
+      : activeTab === "orders" || activeTab === "executions"
+        ? tabs.filter((item) => item.id === "orders" || item.id === "executions")
+        : [];
   const maxVolume = Math.max(
     ...(dashboard?.overview.history ?? []).map((entry) => Number(entry.volumeMinor)),
     1,
@@ -346,9 +356,9 @@ export function AdminFinanceTrading({
       <header className="admin-finance-header admin-list-workspace__heading">
         <div>
           <p className="admin-finance-breadcrumb">
-            Finance &amp; Trading <span>›</span> Finance Dashboard
+            {simplified ? "Money" : "Finance & Trading"} <span>›</span> Finance Dashboard
           </p>
-          <h2>Finance &amp; Trading</h2>
+          <h2>{simplified ? "Money" : "Finance & Trading"}</h2>
           <p>One control surface for customer funds, provider liquidity, and company revenue.</p>
         </div>
         <div
@@ -563,8 +573,8 @@ export function AdminFinanceTrading({
               : `${titleCase(activeTab)} · ${dataClass === "QA_DEMO" ? "QA / demo" : "all data"}`}
           </b>
         </header>
-        <nav className="admin-finance-tabs" aria-label="Finance sections">
-          {tabs.map((entry) => (
+        {visibleTabs.length ? <nav className="admin-finance-tabs" aria-label="Finance sections">
+          {visibleTabs.map((entry) => (
             <button
               className={entry.id === activeTab ? "active" : ""}
               key={entry.id}
@@ -574,7 +584,7 @@ export function AdminFinanceTrading({
               {entry.label}
             </button>
           ))}
-        </nav>
+        </nav> : null}
         <div className="admin-finance-toolbar">
           <label className="admin-finance-search">
             <Search size={15} />

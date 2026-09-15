@@ -435,7 +435,7 @@ function LocationDirectory({
           <EnvironmentPill environment={location.environment} />
           <AvailabilityPill location={location} />
           <CapacityDisplay location={location} />
-          <Link className="intake-location-active-link" to="/admin" search={{ section: "intake", vault: location.id }}>{location.activeIntakes} →</Link>
+          <Link className="intake-location-active-link" to="/admin" search={{ section: "assets", view: "intake-custody", vault: location.id }}>{location.activeIntakes} →</Link>
           <span className="intake-location-last-activity"><strong>{relativeTime(location.lastActivityAt)}</strong><small>{new Date(location.lastActivityAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</small></span>
           <button
             type="button"
@@ -477,7 +477,7 @@ function LocationSummaryRail({
       <section className="admin-panel intake-location-rail-card intake-location-quick-links">
         <RailHeading icon={<Link2 />} title="Quick links" />
         <button type="button" onClick={onOpenPhysicalIntake}><PackageCheck /> Open Physical Intake <ChevronRight /></button>
-        <Link to="/admin" search={{ section: "audit" }}><Clock3 /> View Audit History <ChevronRight /></Link>
+        <Link to="/admin" search={{ section: "platform", view: "audit-settings", tab: "audit" }}><Clock3 /> View Audit History <ChevronRight /></Link>
         <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}><Settings2 /> Location Capacity Guide <ChevronRight /></button>
       </section>
     </aside>
@@ -557,7 +557,7 @@ function CollectorPreview({ location, visibility }: { location: AdminIntakeLocat
 }
 
 function LocationIntakePreview({ detail, onOpenIntakes }: { detail: AdminIntakeLocationDetail; onOpenIntakes: () => void }) {
-  return <section className="admin-panel intake-location-detail-section"><SectionHeading eyebrow="Current work" title="Recent active intakes" action={<button type="button" className="admin-secondary-button" onClick={onOpenIntakes}>View all active intakes</button>} />{detail.intakes.length ? <div className="intake-location-preview-list">{detail.intakes.slice(0, 4).map((intake) => <Link key={intake.id} to="/admin" search={{ section: "intake", intake: intake.submissionId, intakeTab: "overview" }}><div><strong>{intake.title}</strong><small>{intake.collector} · {intake.deliveryMethod === "IN_PERSON" ? "In-person" : "Shipping"}</small></div><span>{intake.stage.replaceAll("_", " ")}</span><span>{intake.assignedStaff ?? "Unassigned"}</span><span>{intake.nextAction}</span></Link>)}</div> : <p className="intake-location-state">No active intakes are assigned to this location.</p>}</section>;
+  return <section className="admin-panel intake-location-detail-section"><SectionHeading eyebrow="Current work" title="Recent active intakes" action={<button type="button" className="admin-secondary-button" onClick={onOpenIntakes}>View all active intakes</button>} />{detail.intakes.length ? <div className="intake-location-preview-list">{detail.intakes.slice(0, 4).map((intake) => <Link key={intake.id} to="/admin" search={{ section: "assets", view: "intake-custody", intake: intake.submissionId, intakeTab: "overview" }}><div><strong>{intake.title}</strong><small>{intake.collector} · {intake.deliveryMethod === "IN_PERSON" ? "In-person" : "Shipping"}</small></div><span>{intake.stage.replaceAll("_", " ")}</span><span>{intake.assignedStaff ?? "Unassigned"}</span><span>{intake.nextAction}</span></Link>)}</div> : <p className="intake-location-state">No active intakes are assigned to this location.</p>}</section>;
 }
 
 function CapacitySummary({ location }: { location: AdminIntakeLocationDetail["location"] }) {
@@ -636,7 +636,7 @@ function LocationIntakes({ detail }: { detail: AdminIntakeLocationDetail }) {
           <span>Issue</span>
         </div>
         {detail.intakes.map((intake) => (
-          <Link className="intake-location-table-row" role="row" key={intake.id} to="/admin" search={{ section: "intake", intake: intake.submissionId, intakeTab: "overview" }}>
+          <Link className="intake-location-table-row" role="row" key={intake.id} to="/admin" search={{ section: "assets", view: "intake-custody", intake: intake.submissionId, intakeTab: "overview" }}>
             <div>
               <strong>{intake.title}</strong>
               <small>{intake.reference}</small>

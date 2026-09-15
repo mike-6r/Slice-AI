@@ -270,7 +270,7 @@ export function MainNavigation() {
                 {canAccessAdmin(currentUser.data?.roles ?? []) && (
                   <Link
                     to="/admin"
-                    search={{ section: "control", user: undefined, tab: undefined }}
+                    search={{ section: "home", view: "action-queue", user: undefined, tab: undefined }}
                     onClick={() => setMobileOpen(false)}
                     className="rounded-lg px-3 py-3 text-sm font-medium text-subtle"
                   >
