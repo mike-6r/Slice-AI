@@ -1045,7 +1045,7 @@ function ReviewHeader({ detail }: { detail: SubmissionReviewDetail }) {
           </div>
           <h2>{item?.title ?? "Untitled submission"}</h2>
           <p>
-            {[item?.year, item?.set, item?.cardNumber ? `#${item.cardNumber}` : null]
+            {[item?.year, item?.set, item?.cardNumber ? `#${item.cardNumber}` : null, item?.variant]
               .filter(Boolean)
               .join(" · ") || "Collector-supplied identity"}
           </p>
@@ -2406,12 +2406,11 @@ function DecisionRail({
 }) {
   const workspace = detail.reviewWorkspace;
   if (!workspace) return null;
-  const contributors = workspace.contributors ?? [];
   return (
     <aside className="admin-review-decision-rail">
-      <section className="admin-panel-card admin-review-status-card">
+      <section className="admin-panel-card admin-review-status-card admin-review-command-card">
         <div className="admin-review-status-card-heading">
-          <h2>Current state</h2>
+          <h2>Review command</h2>
           <StatusPill
             value={workspace.selfReviewBlocked ? "Awaiting reviewer" : currentStateLabel(detail)}
           />
@@ -2424,7 +2423,7 @@ function DecisionRail({
           <span>Why</span>
           <strong>{currentStateReason(detail)}</strong>
         </div>
-        <div className="admin-review-next-action">
+        <div className="admin-review-rail-next-action">
           <span>Next action</span>
           <strong>{nextActionTitle(detail)}</strong>
           {nextActionCopy(workspace.nextAction) ? (
@@ -2439,34 +2438,34 @@ function DecisionRail({
               : "Create canonical collectible → Physical Intake"}
           </strong>
         </div>
-      </section>
-      <section className="admin-panel-card admin-review-eligibility-card">
-        <h2>Decision eligibility</h2>
-        {detail.reviewWorkspace?.selfReviewBlocked ? (
-          <div className="admin-review-eligibility-state is-blocked">
-            <span aria-hidden="true">×</span>
-            <div>
-              <strong>Self-review blocked</strong>
-              <p>You cannot make the final decision on your own submission.</p>
+        <div className="admin-review-rail-decision">
+          <span>Decision</span>
+          {detail.reviewWorkspace?.selfReviewBlocked ? (
+            <div className="admin-review-eligibility-state is-blocked">
+              <span aria-hidden="true">×</span>
+              <div>
+                <strong>Self-review blocked</strong>
+                <p>You cannot make the final decision on your own submission.</p>
+              </div>
             </div>
-          </div>
-        ) : detail.readiness?.decisionEligible ? (
-          <div className="admin-review-eligibility-state is-ready">
-            <CheckCircle2 aria-hidden="true" />
-            <div>
-              <strong>Eligible to decide</strong>
-              <p>All required review gates are complete.</p>
+          ) : detail.readiness?.decisionEligible ? (
+            <div className="admin-review-eligibility-state is-ready">
+              <CheckCircle2 aria-hidden="true" />
+              <div>
+                <strong>Eligible to decide</strong>
+                <p>All required review gates are complete.</p>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="admin-review-eligibility-state is-blocked">
-            <AlertTriangle aria-hidden="true" />
-            <div>
-              <strong>Not ready</strong>
-              <p>Complete the required review items before deciding.</p>
+          ) : (
+            <div className="admin-review-eligibility-state is-blocked">
+              <AlertTriangle aria-hidden="true" />
+              <div>
+                <strong>Not ready</strong>
+                <p>Complete the required review items before deciding.</p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </section>
       <section className="admin-panel-card admin-review-actions-card">
         <h2>Quick actions</h2>
@@ -2532,40 +2531,31 @@ function DecisionRail({
           </div>
         )}
       </section>
-      <section className="admin-panel-card admin-review-links-card">
-        <h2>Quick links</h2>
-        <Link to="/admin" search={{ section: "customers", view: "directory" }}>
-          <Users aria-hidden="true" /> Collector account <span>↗</span>
-        </Link>
-        <Link to="/admin" search={{ section: "assets", view: "catalogue", asset: detail.assetId ?? undefined }}>
-          <Tag aria-hidden="true" /> Canonical collectible (if created) <span>↗</span>
-        </Link>
-        <Link to="/admin" search={{ section: "assets", view: "intake-custody" }}>
-          <Inbox aria-hidden="true" /> Physical intake (if created) <span>↗</span>
-        </Link>
-        <Link to="/admin" search={{ section: "assets", view: "pipeline" }}>
-          <ClipboardCheck aria-hidden="true" /> Review queue <span>↗</span>
-        </Link>
-        <Link to="/admin" search={{ section: "platform", view: "audit-settings", tab: "audit" }}>
-          <FileClock aria-hidden="true" /> Audit log <span>↗</span>
-        </Link>
-      </section>
-      <section className="admin-panel-card admin-review-summary-card">
-        <h2>Submission summary</h2>
-        <dl>
-          {fact("Category", detail.collectible?.category)}
-          {fact("Card number", detail.collectible?.cardNumber)}
-          {fact("Year", detail.collectible?.year)}
-          {fact("Set", detail.collectible?.set)}
-          {fact("Variant", detail.collectible?.variant)}
-          {fact(
-            "Grade",
-            detail.collectible?.grader
-              ? `${detail.collectible.grader} ${detail.collectible.grade ?? ""}`
-              : "Raw / Ungraded",
-          )}
-        </dl>
-      </section>
+      <details className="admin-panel-card admin-review-related-workspaces">
+        <summary>
+          Related workspaces <span>Optional</span>
+        </summary>
+        <div>
+          <Link to="/admin" search={{ section: "customers", view: "directory" }}>
+            <Users aria-hidden="true" /> Collector account <span>↗</span>
+          </Link>
+          <Link
+            to="/admin"
+            search={{ section: "assets", view: "catalogue", asset: detail.assetId ?? undefined }}
+          >
+            <Tag aria-hidden="true" /> Canonical collectible <span>↗</span>
+          </Link>
+          <Link to="/admin" search={{ section: "assets", view: "intake-custody" }}>
+            <Inbox aria-hidden="true" /> Physical intake <span>↗</span>
+          </Link>
+          <Link to="/admin" search={{ section: "assets", view: "pipeline" }}>
+            <ClipboardCheck aria-hidden="true" /> Review queue <span>↗</span>
+          </Link>
+          <Link to="/admin" search={{ section: "platform", view: "audit-settings", tab: "audit" }}>
+            <FileClock aria-hidden="true" /> Audit log <span>↗</span>
+          </Link>
+        </div>
+      </details>
     </aside>
   );
 }

@@ -374,7 +374,12 @@ export function AdminFinanceTrading({
         </div>
       </header>
 
-      <GuidancePanel compact currentState="Financial operations" nextAction={financeGuidance} />
+      <GuidancePanel
+        compact
+        className={`admin-finance-action-center tone-${operationalLiquidityTone(liquidityOperationalStatus)}`}
+        currentState="Financial operations"
+        nextAction={financeGuidance}
+      />
 
       <section className="admin-finance-domain-grid" aria-label="Financial control domains">
         <article className="admin-finance-domain-card is-customer">
@@ -399,24 +404,22 @@ export function AdminFinanceTrading({
             />
             <Metric label="Reserved" value={money(dashboard.kpis.reservedFundsMinor)} tone="blue" />
             <Metric
-              label="Withdrawal eligible"
-              value={money(financialSeparation?.customerLiabilities.withdrawalEligibleMinor)}
-              tone="green"
-            />
-            <Metric
-              label="Collector proceeds"
-              value={money(financialSeparation?.customerLiabilities.collectorProceedsMinor)}
-              tone="purple"
-            />
-            <Metric
               label="Withdrawal holds"
               value={money(financialSeparation?.customerLiabilities.withdrawalReservationMinor)}
               tone="gold"
             />
           </div>
           <footer className="admin-finance-domain-footer">
-            Pending deposits {money(dashboard.kpis.pendingDepositsMinor)} · pending withdrawals{" "}
-            {money(dashboard.kpis.pendingWithdrawalsMinor)}
+            <span>
+              Withdrawal eligible {money(financialSeparation?.customerLiabilities.withdrawalEligibleMinor)}
+            </span>
+            <span>
+              Collector proceeds {money(financialSeparation?.customerLiabilities.collectorProceedsMinor)}
+            </span>
+            <p>
+              Pending deposits {money(dashboard.kpis.pendingDepositsMinor)} · pending withdrawals{" "}
+              {money(dashboard.kpis.pendingWithdrawalsMinor)}
+            </p>
           </footer>
         </article>
 
@@ -459,16 +462,6 @@ export function AdminFinanceTrading({
               tone="cyan"
             />
             <Metric
-              label="Pending at Stripe"
-              value={providerMoney(
-                separatedStripe?.providerPendingMinor ??
-                  dashboard.payoutLiquidity?.providerPendingMinor,
-                separatedStripe?.payoutLiquidityStatus ??
-                  dashboard.payoutLiquidity?.providerLiquidityStatus,
-              )}
-              tone="purple"
-            />
-            <Metric
               label="Payout obligations"
               value={money(separatedStripe?.pendingPayoutObligationMinor)}
               tone="gold"
@@ -490,11 +483,21 @@ export function AdminFinanceTrading({
             />
           </div>
           <footer className="admin-finance-domain-footer">
-            {separatedStripe?.payoutLiquidityStatus === "UNAVAILABLE"
-              ? "Stripe could not be read. Preflight stays fail-closed until provider evidence returns."
-              : liquidityOperationalStatus === "DEFICIT"
-                ? `${money(separatedStripe?.liquidityShortfallMinor)} below the protected liability and reserve projection.`
-                : "Only Stripe Platform Payments Balance can release a customer withdrawal."}
+            <span>
+              Pending at Stripe{" "}
+              {providerMoney(
+                separatedStripe?.providerPendingMinor ?? dashboard.payoutLiquidity?.providerPendingMinor,
+                separatedStripe?.payoutLiquidityStatus ??
+                  dashboard.payoutLiquidity?.providerLiquidityStatus,
+              )}
+            </span>
+            <p>
+              {separatedStripe?.payoutLiquidityStatus === "UNAVAILABLE"
+                ? "Stripe could not be read. Preflight stays fail-closed until provider evidence returns."
+                : liquidityOperationalStatus === "DEFICIT"
+                  ? `${money(separatedStripe?.liquidityShortfallMinor)} below the protected liability and reserve projection.`
+                  : "Only Stripe Platform Payments Balance can release a customer withdrawal."}
+            </p>
           </footer>
         </article>
 
@@ -541,21 +544,19 @@ export function AdminFinanceTrading({
               }
               tone={separatedRevenue?.pendingProviderCostCount ? "gold" : "green"}
             />
-            <Metric
-              label="Already swept"
-              value={money(separatedRevenue?.alreadySweptMinor)}
-              tone="purple"
-            />
-            <Metric label="External settlement" value="Not configured" tone="blue" />
           </div>
           <footer
             className={`admin-finance-domain-footer${separatedRevenue?.safeToSweepStatus === "BLOCKED" ? " is-warning" : ""}`}
           >
-            {separatedRevenue?.safeToSweepStatus === "READY"
-              ? "A dual-control sweep request may be recorded; approval does not send a Stripe payout."
-              : separatedRevenue?.blockedReasons.length
-                ? `Sweep blocked: ${separatedRevenue.blockedReasons.map(titleCase).join(", ")}.`
-                : "Sweep readiness remains blocked until the server proves a safe amount."}
+            <span>Already swept {money(separatedRevenue?.alreadySweptMinor)}</span>
+            <span>External settlement not configured</span>
+            <p>
+              {separatedRevenue?.safeToSweepStatus === "READY"
+                ? "A dual-control sweep request may be recorded; approval does not send a Stripe payout."
+                : separatedRevenue?.blockedReasons.length
+                  ? `Sweep blocked: ${separatedRevenue.blockedReasons.map(titleCase).join(", ")}.`
+                  : "Sweep readiness remains blocked until the server proves a safe amount."}
+            </p>
           </footer>
         </article>
       </section>
@@ -564,8 +565,8 @@ export function AdminFinanceTrading({
         <header className="admin-finance-ledger-heading">
           <div>
             <span>Finance ledger</span>
-            <h3>Accounts, movements &amp; settlement records</h3>
-            <p>Filter the authoritative record stream without leaving the control room.</p>
+            <h3>Ledger records</h3>
+            <p>Search the authoritative account and settlement record without leaving Finance.</p>
           </div>
           <b>
             {dataClass === "OPERATIONAL"

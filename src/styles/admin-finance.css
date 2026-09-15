@@ -946,3 +946,324 @@
     flex-direction: column;
   }
 }
+
+/* Finance control room: put the protected decision ahead of the ledger detail. */
+.admin-finance-page {
+  gap: 1.25rem;
+}
+.admin-finance-header {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(46, 74, 84, 0.72);
+}
+.admin-finance-breadcrumb {
+  color: #52d4b5;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+.admin-finance-header h2 {
+  font-size: clamp(1.9rem, 2.35vw, 2.6rem);
+  font-weight: 650;
+  letter-spacing: -0.06em;
+}
+.admin-finance-header p:last-child {
+  max-width: 46rem;
+  color: #9bb0ba;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+.admin-finance-posture {
+  min-width: 12.5rem;
+  border-radius: 0.7rem;
+  padding: 0.82rem 0.95rem;
+}
+.admin-finance-posture span {
+  font-size: 0.58rem;
+}
+.admin-finance-posture strong {
+  font-size: 1.08rem;
+}
+.admin-finance-posture small {
+  font-size: 0.64rem;
+}
+
+.admin-finance-page .admin-finance-action-center {
+  gap: 0.75rem;
+  border-color: rgba(58, 207, 177, 0.52);
+  border-radius: 0.78rem;
+  padding: 1rem 1.1rem;
+  background:
+    linear-gradient(105deg, rgba(19, 74, 73, 0.68), rgba(8, 27, 35, 0.94) 46%),
+    #081c25;
+  box-shadow: 0 1.1rem 2.5rem rgba(0, 0, 0, 0.14);
+}
+.admin-finance-page .admin-finance-action-center.tone-red {
+  border-color: rgba(235, 111, 111, 0.48);
+  background:
+    linear-gradient(105deg, rgba(83, 38, 42, 0.7), rgba(20, 26, 34, 0.94) 46%),
+    #101b24;
+}
+.admin-finance-page .admin-finance-action-center .admin-guidance-primary {
+  gap: 0.5rem;
+}
+.admin-finance-page .admin-finance-action-center .admin-guidance-primary__heading span,
+.admin-finance-page .admin-finance-action-center .admin-guidance-primary__meta small {
+  font-size: 0.59rem;
+}
+.admin-finance-page .admin-finance-action-center .admin-guidance-primary h2 {
+  font-size: clamp(1.22rem, 1.6vw, 1.58rem);
+}
+.admin-finance-page .admin-finance-action-center .admin-guidance-primary > p {
+  max-width: 68rem;
+  color: #b1c6c4;
+  font-size: 0.75rem;
+}
+.admin-finance-page .admin-finance-action-center .admin-guidance-primary__meta {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.55fr) minmax(17rem, 1.1fr) minmax(17rem, 1.1fr);
+  gap: 0.7rem;
+}
+.admin-finance-page .admin-finance-action-center .admin-guidance-owner,
+.admin-finance-page .admin-finance-action-center .admin-guidance-primary__meta > div:not(.admin-guidance-owner) {
+  min-width: 0;
+  border: 1px solid rgba(83, 122, 130, 0.38);
+  border-radius: 0.48rem;
+  padding: 0.58rem 0.68rem;
+  background: rgba(3, 16, 22, 0.28);
+}
+.admin-finance-page .admin-finance-action-center .admin-guidance-primary__meta strong {
+  font-size: 0.67rem;
+  line-height: 1.38;
+}
+.admin-finance-page .admin-finance-action-center .admin-guidance-action {
+  min-height: 2.35rem;
+  border-radius: 0.45rem;
+  padding-inline: 0.8rem;
+  font-size: 0.67rem;
+}
+
+.admin-finance-domain-grid {
+  gap: 0.85rem;
+}
+.admin-finance-domain-card,
+.admin-finance-ledger-card,
+.admin-finance-insight-card {
+  border-color: #294550;
+  border-radius: 0.78rem;
+}
+.admin-finance-domain-card {
+  min-height: 23.25rem;
+  padding: 1rem;
+}
+.admin-finance-domain-heading h3,
+.admin-finance-ledger-heading h3,
+.admin-finance-insight-heading h3 {
+  font-size: 1.03rem;
+}
+.admin-finance-domain-heading p,
+.admin-finance-ledger-heading p {
+  max-width: 28rem;
+  font-size: 0.67rem;
+  line-height: 1.48;
+}
+.admin-finance-domain-heading > div > span,
+.admin-finance-ledger-heading > div > span,
+.admin-finance-insight-heading > div > span {
+  font-size: 0.58rem;
+}
+.admin-finance-domain-heading b,
+.admin-finance-ledger-heading > b,
+.admin-finance-insight-heading > b,
+.admin-finance-insight-heading button {
+  padding: 0.28rem 0.48rem;
+  font-size: 0.57rem;
+}
+.admin-finance-domain-primary {
+  margin-top: 1rem;
+  border-color: rgba(72, 121, 139, 0.34);
+  border-radius: 0.6rem;
+  padding: 0.92rem;
+}
+.admin-finance-domain-primary > span,
+.admin-finance-domain-primary small {
+  font-size: 0.63rem;
+}
+.admin-finance-domain-primary strong {
+  margin-block: 0.32rem;
+  font-size: clamp(1.72rem, 2.05vw, 2.35rem);
+}
+.admin-finance-domain-metrics {
+  gap: 0.55rem;
+  margin-top: 0.62rem;
+}
+.admin-finance-metric {
+  min-height: 3.35rem;
+  border-color: rgba(54, 96, 114, 0.7);
+  border-radius: 0.52rem;
+  padding: 0.62rem 0.68rem;
+}
+.admin-finance-metric small {
+  font-size: 0.6rem;
+}
+.admin-finance-metric strong {
+  margin-top: 0.28rem;
+  font-size: 0.82rem;
+}
+.admin-finance-domain-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.38rem 0.7rem;
+  margin-top: auto;
+  padding-top: 0.72rem;
+  font-size: 0.62rem;
+}
+.admin-finance-domain-footer > span {
+  color: #9ab0b9;
+}
+.admin-finance-domain-footer > span + span::before {
+  margin-right: 0.7rem;
+  color: #53707b;
+  content: "•";
+}
+.admin-finance-domain-footer p {
+  width: 100%;
+  margin: 0.1rem 0 0;
+  color: #738e9d;
+  line-height: 1.45;
+}
+.admin-finance-domain-footer.is-warning p {
+  color: #d7ac6b;
+}
+
+.admin-finance-ledger-heading {
+  min-height: 5.7rem;
+  padding: 1rem 1.05rem 0.9rem;
+}
+.admin-finance-tabs {
+  gap: 0.35rem;
+  padding: 0.5rem 0.78rem 0;
+}
+.admin-finance-tabs button {
+  min-height: 2.5rem;
+  border-radius: 0.48rem 0.48rem 0 0;
+  padding: 0.5rem 0.72rem;
+  font-size: 0.66rem;
+}
+.admin-finance-toolbar {
+  display: grid;
+  grid-template-columns: minmax(18rem, 1fr) repeat(2, minmax(10.5rem, max-content));
+  gap: 0.6rem;
+  padding: 0.82rem;
+}
+.admin-finance-search,
+.admin-finance-toolbar select {
+  min-height: 2.42rem;
+  box-sizing: border-box;
+  border-radius: 0.48rem;
+  padding: 0.55rem 0.68rem;
+  font-size: 0.67rem;
+}
+.admin-finance-search input {
+  font-size: 0.67rem;
+}
+.admin-finance-table th {
+  height: 2.75rem;
+  padding: 0.55rem 0.72rem;
+  font-size: 0.58rem;
+}
+.admin-finance-table td {
+  padding: 0.72rem;
+  font-size: 0.68rem;
+}
+.admin-finance-identity span {
+  font-size: 0.69rem;
+}
+.admin-finance-identity small,
+.admin-finance-status {
+  font-size: 0.6rem;
+}
+.admin-finance-pagination {
+  padding: 0.76rem 0.85rem;
+  font-size: 0.65rem;
+}
+
+.admin-finance-insights-grid {
+  grid-template-columns: minmax(15rem, 0.8fr) minmax(18rem, 1.1fr) minmax(18rem, 1.1fr);
+  gap: 0.85rem;
+}
+.admin-finance-insight-card {
+  min-height: 16rem;
+  padding: 1rem;
+}
+.admin-finance-total {
+  margin-block: 1rem 0.58rem;
+  font-size: 2rem;
+}
+.admin-finance-chart {
+  height: 5.3rem;
+}
+.admin-finance-operation-counts {
+  margin-top: 1rem;
+}
+.admin-finance-operation-counts > div {
+  padding: 0.68rem;
+}
+.admin-finance-operation-counts small,
+.admin-finance-operation-counts span,
+.admin-finance-recon,
+.admin-finance-recon small,
+.admin-finance-activity strong,
+.admin-finance-activity small,
+.admin-finance-activity b,
+.admin-finance-quick-action {
+  font-size: 0.62rem;
+}
+.admin-finance-operation-counts strong {
+  font-size: 1.25rem;
+}
+.admin-finance-quick-action {
+  min-height: 2.3rem;
+  border-radius: 0.45rem;
+}
+
+@media (max-width: 1180px) {
+  .admin-finance-domain-grid,
+  .admin-finance-insights-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .admin-finance-domain-card.is-customer,
+  .admin-finance-insight-card.is-activity {
+    grid-column: 1 / -1;
+  }
+  .admin-finance-page .admin-finance-action-center .admin-guidance-primary__meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .admin-finance-page .admin-finance-action-center .admin-guidance-owner {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 760px) {
+  .admin-finance-header {
+    gap: 0.9rem;
+  }
+  .admin-finance-posture {
+    width: 100%;
+  }
+  .admin-finance-domain-grid,
+  .admin-finance-insights-grid,
+  .admin-finance-page .admin-finance-action-center .admin-guidance-primary__meta {
+    grid-template-columns: 1fr;
+  }
+  .admin-finance-domain-card.is-customer,
+  .admin-finance-insight-card.is-activity,
+  .admin-finance-page .admin-finance-action-center .admin-guidance-owner {
+    grid-column: auto;
+  }
+  .admin-finance-domain-card {
+    min-height: 0;
+  }
+  .admin-finance-toolbar {
+    grid-template-columns: 1fr;
+  }
+}

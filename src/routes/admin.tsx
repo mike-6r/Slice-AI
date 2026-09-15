@@ -5206,6 +5206,32 @@ function ControlCenterRevamp({
       item: center.summary.platformIncidents,
     },
   ] as const;
+  const workspacePulse = [
+    {
+      label: "Customers",
+      detail: "Verification, access and customer support",
+      count: center.summary.staffDecisions.count,
+      onClick: () => select("compliance"),
+    },
+    {
+      label: "Assets",
+      detail: "Qualification, intake and launch readiness",
+      count: center.summary.needsAction.count,
+      onClick: () => select("moderation"),
+    },
+    {
+      label: "Money",
+      detail: "Wallet movements and financial exceptions",
+      count: center.summary.financialRisk.count,
+      onClick: () => select("payments"),
+    },
+    {
+      label: "Platform",
+      detail: "Health, delivery and operational controls",
+      count: center.summary.platformIncidents.count,
+      onClick: () => select("health"),
+    },
+  ] as const;
   if (view === "action-queue") {
     return (
       <section className="admin-home-workspace admin-list-workspace">
@@ -5213,12 +5239,32 @@ function ControlCenterRevamp({
           <div>
             <p className="admin-console-eyebrow">Home · Action Queue</p>
             <h2>Work that needs a decision.</h2>
-            <span>One priority queue. Open an item to continue in its authoritative workspace.</span>
+            <span>Every item has one clear destination. Open it to continue in the authoritative workspace.</span>
           </div>
           <button type="button" className="admin-inline-action" onClick={retry}>
             <RefreshCw aria-hidden="true" /> Refresh queue
           </button>
         </header>
+        <section className="admin-home-queue-context" aria-label="Action queue summary">
+          <div>
+            <span>Open decisions</span>
+            <strong>{center.priorityWork.length}</strong>
+            <small>Items waiting for a next step</small>
+          </div>
+          <div>
+            <span>Financial exceptions</span>
+            <strong>{center.summary.financialRisk.count ?? "—"}</strong>
+            <small>Route directly to Money</small>
+          </div>
+          <div>
+            <span>Staff decisions</span>
+            <strong>{center.summary.staffDecisions.count ?? "—"}</strong>
+            <small>Route directly to Customers</small>
+          </div>
+          <button type="button" onClick={() => select("home", "operational-summary")}>
+            View operating picture <ArrowRight aria-hidden="true" />
+          </button>
+        </section>
         <section className="admin-panel admin-home-action-queue">
           <div className="admin-home-action-queue__head" aria-hidden="true">
             <span>Severity</span>
@@ -5262,7 +5308,7 @@ function ControlCenterRevamp({
         <div>
           <p className="admin-console-eyebrow">Home · Operational Summary</p>
           <h2>What needs attention across Slice.</h2>
-          <span>Counts are links to the responsible workspace, never a second operational dashboard.</span>
+          <span>Start here for direction, then continue in the workspace that owns the work.</span>
         </div>
         <small className="admin-home-refreshed">Last refreshed {age(center.lastRefreshedAt)}</small>
       </header>
@@ -5284,28 +5330,59 @@ function ControlCenterRevamp({
           </button>
         ))}
       </div>
-      <section className="admin-panel admin-home-system-strip">
-        <div>
-          <span>Customer verification</span>
-          <strong>{center.summary.staffDecisions.count ?? "—"}</strong>
-          <button type="button" onClick={() => select("compliance")}>Open Customers</button>
-        </div>
-        <div>
-          <span>Asset pipeline</span>
-          <strong>{center.summary.needsAction.count ?? "—"}</strong>
-          <button type="button" onClick={() => select("moderation")}>Open Assets</button>
-        </div>
-        <div>
-          <span>Money exceptions</span>
-          <strong>{center.summary.financialRisk.count ?? "—"}</strong>
-          <button type="button" onClick={() => select("payments")}>Open Money</button>
-        </div>
-        <div>
-          <span>Platform health</span>
-          <strong>{center.summary.platformIncidents.count ?? "—"}</strong>
-          <button type="button" onClick={() => select("health")}>Open Platform</button>
-        </div>
-      </section>
+      <div className="admin-home-overview-grid">
+        <section className="admin-panel admin-home-pulse">
+          <div className="admin-home-section-heading">
+            <div>
+              <p>Workspace pulse</p>
+              <h3>Where to go next</h3>
+            </div>
+            <span>Live counts</span>
+          </div>
+          <div className="admin-home-pulse-list">
+            {workspacePulse.map((workspace) => (
+              <button type="button" key={workspace.label} onClick={workspace.onClick}>
+                <span className="admin-home-pulse-count">{workspace.count ?? "—"}</span>
+                <span className="admin-home-pulse-copy">
+                  <strong>{workspace.label}</strong>
+                  <small>{workspace.detail}</small>
+                </span>
+                <ArrowRight aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+        </section>
+        <section className="admin-panel admin-home-priority-preview">
+          <div className="admin-home-section-heading">
+            <div>
+              <p>Priority preview</p>
+              <h3>Start with the oldest decisions</h3>
+            </div>
+            <button type="button" onClick={() => select("home", "action-queue")}>Open queue</button>
+          </div>
+          {center.priorityWork.length ? (
+            <div className="admin-home-priority-preview__list">
+              {center.priorityWork.slice(0, 5).map((item) => (
+                <article key={item.id}>
+                  <span
+                    className={`admin-priority-severity is-${item.severity.toLowerCase()}`}
+                    aria-label={`${item.severity} severity`}
+                  />
+                  <div>
+                    <strong title={item.title}>{item.title}</strong>
+                    <small>{item.context}</small>
+                  </div>
+                  <button type="button" aria-label={`Open ${item.title}`} onClick={() => open(item.target)}>
+                    <ArrowRight aria-hidden="true" />
+                  </button>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <AdminEmpty detail="No action items are waiting." />
+          )}
+        </section>
+      </div>
     </section>
   );
   return (
@@ -5777,12 +5854,6 @@ function ReviewQueue({
           tone="danger"
         />
         <ReviewKpi
-          icon={Inbox}
-          label="Awaiting review"
-          value={counts.all}
-          detail="Total active submissions"
-        />
-        <ReviewKpi
           icon={FileClock}
           label="Needs evidence"
           value={counts.awaitingEvidence}
@@ -5795,13 +5866,6 @@ function ReviewQueue({
           value={counts.researchPending}
           detail="Reference research outstanding"
           tone="purple"
-        />
-        <ReviewKpi
-          icon={Users}
-          label="Claimed by staff"
-          value={counts.claimed}
-          detail="Reviews in progress"
-          tone="blue"
         />
       </div>
       <QualificationExceptionPanel
@@ -5945,40 +6009,6 @@ function ReviewQueue({
               ]}
               onChange={(value) => updateSearch({ priority: value || undefined, page: "1" })}
             />
-            <ReviewSelect
-              label="Evidence"
-              value={filters.evidence}
-              options={[
-                ["", "Evidence: All"],
-                ["complete", "Complete"],
-                ["missing", "Missing Required"],
-                ["partial", "Partial"],
-              ]}
-              onChange={(value) => updateSearch({ evidence: value || undefined, page: "1" })}
-            />
-            <ReviewSelect
-              label="Research"
-              value={filters.research}
-              options={[
-                ["", "Research: All"],
-                ["completed", "Matched"],
-                ["pending", "Needs review"],
-                ["unavailable", "Unavailable"],
-                ["not_requested", "Not requested"],
-              ]}
-              onChange={(value) => updateSearch({ research: value || undefined, page: "1" })}
-            />
-            <ReviewSelect
-              label="Reviewer"
-              value={filters.reviewer}
-              options={[
-                ["", "Reviewer: All"],
-                ["unclaimed", "Unclaimed"],
-                ["mine", "Claimed by me"],
-                ["claimed", "Claimed"],
-              ]}
-              onChange={(value) => updateSearch({ reviewer: value || undefined, page: "1" })}
-            />
             <button
               type="button"
               className="admin-review-more-filters"
@@ -5986,13 +6016,19 @@ function ReviewQueue({
               onClick={() => setMoreFiltersOpen((open) => !open)}
             >
               <SlidersHorizontal aria-hidden="true" /> More filters
-              {Number(Boolean(filters.grader)) +
+              {Number(Boolean(filters.evidence)) +
+                Number(Boolean(filters.research)) +
+                Number(Boolean(filters.reviewer)) +
+                Number(Boolean(filters.grader)) +
                 Number(Boolean(filters.fixture)) +
                 Number(Boolean(filters.status)) +
                 Number(Boolean(filters.submittedFrom || filters.submittedTo)) >
               0 ? (
                 <strong>
-                  {Number(Boolean(filters.grader)) +
+                  {Number(Boolean(filters.evidence)) +
+                    Number(Boolean(filters.research)) +
+                    Number(Boolean(filters.reviewer)) +
+                    Number(Boolean(filters.grader)) +
                     Number(Boolean(filters.fixture)) +
                     Number(Boolean(filters.status)) +
                     Number(Boolean(filters.submittedFrom || filters.submittedTo))}
@@ -6005,6 +6041,40 @@ function ReviewQueue({
           </div>
           {moreFiltersOpen ? (
             <div className="admin-review-advanced-filters">
+              <ReviewSelect
+                label="Evidence"
+                value={filters.evidence}
+                options={[
+                  ["", "Evidence: All"],
+                  ["complete", "Complete"],
+                  ["missing", "Missing Required"],
+                  ["partial", "Partial"],
+                ]}
+                onChange={(value) => updateSearch({ evidence: value || undefined, page: "1" })}
+              />
+              <ReviewSelect
+                label="Research"
+                value={filters.research}
+                options={[
+                  ["", "Research: All"],
+                  ["completed", "Matched"],
+                  ["pending", "Needs review"],
+                  ["unavailable", "Unavailable"],
+                  ["not_requested", "Not requested"],
+                ]}
+                onChange={(value) => updateSearch({ research: value || undefined, page: "1" })}
+              />
+              <ReviewSelect
+                label="Reviewer"
+                value={filters.reviewer}
+                options={[
+                  ["", "Reviewer: All"],
+                  ["unclaimed", "Unclaimed"],
+                  ["mine", "Claimed by me"],
+                  ["claimed", "Claimed"],
+                ]}
+                onChange={(value) => updateSearch({ reviewer: value || undefined, page: "1" })}
+              />
               <ReviewSelect
                 label="Submission status"
                 value={filters.status}
@@ -6043,10 +6113,9 @@ function ReviewQueue({
             <table className="admin-review-table">
               <thead>
                 <tr>
-                  <th>Submission</th>
-                  <th>Collector</th>
+                  <th>Submission & collector</th>
                   <th>Review state</th>
-                  <th>Verification</th>
+                  <th>Evidence & research</th>
                   <th>Priority</th>
                   <th>Submitted</th>
                   <th>Actions</th>
@@ -6084,21 +6153,15 @@ function ReviewQueue({
                                 .join(" ") || "Ungraded"}{" "}
                               · Submission {shortId(item.submissionReference)}
                             </small>
+                            <small className="admin-review-submission-owner">
+                              {item.collector.displayName}
+                              {item.collector.username ? ` · @${item.collector.username}` : ""}
+                              {item.collector.membership ? ` · ${item.collector.membership}` : ""}
+                            </small>
                             {item.testFixture ? (
                               <em className="admin-review-fixture-badge">TEST / DEMO</em>
                             ) : null}
                           </span>
-                        </div>
-                      </td>
-                      <td>
-                        <div className="admin-review-collector">
-                          <strong>{item.collector.displayName}</strong>
-                          <small>
-                            {item.collector.username
-                              ? `@${item.collector.username}`
-                              : "No username"}
-                          </small>
-                          {item.collector.membership ? <em>{item.collector.membership}</em> : null}
                         </div>
                       </td>
                       <td>
@@ -6168,7 +6231,7 @@ function ReviewQueue({
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={6}>
                       <AdminEmpty
                         detail={
                           searchInput ||
@@ -6946,23 +7009,6 @@ function AccountsWorkspace({
                 ["SUSPENDED", "Suspended"],
               ]}
             />
-            {summary?.financialExceptions !== null ? (
-              <AdminSelect
-                label="Financial state"
-                value={draftFilters.financialState}
-                onChange={(value) => updateDraft("financialState", value)}
-                options={[
-                  ["", "Financial state: All"],
-                  ["EXCEPTION", "Financial exception"],
-                  ["CLEAR", "Clear"],
-                  ["BANK_CLEARING", "Bank clearing"],
-                  ["MANUAL_REVIEW", "Manual review"],
-                  ["FINANCIAL_DEFICIT", "Financial deficit"],
-                  ["RETURNED_DEPOSIT", "Returned deposit"],
-                  ["WITHDRAWAL_HOLD", "Withdrawal hold"],
-                ]}
-              />
-            ) : null}
             <AdminSelect
               label="Compliance"
               value={draftFilters.complianceState}
@@ -6975,40 +7021,6 @@ function AccountsWorkspace({
                 ["RESTRICTED", "Restricted"],
               ]}
             />
-            <AdminSelect
-              label="Payouts"
-              value={draftFilters.payoutState}
-              onChange={(value) => updateDraft("payoutState", value)}
-              options={[
-                ["", "Payouts: All"],
-                ["READY", "Ready"],
-                ["NOT_CONFIGURED", "Not configured"],
-                ["SETUP_IN_PROGRESS", "Setup in progress"],
-                ["UNDER_REVIEW", "Under review"],
-                ["ACTION_REQUIRED", "Action required"],
-                ["RESTRICTED", "Restricted"],
-              ]}
-            />
-            <AdminSelect
-              label="Admin access"
-              value={draftFilters.role}
-              onChange={(value) => updateDraft("role", value)}
-              options={[
-                ["", "Admin access: All"],
-                ["ADMIN", "Administrator"],
-              ]}
-            />
-            <AdminSelect
-              label="Membership"
-              value={draftFilters.membershipPlan}
-              onChange={(value) => updateDraft("membershipPlan", value)}
-              options={[
-                ["", "Membership: All"],
-                ["STARTER", "Starter"],
-                ["PRO", "Pro"],
-                ["ELITE", "Elite"],
-              ]}
-            />
           </div>
           {filtersOpen ? (
             <section
@@ -7019,6 +7031,57 @@ function AccountsWorkspace({
                 <strong>More filters</strong>
                 <span>Use only dimensions backed by account telemetry.</span>
               </div>
+              {summary?.financialExceptions !== null ? (
+                <AdminSelect
+                  label="Financial state"
+                  value={draftFilters.financialState}
+                  onChange={(value) => updateDraft("financialState", value)}
+                  options={[
+                    ["", "Financial state: All"],
+                    ["EXCEPTION", "Financial exception"],
+                    ["CLEAR", "Clear"],
+                    ["BANK_CLEARING", "Bank clearing"],
+                    ["MANUAL_REVIEW", "Manual review"],
+                    ["FINANCIAL_DEFICIT", "Financial deficit"],
+                    ["RETURNED_DEPOSIT", "Returned deposit"],
+                    ["WITHDRAWAL_HOLD", "Withdrawal hold"],
+                  ]}
+                />
+              ) : null}
+              <AdminSelect
+                label="Payouts"
+                value={draftFilters.payoutState}
+                onChange={(value) => updateDraft("payoutState", value)}
+                options={[
+                  ["", "Payouts: All"],
+                  ["READY", "Ready"],
+                  ["NOT_CONFIGURED", "Not configured"],
+                  ["SETUP_IN_PROGRESS", "Setup in progress"],
+                  ["UNDER_REVIEW", "Under review"],
+                  ["ACTION_REQUIRED", "Action required"],
+                  ["RESTRICTED", "Restricted"],
+                ]}
+              />
+              <AdminSelect
+                label="Admin access"
+                value={draftFilters.role}
+                onChange={(value) => updateDraft("role", value)}
+                options={[
+                  ["", "Admin access: All"],
+                  ["ADMIN", "Administrator"],
+                ]}
+              />
+              <AdminSelect
+                label="Membership"
+                value={draftFilters.membershipPlan}
+                onChange={(value) => updateDraft("membershipPlan", value)}
+                options={[
+                  ["", "Membership: All"],
+                  ["STARTER", "Starter"],
+                  ["PRO", "Pro"],
+                  ["ELITE", "Elite"],
+                ]}
+              />
               <AdminSelect
                 label="Billing status"
                 value={draftFilters.membershipStatus}
@@ -7101,10 +7164,8 @@ function AccountsWorkspace({
                   <tr>
                     <th>Account</th>
                     <th>Access</th>
-                    <th>Account state</th>
-                    <th>Financial state</th>
-                    <th>Compliance</th>
-                    <th>Payouts</th>
+                    <th>Account standing</th>
+                    <th>Money &amp; payouts</th>
                     <th>Last activity</th>
                     <th>Joined</th>
                     <th>Actions</th>
@@ -7150,33 +7211,33 @@ function AccountsWorkspace({
                             )}
                           </div>
                         </td>
-                        <td data-label="Account state">
-                          <AccountStateCell
-                            label={accountStatusLabel(user.accountStatus)}
-                            reason={user.accountStateReason}
-                            tone={accountStatusTone(user.accountStatus)}
-                          />
+                        <td data-label="Account standing">
+                          <div className="admin-account-state-stack">
+                            <AccountStateCell
+                              label={accountStatusLabel(user.accountStatus)}
+                              reason={user.accountStateReason}
+                              tone={accountStatusTone(user.accountStatus)}
+                            />
+                            <AccountStateCell
+                              label={complianceStateLabel(user.complianceState)}
+                              reason={user.complianceReason ? sentence(user.complianceReason) : null}
+                              tone={complianceStateTone(user.complianceState)}
+                            />
+                          </div>
                         </td>
-                        <td data-label="Financial state">
-                          <AccountStateCell
-                            label={financialStateLabel(user.financialState)}
-                            reason={financialStateDetail(user)}
-                            tone={financialStateTone(user.financialState)}
-                          />
-                        </td>
-                        <td data-label="Compliance">
-                          <AccountStateCell
-                            label={complianceStateLabel(user.complianceState)}
-                            reason={user.complianceReason ? sentence(user.complianceReason) : null}
-                            tone={complianceStateTone(user.complianceState)}
-                          />
-                        </td>
-                        <td data-label="Payouts">
-                          <AccountStateCell
-                            label={payoutStateLabel(user.payoutState)}
-                            reason={user.payoutReason}
-                            tone={payoutStateTone(user.payoutState)}
-                          />
+                        <td data-label="Money and payouts">
+                          <div className="admin-account-state-stack">
+                            <AccountStateCell
+                              label={financialStateLabel(user.financialState)}
+                              reason={financialStateDetail(user)}
+                              tone={financialStateTone(user.financialState)}
+                            />
+                            <AccountStateCell
+                              label={payoutStateLabel(user.payoutState)}
+                              reason={user.payoutReason}
+                              tone={payoutStateTone(user.payoutState)}
+                            />
+                          </div>
                         </td>
                         <td
                           data-label="Last activity"
@@ -8143,13 +8204,6 @@ function ConsolidatedUserDetailExperience({
       ? "Available"
       : stateText(decision?.reason ?? decision?.status ?? "UNAVAILABLE");
   };
-  const availableCommand = (name: string) =>
-    user.availableCommands.find((command) => command.id === name);
-  const commandText = (name: string) => {
-    const command = availableCommand(name);
-    if (!command) return "Unavailable";
-    return command.allowed ? "Available" : "Unavailable";
-  };
   const renderStatusStrip = () => (
     <section className="admin-account-detail-state-grid" aria-label="Account operating state">
       {stateCell("Account state", user.accountStatus, user.accountStateReason ?? "No restrictions")}
@@ -8180,49 +8234,6 @@ function ConsolidatedUserDetailExperience({
   );
   const renderActionCenter = () => (
     <section className="admin-account-action-center" aria-label="Account action center">
-      <GuidancePanel
-        compact
-        currentState={stateText(user.accountStatus)}
-        nextAction={
-          user.recommendedAction
-            ? {
-                title: user.recommendedAction.title,
-                why: user.recommendedAction.explanation,
-                actor: "ADMIN",
-                blocker: user.actionCenter[0]?.title ?? "Account controls require review.",
-                afterThis:
-                  "The owning account-control workflow can apply the next protected change.",
-                action: {
-                  label: "Open account control",
-                  onClick: () => setTab(user.recommendedAction!.tab),
-                },
-              }
-            : {
-                title: "No account action required",
-                why: "No backend-derived account control requires staff intervention.",
-                actor: "NO_ACTION_REQUIRED",
-                afterThis:
-                  "Continue monitoring account, finance, and compliance authority separately.",
-              }
-        }
-        blockers={user.actionCenter.map((item, index) => ({
-          label: item.title,
-          reason:
-            index === 0
-              ? item.explanation
-              : "This remains visible after the primary account action is addressed.",
-          severity:
-            item.severity === "RESTRICTED" || item.severity === "BLOCKING" ? "HIGH" : "MEDIUM",
-        }))}
-        commands={user.availableCommands
-          .filter((command) => !command.allowed && command.reason)
-          .slice(0, 3)
-          .map((command) => ({
-            label: commandLabelsForGuidance(command.id),
-            available: false,
-            unavailableReason: command.reason,
-          }))}
-      />
       <div className="admin-account-action-center-heading">
         <div className="admin-account-action-center-status">
           {user.actionCenter.length ? (
@@ -8231,17 +8242,21 @@ function ConsolidatedUserDetailExperience({
             <CheckCircle2 aria-hidden="true" />
           )}
           <div>
-            <p className="admin-console-eyebrow">Action Center</p>
-            <h3>{user.actionCenter.length ? "What needs attention" : "All systems normal"}</h3>
+            <p className="admin-console-eyebrow">Next required action</p>
+            <h3>{user.recommendedAction?.title ?? "No account action required"}</h3>
             <span>
-              {user.actionCenter.length
-                ? `${user.actionCenter.length} backend-derived account blocker${user.actionCenter.length === 1 ? "" : "s"} require review.`
-                : "No backend-derived account blockers require action."}
+              {user.recommendedAction?.explanation ??
+                "No backend-derived account blocker requires a protected change."}
             </span>
           </div>
         </div>
-        <button type="button" onClick={() => setGeneralControl("access")}>
-          View all checks <ArrowRight aria-hidden="true" />
+        <button
+          type="button"
+          onClick={() =>
+            user.recommendedAction ? setTab(user.recommendedAction.tab) : setGeneralControl("access")
+          }
+        >
+          {user.recommendedAction ? "Open control" : "Review access"} <ArrowRight aria-hidden="true" />
         </button>
       </div>
       {user.actionCenter.length ? (
@@ -8271,23 +8286,7 @@ function ConsolidatedUserDetailExperience({
     </section>
   );
   const renderCommandRail = () => {
-    const commandLabels: Record<string, string> = {
-      EDIT_PROFILE: "Edit profile",
-      MANAGE_ROLES: "Manage roles",
-      SUSPEND_ACCOUNT: "Suspend account",
-      RESTORE_ACCOUNT: "Restore account",
-      REVOKE_SESSIONS: "Revoke sessions",
-      RESET_TWO_FACTOR: "Reset two-factor",
-      MANAGE_RESTRICTIONS: "Manage restrictions",
-      MANAGE_FINANCIAL_HOLDS: "Manage financial holds",
-      ADD_NOTE: "Add internal note",
-      DISABLE_ACCOUNT: "Disable account",
-      MANAGE_COLLECTOR: "Manage Collector access",
-      MANAGE_INVESTOR: "Manage Investor access",
-      MANAGE_COMPLIANCE: "Manage compliance state",
-      PROVIDER_RECOVERY: "Provider recovery",
-      ACCOUNT_RECOVERY: "Account recovery",
-    };
+    const urgentBlockers = user.actionCenter.filter((item) => item.severity !== "ATTENTION");
     return (
       <aside className="admin-account-detail-rail" aria-label="Account command rail">
         <section className="admin-account-detail-rail-card">
@@ -8300,26 +8299,22 @@ function ConsolidatedUserDetailExperience({
           />
           <DetailRow label="Risk state" value={user.financialState} />
         </section>
-        <section className="admin-account-detail-rail-card admin-account-detail-rail-card--urgent">
-          <AdminPanelHeading title="Urgent blockers" />
-          {user.actionCenter.filter((item) => item.severity !== "ATTENTION").length ? (
+        {urgentBlockers.length ? (
+          <section className="admin-account-detail-rail-card admin-account-detail-rail-card--urgent">
+            <AdminPanelHeading title="Urgent blockers" />
             <div className="admin-account-rail-list">
-              {user.actionCenter
-                .filter((item) => item.severity !== "ATTENTION")
-                .map((item) => (
+              {urgentBlockers.map((item) => (
                   <button type="button" key={item.id} onClick={() => setTab(item.tab)}>
                     <strong>{item.title}</strong>
                     <span>{item.explanation}</span>
                   </button>
                 ))}
             </div>
-          ) : (
-            <p className="admin-safe-note">No blocking state is recorded.</p>
-          )}
-        </section>
-        <section className="admin-account-detail-rail-card admin-account-detail-rail-card--next">
-          <AdminPanelHeading title="Next recommended action" />
-          {user.recommendedAction ? (
+          </section>
+        ) : null}
+        {user.recommendedAction ? (
+          <section className="admin-account-detail-rail-card admin-account-detail-rail-card--next">
+            <AdminPanelHeading title="Recommended action" />
             <button type="button" onClick={() => setTab(user.recommendedAction!.tab)}>
               <strong>{user.recommendedAction.title}</strong>
               <span>{user.recommendedAction.explanation}</span>
@@ -8327,10 +8322,8 @@ function ConsolidatedUserDetailExperience({
                 Open account controls <ArrowRight aria-hidden="true" />
               </small>
             </button>
-          ) : (
-            <p className="admin-safe-note">No next action is currently recommended.</p>
-          )}
-        </section>
+          </section>
+        ) : null}
         <section className="admin-account-detail-rail-card">
           <AdminPanelHeading title="Quick actions" />
           <div className="admin-account-rail-actions">
@@ -8357,9 +8350,9 @@ function ConsolidatedUserDetailExperience({
             </Link>
           </div>
         </section>
-        <section className="admin-account-detail-rail-card">
-          <AdminPanelHeading title="Active restrictions / holds" />
-          {user.activeHolds.length ? (
+        {user.activeHolds.length ? (
+          <section className="admin-account-detail-rail-card">
+            <AdminPanelHeading title="Active restrictions / holds" />
             <div className="admin-account-rail-list">
               {user.activeHolds.map((hold) => (
                 <div key={hold.id}>
@@ -8369,65 +8362,8 @@ function ConsolidatedUserDetailExperience({
                 </div>
               ))}
             </div>
-          ) : (
-            <p className="admin-safe-note">No active account holds are recorded.</p>
-          )}
-        </section>
-        <section className="admin-account-detail-rail-card">
-          <AdminPanelHeading title="Support / compliance" />
-          <DetailRow
-            label="Compliance cases"
-            value={
-              user.permissions.compliance ? String(user.complianceSummary.caseCount) : "Unavailable"
-            }
-          />
-          <DetailRow label="Compliance state" value={stateText(user.complianceState)} />
-          <DetailRow
-            label="Support linkage"
-            value={user.identity.discord.connected ? "Discord linked" : "Not linked"}
-          />
-          <p className="admin-safe-note">
-            Support tickets are not linked to Slice accounts in the current authority.
-          </p>
-        </section>
-        <section className="admin-account-detail-rail-card">
-          <AdminPanelHeading title="Financial risk snapshot" />
-          <DetailRow
-            label="Available cash"
-            value={money(user.permissions.finance ? (finance?.availableMinor ?? null) : null)}
-          />
-          <DetailRow
-            label="Reserved"
-            value={money(user.permissions.finance ? (finance?.reservedMinor ?? null) : null)}
-          />
-          <DetailRow
-            label="Deficit"
-            value={money(user.permissions.finance ? (finance?.deficitMinor ?? null) : null)}
-          />
-          <DetailRow
-            label="BACS risk hold"
-            value={money(user.permissions.finance ? (finance?.bacsHeldMinor ?? null) : null)}
-          />
-          <Link
-            to="/admin"
-            search={{ section: "money", view: "wallets-movements", tab: "wallets" }}
-            className="admin-detail-link"
-          >
-            Open authoritative Finance <ArrowRight aria-hidden="true" />
-          </Link>
-        </section>
-        <section className="admin-account-detail-rail-card admin-account-detail-rail-card--commands">
-          <AdminPanelHeading title="Command availability" />
-          <div className="admin-account-command-list">
-            {user.availableCommands.map((command) => (
-              <div key={command.id} data-available={command.allowed}>
-                <span>{commandLabels[command.id] ?? sentence(command.id)}</span>
-                <strong>{command.allowed ? "Available" : "Unavailable"}</strong>
-                {!command.allowed && command.reason ? <small>{command.reason}</small> : null}
-              </div>
-            ))}
-          </div>
-        </section>
+          </section>
+        ) : null}
       </aside>
     );
   };
@@ -9411,30 +9347,22 @@ function ConsolidatedUserDetailExperience({
             aria-label="Account controls"
           >
             {[
-              "General",
-              "Security",
-              "Restrictions",
-              "Financial Access",
-              "Compliance",
-              "Collector / Investor",
-              "Recovery",
-            ].map((view) => (
+              ["General", "Overview"],
+              ["Security", "Security"],
+              ["Restrictions", "Restrictions"],
+              ["Financial", "Money access"],
+              ["Compliance", "Compliance"],
+              ["Collector / Investor", "Participation"],
+              ["Recovery", "Recovery & audit"],
+            ].map(([value, label]) => (
               <button
                 type="button"
-                className={
-                  activeTab === (view === "Financial Access" ? "Financial" : view)
-                    ? "is-active"
-                    : ""
-                }
-                key={view}
-                onClick={() => setTab(view)}
-                aria-current={
-                  activeTab === (view === "Financial Access" ? "Financial" : view)
-                    ? "page"
-                    : undefined
-                }
+                className={activeTab === value ? "is-active" : ""}
+                key={value}
+                onClick={() => setTab(value)}
+                aria-current={activeTab === value ? "page" : undefined}
               >
-                {view}
+                {label}
               </button>
             ))}
           </nav>
