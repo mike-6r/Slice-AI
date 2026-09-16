@@ -157,20 +157,20 @@ describe('MarketService similar-assets projection', () => {
     });
   });
 
-  it('falls back to other published assets when its category has no matches', async () => {
+  it('does not recommend an unrelated published asset when no close match exists', async () => {
     const { service, db } = createService(baseRow);
-    db.asset.findMany
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([baseRow]);
+    db.asset.findMany.mockResolvedValueOnce([]);
 
     await expect(service.similar('current-card', 3)).resolves.toMatchObject({
-      items: [{ assetId: 'similar-public-id' }],
+      items: [],
     });
-    expect(db.asset.findMany).toHaveBeenLastCalledWith(
+    expect(db.asset.findMany).toHaveBeenCalledTimes(1);
+    expect(db.asset.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          id: { notIn: ['current-asset'] },
+          id: { not: 'current-asset' },
+          categoryId: 'pokemon',
+          setId: 'set-a',
         }),
         take: 3,
       }),

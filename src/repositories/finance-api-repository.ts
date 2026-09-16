@@ -134,11 +134,24 @@ export const mapCash = (raw: unknown): PortfolioCashSummary => {
     ...(body.orderReservedMinor !== undefined
       ? { orderReservedMinor: minor(body.orderReservedMinor, "wallet.orderReservedMinor") }
       : {}),
+    ...(body.orderReservationCount !== undefined
+      ? {
+          orderReservationCount: count(body.orderReservationCount, "wallet.orderReservationCount"),
+        }
+      : {}),
     ...(body.withdrawalReservedMinor !== undefined
       ? {
           withdrawalReservedMinor: minor(
             body.withdrawalReservedMinor,
             "wallet.withdrawalReservedMinor",
+          ),
+        }
+      : {}),
+    ...(body.withdrawalReservationCount !== undefined
+      ? {
+          withdrawalReservationCount: count(
+            body.withdrawalReservationCount,
+            "wallet.withdrawalReservationCount",
           ),
         }
       : {}),

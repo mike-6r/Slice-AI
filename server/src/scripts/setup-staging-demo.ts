@@ -1,10 +1,11 @@
 import { NestFactory } from '@nestjs/core';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { AppModule } from '../app.module';
 import { APP_CONFIG, type AppConfig } from '../config/app-config';
 import { PrismaService } from '../database/prisma.service';
 import { FinancialLedgerService } from '../modules/finance/application/financial-ledger.service';
 import { AccessControlService } from '../modules/identity/access/access-control.service';
+import { AccountCapabilityService } from '../modules/identity/access/account-capability.service';
 import { AuthService, type Actor } from '../modules/identity/auth/auth.service';
 import {
   assertStagingDemoSafety,
@@ -18,9 +19,10 @@ type DemoDefinition = (typeof demoAccounts)[keyof typeof demoAccounts];
  * Creates only the two durable staging identities and their account records.
  * It deliberately does not create collectible, intake, ownership, offering,
  * or market fixtures, alter passwords of an existing account,
- * grant privileged financial, vault, or compliance roles, directly credit
- * balances, or create external-provider records. Staff review and catalogue
- * fixtures are not provisioned by this setup.
+ * grant privileged financial, vault, or compliance roles, or create
+ * external-provider records. It may create an internal, explicitly labelled
+ * staging-only identity approval for the named fake-money investor so the
+ * investor trading walkthrough is usable without real identity or banking data.
  */
 export async function runStagingDemoSetup() {
   assertStagingDemoSafety();
@@ -32,6 +34,7 @@ export async function runStagingDemoSetup() {
     const access = app.get(AccessControlService, { strict: false });
     const db = app.get(PrismaService);
     const ledger = app.get(FinancialLedgerService, { strict: false });
+    const capabilities = app.get(AccountCapabilityService, { strict: false });
     const config = app.get<AppConfig>(APP_CONFIG);
     const admin = await authenticatedAdmin(auth);
 
@@ -73,6 +76,8 @@ export async function runStagingDemoSetup() {
     });
 
     await assertAuthRestartProof(db, investor.userId, collector.userId);
+    await ensureDemoInvestorTradingEligibility(db, investor.userId, config);
+    await assertTradingCapability(capabilities, investor.userId);
 
     await ensureDemoFunding(db, ledger, investor.actor, {
       accountId: investor.userId,
@@ -95,7 +100,7 @@ export async function runStagingDemoSetup() {
           investor: ['USER'],
           collector: ['USER', 'COLLECTOR'],
         },
-        note: 'Funding is an idempotent, internal D13 DEMO_FUNDING journal only. No passwords, privileged financial/vault/compliance roles, or external-provider records were written.',
+        note: 'Funding is an idempotent, internal D13 DEMO_FUNDING journal only. The named investor has an internal staging-only fake identity approval and reserved test phone; no real identity, bank mandate, external-provider record, password, or privileged role was written.',
       }) + '\n',
     );
   } finally {
@@ -206,6 +211,144 @@ export async function ensureDemoAccount(
   });
 
   return { userId: actor.userId, actor };
+}
+
+/**
+ * Makes the one named staging investor eligible for the fake-money trading
+ * walkthrough. This is deliberately not a generic "approve user" utility:
+ * the caller has already passed assertStagingDemoSafety and the email is
+ * checked again inside the transaction.
+ */
+export async function ensureDemoInvestorTradingEligibility(
+  db: PrismaService,
+  investorUserId: string,
+  config: AppConfig,
+) {
+  assertStagingDemoSafety();
+  const provider = providerForMode(config.providerMode);
+  if (config.providerMode === 'stripe_live') {
+    throw new Error(
+      'Refusing demo eligibility: Stripe live is not permitted for the staging fake-money investor.',
+    );
+  }
+  const now = new Date();
+  const decisionFingerprint = createHash('sha256')
+    .update(`staging-demo-investor-identity-approved:${provider}`)
+    .digest('hex');
+  await db.$transaction(async (tx) => {
+    const investor = await tx.user.findUnique({
+      where: { id: investorUserId },
+      select: { normalizedEmail: true },
+    });
+    if (investor?.normalizedEmail !== demoAccounts.investor.email) {
+      throw new Error(
+        'Refusing demo eligibility: target is not the named staging investor.',
+      );
+    }
+    await tx.user.update({
+      where: { id: investorUserId },
+      data: {
+        // 07700 900001 is a UK Ofcom-reserved fictional test number.
+        phoneE164: '+447700900001',
+        phoneVerifiedAt: now,
+        emailVerifiedAt: now,
+        financialDataClass: 'DEMO',
+      },
+    });
+    const complianceCase = await tx.complianceCase.upsert({
+      where: {
+        userId_provider_type: { userId: investorUserId, provider, type: 'KYC' },
+      },
+      create: {
+        userId: investorUserId,
+        provider,
+        type: 'KYC',
+        status: 'APPROVED',
+        identityState: 'VERIFIED',
+        identityRequestedAt: now,
+        identityCompletedAt: now,
+        identityVerifiedAt: now,
+        identityLastProviderSync: now,
+      },
+      update: {
+        status: 'APPROVED',
+        identityState: 'VERIFIED',
+        identityCompletedAt: now,
+        identityVerifiedAt: now,
+        identityLastProviderSync: now,
+        identitySafeFailureCode: null,
+      },
+      select: { id: true },
+    });
+    await tx.complianceDecision.upsert({
+      where: {
+        caseId_providerEventIdHash: {
+          caseId: complianceCase.id,
+          providerEventIdHash: decisionFingerprint,
+        },
+      },
+      create: {
+        caseId: complianceCase.id,
+        status: 'APPROVED',
+        reasonCode: 'STAGING_DEMO_FAKE_IDENTITY_APPROVED',
+        providerEventIdHash: decisionFingerprint,
+      },
+      update: {
+        status: 'APPROVED',
+        reasonCode: 'STAGING_DEMO_FAKE_IDENTITY_APPROVED',
+      },
+    });
+    const audited = await tx.auditEvent.findFirst({
+      where: {
+        actorUserId: investorUserId,
+        action: 'STAGING_DEMO_TRADING_ELIGIBILITY_GRANTED',
+        resourceType: 'user',
+        resourceId: investorUserId,
+        result: 'SUCCESS',
+      },
+      select: { id: true },
+    });
+    if (!audited) {
+      await tx.auditEvent.create({
+        data: {
+          id: randomUUID(),
+          actorUserId: investorUserId,
+          actorType: 'SYSTEM',
+          action: 'STAGING_DEMO_TRADING_ELIGIBILITY_GRANTED',
+          resourceType: 'user',
+          resourceId: investorUserId,
+          requestId: `staging-demo-trading-eligibility:${provider}`,
+          result: 'SUCCESS',
+          metadata: {
+            source: 'STAGING_DEMO_SETUP',
+            provider,
+            identity: 'FAKE_MONEY_TEST_ONLY',
+          },
+        },
+      });
+    }
+  });
+}
+
+async function assertTradingCapability(
+  capabilities: AccountCapabilityService,
+  userId: string,
+) {
+  const [buy, sell] = await Promise.all([
+    capabilities.evaluate(userId, 'PLACE_BUY_ORDER'),
+    capabilities.evaluate(userId, 'PLACE_SELL_ORDER'),
+  ]);
+  if (!buy.allowed || !sell.allowed) {
+    throw new Error(
+      `Demo investor identity is ready but trading remains unavailable: buy=${buy.reason ?? 'unknown'}, sell=${sell.reason ?? 'unknown'}.`,
+    );
+  }
+}
+
+function providerForMode(mode: AppConfig['providerMode']) {
+  if (mode === 'stripe_sandbox') return 'STRIPE_SANDBOX' as const;
+  if (mode === 'stripe_live') return 'STRIPE_LIVE' as const;
+  return 'LOCAL_TEST' as const;
 }
 
 export async function ensureDemoFunding(

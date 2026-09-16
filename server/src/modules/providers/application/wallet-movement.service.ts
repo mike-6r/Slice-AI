@@ -42,6 +42,25 @@ import { StripeClientFactory } from './stripe-provider.client';
 type MovementType = 'DEPOSIT' | 'WITHDRAWAL';
 type MovementRail = 'BACS_DIRECT_DEBIT' | 'CARD' | 'CONNECT_STANDARD_PAYOUT';
 
+export const MIN_DEPOSIT_MINOR = 100n;
+export const MAX_DEPOSIT_MINOR = 2_500_000n;
+
+/** A non-negotiable product boundary shared by bank and card deposits. */
+export function validateDepositAmountMinor(value: string) {
+  if (!/^\d+$/.test(value) || BigInt(value) <= 0n)
+    throw new ConflictException({
+      code: 'INVALID_MONEY_AMOUNT',
+      message: 'Amount must be a positive GBP minor-unit integer.',
+    });
+  const amount = BigInt(value);
+  if (amount < MIN_DEPOSIT_MINOR || amount > MAX_DEPOSIT_MINOR)
+    throw new ConflictException({
+      code: 'DEPOSIT_AMOUNT_OUT_OF_RANGE',
+      message: 'Deposit amount must be between £1.00 and £25,000.00.',
+    });
+  return amount;
+}
+
 /**
  * Destination screening belongs to the local destination-based provider
  * adapter. Stripe withdrawals are bank payouts to a verified Connect account;
@@ -199,6 +218,7 @@ export class WalletMovementService {
     requestId: string,
     key: string,
   ) {
+    validateDepositAmountMinor(amountMinor);
     return this.createWithCapability(
       actor,
       'DEPOSIT',
@@ -216,6 +236,7 @@ export class WalletMovementService {
     key: string,
     savePaymentMethod: boolean,
   ) {
+    validateDepositAmountMinor(amountMinor);
     const options = this.cardFunding?.options();
     if (!options?.available) {
       throw new ConflictException({

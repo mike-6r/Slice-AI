@@ -9530,6 +9530,15 @@ body:has(.portfolio-page)
   font-size: 0.55rem;
   line-height: 1.35;
 }
+.wallet-move-form > .wallet-move-validation {
+  min-height: 0;
+  margin: -0.1rem 0 0;
+  padding: 0;
+  border: 0;
+  color: #ff968f;
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
 .wallet-move-form > button,
 .wallet-verify-button {
   min-height: 2.15rem;
@@ -68205,6 +68214,51 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
   width: 1.8rem;
   height: 1.8rem;
 }
+.asset-detail-page .asset-advanced-market-details {
+  min-width: 0;
+  overflow: hidden;
+}
+.asset-detail-page .asset-order-head,
+.asset-detail-page .asset-order-rows li {
+  grid-template-columns:
+    minmax(3.5rem, 1fr)
+    minmax(4.5rem, auto)
+    minmax(4.75rem, auto)
+    minmax(3rem, auto);
+  column-gap: clamp(0.45rem, 1.2vw, 1rem);
+}
+.asset-detail-page .asset-order-head {
+  align-items: end;
+  padding-bottom: 0.55rem;
+  font-size: 0.66rem;
+  line-height: 1.25;
+}
+.asset-detail-page .asset-order-rows li {
+  min-height: 2.5rem;
+  font-variant-numeric: tabular-nums;
+}
+.asset-detail-page .asset-order-head span,
+.asset-detail-page .asset-order-rows li > * {
+  min-width: 0;
+}
+.asset-detail-page .asset-order-head span:not(:first-child),
+.asset-detail-page .asset-order-rows li > :not(:first-child) {
+  text-align: right;
+}
+@media (max-width: 560px) {
+  .asset-detail-page .asset-order-head,
+  .asset-detail-page .asset-order-rows li {
+    grid-template-columns: minmax(2.7rem, 1fr) auto minmax(3.75rem, auto) auto;
+    column-gap: 0.45rem;
+  }
+  .asset-detail-page .asset-order-head {
+    font-size: 0.56rem;
+  }
+  .asset-detail-page .asset-order-rows li {
+    min-height: 2.25rem;
+    font-size: 0.74rem;
+  }
+}
 .asset-detail-page .asset-recent-trades {
   margin-top: 0.35rem;
   padding: 1.25rem 1.3rem 0;
@@ -71693,8 +71747,8 @@ html,
   display: grid;
   width: 20rem;
   min-width: 20rem;
-  height: 8.75rem;
-  min-height: 8.75rem;
+  height: 10.25rem;
+  min-height: 10.25rem;
   flex: 0 0 20rem;
   grid-template-columns: 5.9rem minmax(0, 1fr);
   gap: 0.85rem;
@@ -71728,7 +71782,7 @@ html,
 .asset-detail-page .asset-similar-card__media img {
   display: block;
   width: 4.65rem;
-  height: 7.2rem;
+  height: 8.8rem;
   object-fit: contain;
   filter: drop-shadow(0 0.55rem 0.6rem rgb(0 0 0 / 0.5));
 }
@@ -98718,20 +98772,18 @@ body:has(.portfolio-page)
   box-shadow: 0 1.1rem 2.6rem rgba(0, 0, 0, 0.16);
 }
 .admin-home-action-queue__head {
-  grid-template-columns: 0.5rem minmax(7.5rem, 0.7fr) minmax(22rem, 2.2fr) 4rem minmax(
-      7.5rem,
-      0.75fr
-    ) auto;
+  grid-template-columns:
+    0.5rem minmax(7.5rem, 0.7fr) minmax(22rem, 2.2fr) 4rem minmax(7.5rem, 0.75fr)
+    auto;
   gap: 0.8rem;
   padding: 0.85rem 1.15rem;
   color: #7d99a5;
   font-size: 0.58rem;
 }
 .admin-home-action-queue .admin-priority-row {
-  grid-template-columns: 0.5rem minmax(7.5rem, 0.7fr) minmax(22rem, 2.2fr) 4rem minmax(
-      7.5rem,
-      0.75fr
-    ) auto;
+  grid-template-columns:
+    0.5rem minmax(7.5rem, 0.7fr) minmax(22rem, 2.2fr) 4rem minmax(7.5rem, 0.75fr)
+    auto;
   gap: 0.8rem;
   min-height: 4.25rem;
   padding: 0.72rem 1.15rem;
@@ -98787,10 +98839,9 @@ body:has(.portfolio-page)
 }
 .admin-home-action-queue__head,
 .admin-home-action-queue .admin-priority-row {
-  grid-template-columns: 0.5rem minmax(7rem, 0.65fr) minmax(18rem, 2fr) 4rem minmax(
-      5.8rem,
-      0.65fr
-    ) minmax(7rem, 0.75fr) auto;
+  grid-template-columns:
+    0.5rem minmax(7rem, 0.65fr) minmax(18rem, 2fr) 4rem minmax(5.8rem, 0.65fr)
+    minmax(7rem, 0.75fr) auto;
 }
 .admin-priority-target {
   color: #9bb0b5;

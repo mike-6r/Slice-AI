@@ -143,7 +143,8 @@ describe("approved portfolio workspace", () => {
     expect(html).toContain("Total account value");
     expect(html).toContain("Capital deployed");
     expect(html).toContain("Ready to invest");
-    expect(html).toContain("Reserved for orders");
+    expect(html).toContain("Reserved cash");
+    expect(html).toContain("Held-cash detail temporarily unavailable");
     expect(html).toContain("Unrealised return");
     expect(html).toContain("Safe asset");
     expect(html).toContain("1 active position");

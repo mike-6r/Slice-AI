@@ -21,7 +21,11 @@ export interface PortfolioCashSummary {
   pendingWithdrawalMinor?: GbpMinorUnits;
   pendingWithdrawalCount?: number;
   orderReservedMinor?: GbpMinorUnits;
+  /** Number of active buy orders that currently hold the order reservation. */
+  orderReservationCount?: number;
   withdrawalReservedMinor?: GbpMinorUnits;
+  /** Number of pending withdrawals that currently hold cash. */
+  withdrawalReservationCount?: number;
   /** Posted GBP cash that is eligible for an external withdrawal. */
   withdrawableMinor?: GbpMinorUnits;
   /** Posted GBP cash that is eligible for orders and executions. */

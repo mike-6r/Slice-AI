@@ -38,6 +38,7 @@ type Db = Prisma.TransactionClient;
  * provider has made funds available.
  */
 export function bacsReleaseAt(providerAvailableOn: Date, _holdDays = 0) {
+  void _holdDays;
   return new Date(providerAvailableOn.getTime());
 }
 
@@ -46,9 +47,7 @@ export function isBacsReleaseEligible(
   _holdDays: number,
   now: Date,
 ) {
-  return (
-    now.getTime() >= providerAvailableOn.getTime()
-  );
+  return now.getTime() >= providerAvailableOn.getTime();
 }
 
 type PostJournalInput = Readonly<{
@@ -587,10 +586,7 @@ export class FinancialLedgerService {
         where: {
           userId,
           reasonCode: {
-            in: [
-              'RETURNED_FUNDS_DEFICIT',
-              'RETURNED_FUNDS_RESERVATION_REVIEW',
-            ],
+            in: ['RETURNED_FUNDS_DEFICIT', 'RETURNED_FUNDS_RESERVATION_REVIEW'],
           },
           status: 'ACTIVE',
         },
@@ -818,44 +814,60 @@ export class FinancialLedgerService {
   async walletForUser(userId: string) {
     await this.releaseMaturedBacsDepositsForUser(userId, 'wallet-projection');
     await this.releaseOrphanedTradingReservationsForUser(userId);
+    await this.reconcileActiveTradingReservationAmountsForUser(userId);
     const accounts = await this.db.financialAccount.findMany({
       where: { ownerType: 'USER', ownerUserId: userId, currency: 'GBP' },
       include: { balance: true },
       orderBy: { code: 'asc' },
     });
     const accountIds = accounts.map((account) => account.id);
-    const [pendingMovements, reservations, heldDeposits] = await Promise.all([
-      this.db.moneyMovement.findMany({
-        where: {
-          userId,
-          status: {
-            in: ['CREATED', 'PENDING_PROVIDER', 'PROCESSING', 'MANUAL_REVIEW'],
+    const [pendingMovements, reservations, heldDeposits, activeBuyOrders] =
+      await Promise.all([
+        this.db.moneyMovement.findMany({
+          where: {
+            userId,
+            status: {
+              in: [
+                'CREATED',
+                'PENDING_PROVIDER',
+                'PROCESSING',
+                'MANUAL_REVIEW',
+              ],
+            },
           },
-        },
-        select: { type: true, amountMinor: true },
-      }),
-      accountIds.length
-        ? this.db.cashReservation.findMany({
-            where: { accountId: { in: accountIds }, status: 'ACTIVE' },
-            select: { purposeType: true, amountMinor: true },
-          })
-        : Promise.resolve([]),
-      this.db.moneyMovement.findMany({
-        where: {
-          userId,
-          type: 'DEPOSIT',
-          status: 'HELD',
-          cashAccount: { code: 'BACS_RISK_HOLD' },
-        },
-        orderBy: [{ providerAvailableOn: 'asc' }, { id: 'asc' }],
-        select: {
-          id: true,
-          amountMinor: true,
-          providerAvailableOn: true,
-          createdAt: true,
-        },
-      }),
-    ]);
+          select: { type: true, amountMinor: true },
+        }),
+        accountIds.length
+          ? this.db.cashReservation.findMany({
+              where: { accountId: { in: accountIds }, status: 'ACTIVE' },
+              select: { id: true, purposeType: true, amountMinor: true },
+            })
+          : Promise.resolve([]),
+        this.db.moneyMovement.findMany({
+          where: {
+            userId,
+            type: 'DEPOSIT',
+            status: 'HELD',
+            cashAccount: { code: 'BACS_RISK_HOLD' },
+          },
+          orderBy: [{ providerAvailableOn: 'asc' }, { id: 'asc' }],
+          select: {
+            id: true,
+            amountMinor: true,
+            providerAvailableOn: true,
+            createdAt: true,
+          },
+        }),
+        this.db.tradingOrder.findMany({
+          where: {
+            userId,
+            side: 'BUY',
+            status: { in: ['PENDING_RESERVATION', 'OPEN', 'PARTIALLY_FILLED'] },
+            cashReservationId: { not: null },
+          },
+          select: { cashReservationId: true },
+        }),
+      ]);
     const pendingDeposits = pendingMovements.filter(
       (movement) => movement.type === 'DEPOSIT',
     );
@@ -869,14 +881,27 @@ export class FinancialLedgerService {
       (total, movement) => total + movement.amountMinor,
       0n,
     );
-    const orderReservedMinor = reservations
-      .filter((reservation) => reservation.purposeType === 'TRADING_ORDER')
-      .reduce((total, reservation) => total + reservation.amountMinor, 0n);
-    const withdrawalReservedMinor = reservations
-      .filter(
-        (reservation) => reservation.purposeType === 'EXTERNAL_WITHDRAWAL',
-      )
-      .reduce((total, reservation) => total + reservation.amountMinor, 0n);
+    const activeOrderReservationIds = new Set(
+      activeBuyOrders.flatMap((order) =>
+        order.cashReservationId ? [order.cashReservationId] : [],
+      ),
+    );
+    const activeOrderReservations = reservations.filter(
+      (reservation) =>
+        reservation.purposeType === 'TRADING_ORDER' &&
+        activeOrderReservationIds.has(reservation.id),
+    );
+    const orderReservedMinor = activeOrderReservations.reduce(
+      (total, reservation) => total + reservation.amountMinor,
+      0n,
+    );
+    const withdrawalReservations = reservations.filter(
+      (reservation) => reservation.purposeType === 'EXTERNAL_WITHDRAWAL',
+    );
+    const withdrawalReservedMinor = withdrawalReservations.reduce(
+      (total, reservation) => total + reservation.amountMinor,
+      0n,
+    );
     const riskHold = accounts.find(
       (account) => account.code === 'BACS_RISK_HOLD',
     );
@@ -964,7 +989,9 @@ export class FinancialLedgerService {
       pendingWithdrawalMinor: pendingWithdrawalMinor.toString(),
       pendingWithdrawalCount: pendingWithdrawals.length,
       orderReservedMinor: orderReservedMinor.toString(),
+      orderReservationCount: activeOrderReservations.length,
       withdrawalReservedMinor: withdrawalReservedMinor.toString(),
+      withdrawalReservationCount: withdrawalReservations.length,
       // This is the only customer-facing withdrawal amount. It is derived
       // from posted GBP cash accounts after active reservations; pending
       // provider movements have no posted balance and therefore cannot inflate
@@ -989,10 +1016,9 @@ export class FinancialLedgerService {
         amountMinor: movement.amountMinor.toString(),
         providerAvailableOn:
           movement.providerAvailableOn?.toISOString() ?? null,
-        expectedReleaseAt:
-          movement.providerAvailableOn
-            ? bacsReleaseAt(movement.providerAvailableOn).toISOString()
-            : null,
+        expectedReleaseAt: movement.providerAvailableOn
+          ? bacsReleaseAt(movement.providerAvailableOn).toISOString()
+          : null,
       })),
       withdrawableSources,
       collectorProceedsMinor: collectorProceedsMinor.toString(),
@@ -1096,6 +1122,68 @@ export class FinancialLedgerService {
         });
       }
     });
+  }
+
+  /**
+   * Older partial-fill writes reduced AccountBalance but retained the original
+   * CashReservation amount. Rebuild only that explanatory amount from the
+   * still-open order, with a compare-and-set update so it cannot overwrite a
+   * concurrent settlement. Account balances are intentionally not changed.
+   */
+  private async reconcileActiveTradingReservationAmountsForUser(
+    userId: string,
+  ) {
+    const orders = await this.db.tradingOrder.findMany({
+      where: {
+        userId,
+        side: 'BUY',
+        status: { in: ['PENDING_RESERVATION', 'OPEN', 'PARTIALLY_FILLED'] },
+        cashReservationId: { not: null },
+      },
+      select: {
+        cashReservationId: true,
+        limitPriceMinor: true,
+        remainingUnits: true,
+        asset: { select: { tradingMarket: { select: { takerFeeBps: true } } } },
+      },
+    });
+    const reservationIds = orders.flatMap((order) =>
+      order.cashReservationId ? [order.cashReservationId] : [],
+    );
+    if (!reservationIds.length) return;
+    const reservations = await this.db.cashReservation.findMany({
+      where: {
+        id: { in: reservationIds },
+        purposeType: 'TRADING_ORDER',
+        status: 'ACTIVE',
+      },
+      select: { id: true, amountMinor: true },
+    });
+    const reservationsById = new Map(
+      reservations.map((reservation) => [reservation.id, reservation]),
+    );
+    await Promise.all(
+      orders.map(async (order) => {
+        const reservation = order.cashReservationId
+          ? reservationsById.get(order.cashReservationId)
+          : undefined;
+        const takerFeeBps = order.asset.tradingMarket?.takerFeeBps;
+        if (!reservation || takerFeeBps === undefined) return;
+        const gross = order.limitPriceMinor * order.remainingUnits;
+        const expected =
+          gross + (gross * BigInt(takerFeeBps) + 9_999n) / 10_000n;
+        if (reservation.amountMinor === expected) return;
+        await this.db.cashReservation.updateMany({
+          where: {
+            id: reservation.id,
+            purposeType: 'TRADING_ORDER',
+            status: 'ACTIVE',
+            amountMinor: reservation.amountMinor,
+          },
+          data: { amountMinor: expected },
+        });
+      }),
+    );
   }
 
   async walletInsightsForUser(

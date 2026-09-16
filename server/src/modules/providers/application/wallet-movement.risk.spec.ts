@@ -3,6 +3,7 @@ import {
   calculateDepositVelocity,
   requiresDestinationScreening,
   depositLimitMessage,
+  validateDepositAmountMinor,
   WalletMovementService,
 } from './wallet-movement.service';
 
@@ -25,11 +26,32 @@ describe('wallet movement risk controls', () => {
     expect(totals.rapidCount).toBe(0);
   });
   it('returns customer-safe copy for every deposit limit reason', () => {
-    expect(depositLimitMessage('DEPOSIT_LIMIT_EXCEEDED')).toBe('This deposit would exceed your current bank funding limit.');
-    expect(depositLimitMessage('DEPOSIT_DAILY_LIMIT_EXCEEDED')).toBe('You’ve reached your current daily bank funding limit.');
-    expect(depositLimitMessage('DEPOSIT_ROLLING_LIMIT_EXCEEDED')).toBe('This deposit would exceed your current rolling bank funding limit.');
-    expect(depositLimitMessage('DEPOSIT_DAILY_COUNT_LIMIT_EXCEEDED')).toBe('You’ve reached the current number of bank deposits allowed today.');
-    expect(depositLimitMessage('DEPOSIT_RAPID_ATTEMPT_LIMIT_EXCEEDED')).toBe('Please wait a little before trying another bank deposit.');
+    expect(depositLimitMessage('DEPOSIT_LIMIT_EXCEEDED')).toBe(
+      'This deposit would exceed your current bank funding limit.',
+    );
+    expect(depositLimitMessage('DEPOSIT_DAILY_LIMIT_EXCEEDED')).toBe(
+      'You’ve reached your current daily bank funding limit.',
+    );
+    expect(depositLimitMessage('DEPOSIT_ROLLING_LIMIT_EXCEEDED')).toBe(
+      'This deposit would exceed your current rolling bank funding limit.',
+    );
+    expect(depositLimitMessage('DEPOSIT_DAILY_COUNT_LIMIT_EXCEEDED')).toBe(
+      'You’ve reached the current number of bank deposits allowed today.',
+    );
+    expect(depositLimitMessage('DEPOSIT_RAPID_ATTEMPT_LIMIT_EXCEEDED')).toBe(
+      'Please wait a little before trying another bank deposit.',
+    );
+  });
+  it('enforces the advertised £1 to £25,000 deposit range before any provider or capability work', () => {
+    expect(() => validateDepositAmountMinor('')).toThrow('positive GBP');
+    expect(() => validateDepositAmountMinor('50')).toThrow(
+      'between £1.00 and £25,000.00',
+    );
+    expect(() => validateDepositAmountMinor('2500001')).toThrow(
+      'between £1.00 and £25,000.00',
+    );
+    expect(validateDepositAmountMinor('100')).toBe(100n);
+    expect(validateDepositAmountMinor('2500000')).toBe(2500000n);
   });
   it('calculates configured withdrawal windows without inventing a risk score', () => {
     const now = new Date('2026-08-18T12:00:00.000Z');

@@ -63,6 +63,7 @@ import {
   filterWalletMovements,
   formatWalletMoney,
   parseWalletGbp,
+  validateDepositAmount,
   walletAccessPresentation,
   type WalletMovementFilter,
 } from "./-wallet-presentation";
@@ -198,11 +199,14 @@ export function Wallet() {
       action: requestedAction,
       amount: requestedAmount,
     }: WalletMovementRequest) => {
-      const amountMinor = parseWalletGbp(requestedAmount);
+      const depositValidation =
+        requestedAction === "DEPOSIT" ? validateDepositAmount(requestedAmount) : null;
+      const amountMinor = depositValidation?.amountMinor ?? parseWalletGbp(requestedAmount);
       if (!amountMinor || BigInt(amountMinor) <= 0n) {
         throw new ApiError(
           "VALIDATION_ERROR",
-          "Enter a positive GBP amount with no more than two decimal places.",
+          depositValidation?.message ??
+            "Enter a positive GBP amount with no more than two decimal places.",
         );
       }
       return requestedAction === "DEPOSIT"
@@ -237,14 +241,17 @@ export function Wallet() {
       amount: string;
       savePaymentMethod: boolean;
     }) => {
-      const amountMinor = parseWalletGbp(requestedAmount);
-      if (!amountMinor || BigInt(amountMinor) <= 0n) {
+      const depositValidation = validateDepositAmount(requestedAmount);
+      if (!depositValidation.amountMinor) {
         throw new ApiError(
           "VALIDATION_ERROR",
-          "Enter a positive GBP amount with no more than two decimal places.",
+          depositValidation.message ?? "Enter a valid deposit amount.",
         );
       }
-      return services.providers.createCardDeposit({ amountMinor, savePaymentMethod });
+      return services.providers.createCardDeposit({
+        amountMinor: depositValidation.amountMinor,
+        savePaymentMethod,
+      });
     },
     onSuccess: (session) => {
       setCardFundingSession(session);
@@ -560,7 +567,7 @@ function WalletKpis({
         icon={LockKeyhole}
         label="Reserved cash"
         value={formatWalletMoney(cash.reservedMinor)}
-        detail={countDetail(cash.pendingWithdrawalCount, "withdrawal", "Orders and withdrawals")}
+        detail={walletReservationDetail(cash)}
       />
       <WalletKpi
         icon={BanknoteArrowDown}
@@ -597,9 +604,23 @@ function WalletKpi({
   );
 }
 
-function countDetail(count: number | undefined, singular: string, fallback: string) {
-  if (count === undefined) return fallback;
-  return `${count} ${singular}${count === 1 ? "" : "s"} ${fallback}`;
+function walletReservationDetail(cash: PortfolioSummary["cash"]) {
+  const reasons: string[] = [];
+  if (cash.orderReservationCount) {
+    reasons.push(
+      `${cash.orderReservationCount} open buy ${cash.orderReservationCount === 1 ? "order" : "orders"}`,
+    );
+  }
+  if (cash.withdrawalReservationCount) {
+    reasons.push(
+      `${cash.withdrawalReservationCount} pending ${cash.withdrawalReservationCount === 1 ? "withdrawal" : "withdrawals"}`,
+    );
+  }
+  if (reasons.length) return `Held for ${reasons.join(" and ")}`;
+  if (cash.reservedMinor === "0") return "No cash is currently reserved";
+  return cash.orderReservationCount === undefined && cash.withdrawalReservationCount === undefined
+    ? "Held-cash detail temporarily unavailable"
+    : "Reserved for an active order or pending withdrawal";
 }
 
 function WalletKpiSkeletons() {
@@ -1174,6 +1195,7 @@ function MoveMoneyPanel({
             ? (cardFundingOptions?.reason ?? "Card funding is currently unavailable.")
             : null;
   const requestedAmountMinor = parseWalletGbp(amount);
+  const depositValidation = action === "DEPOSIT" ? validateDepositAmount(amount) : null;
   const withdrawalBlocked =
     action === "WITHDRAWAL" &&
     Boolean(requestedAmountMinor) &&
@@ -1256,6 +1278,7 @@ function MoveMoneyPanel({
           className="wallet-move-form"
           onSubmit={(event) => {
             event.preventDefault();
+            if (action === "DEPOSIT" && !depositValidation?.amountMinor) return;
             if (capability && !capability.allowed && !isCardDeposit) {
               onCapabilityRequired(capability);
               return;
@@ -1284,8 +1307,19 @@ function MoveMoneyPanel({
               onChange={(event) => setAmount(event.target.value)}
               inputMode="decimal"
               placeholder="£0.00"
+              aria-invalid={action === "DEPOSIT" && Boolean(depositValidation?.message)}
+              aria-describedby={
+                action === "DEPOSIT" && depositValidation?.message
+                  ? "wallet-deposit-amount-error"
+                  : undefined
+              }
             />
           </label>
+          {action === "DEPOSIT" && depositValidation?.message ? (
+            <p id="wallet-deposit-amount-error" className="wallet-move-validation" role="alert">
+              {depositValidation.message}
+            </p>
+          ) : null}
           {action === "DEPOSIT" ? (
             <dl className="wallet-move-terms">
               <div>
@@ -1302,7 +1336,7 @@ function MoveMoneyPanel({
               </div>
               <div>
                 <dt>Max. deposit</dt>
-                <dd>{isCardDeposit ? "Set by your card issuer" : "£25,000.00"}</dd>
+                <dd>£25,000.00</dd>
               </div>
             </dl>
           ) : null}
@@ -1403,7 +1437,13 @@ function MoveMoneyPanel({
           ) : null}
           <button
             type="submit"
-            disabled={domainBlocked || withdrawalBlocked || movement.isPending || cardFundingBusy}
+            disabled={
+              domainBlocked ||
+              withdrawalBlocked ||
+              movement.isPending ||
+              cardFundingBusy ||
+              (action === "DEPOSIT" && !depositValidation?.amountMinor)
+            }
           >
             {movement.isPending || cardFundingBusy
               ? "Submitting…"

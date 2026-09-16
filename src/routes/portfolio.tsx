@@ -1814,6 +1814,7 @@ function PortfolioAtlasOverview({
   const totalAccountValue = data?.totalAccountValueMinor ?? data?.estimatedPortfolioValueMinor;
   const availableCash = data?.availableCashMinor ?? data?.cash.availableMinor;
   const reservedCash = data?.reservedCashMinor ?? data?.cash.reservedMinor;
+  const reservedCashDetail = portfolioCashReservationDetail(data?.cash);
   const positionValue = data ? positionsValueMinor(data, preSaleReservations) : null;
   const positionCount = (data?.holdings.length ?? 0) + preSaleReservations.length;
   const valuation = data ? derivePortfolioValuationSnapshot(data) : null;
@@ -1885,9 +1886,9 @@ function PortfolioAtlasOverview({
           <small>Cash available for the market</small>
         </div>
         <div>
-          <dt>Reserved for orders</dt>
+          <dt>Reserved cash</dt>
           <dd>{reservedCash ? formatPortfolioMoney(reservedCash) : "—"}</dd>
-          <small>Held while open orders settle</small>
+          <small>{reservedCashDetail}</small>
         </div>
         <div>
           <dt>Unrealised return</dt>
@@ -1924,6 +1925,26 @@ function PortfolioAtlasOverview({
       <PortfolioAtlasMarket market={market} />
     </section>
   );
+}
+
+function portfolioCashReservationDetail(cash: PortfolioSummary["cash"] | undefined) {
+  if (!cash) return "Reservation details unavailable";
+  const reasons: string[] = [];
+  if (cash.orderReservationCount) {
+    reasons.push(
+      `${cash.orderReservationCount} open buy ${cash.orderReservationCount === 1 ? "order" : "orders"}`,
+    );
+  }
+  if (cash.withdrawalReservationCount) {
+    reasons.push(
+      `${cash.withdrawalReservationCount} pending ${cash.withdrawalReservationCount === 1 ? "withdrawal" : "withdrawals"}`,
+    );
+  }
+  if (reasons.length) return `Held for ${reasons.join(" and ")}`;
+  if (cash.reservedMinor === "0") return "No cash is currently reserved";
+  return cash.orderReservationCount === undefined && cash.withdrawalReservationCount === undefined
+    ? "Held-cash detail temporarily unavailable"
+    : "Reserved for an active order or pending withdrawal";
 }
 
 function PortfolioAtlasValueCanvas({
@@ -3940,7 +3961,9 @@ function buildPortfolioActivityEvents(
       executionSlug ? holdingBySlug.get(executionSlug) : undefined,
       execution.assetSummary ?? order?.assetSummary,
     );
-    const totalUnits = executionSlug ? (holdingBySlug.get(executionSlug)?.totalUnits ?? null) : null;
+    const totalUnits = executionSlug
+      ? (holdingBySlug.get(executionSlug)?.totalUnits ?? null)
+      : null;
     const ownership = totalUnits ? ownershipPercent(execution.units, totalUnits) : null;
     const gross = (
       BigInt(execution.priceMinor) * BigInt(execution.units) +
@@ -4025,9 +4048,9 @@ function buildPortfolioActivityEvents(
       ? "Distribution received"
       : isDemoFunding
         ? "Demo funding added"
-      : isDeposit
-        ? "Funds added"
-        : "Cash withdrawal";
+        : isDeposit
+          ? "Funds added"
+          : "Cash withdrawal";
     const direction = isWithdrawal ? "-" : "+";
     events.push({
       id: `cash:${item.reference ?? item.effectiveAt}:${item.type}:${item.amountMinor}`,
@@ -4037,9 +4060,9 @@ function buildPortfolioActivityEvents(
         ? "A distribution was credited to your account."
         : isDemoFunding
           ? "Internal demo funds were credited to your Slice wallet. This is not a bank deposit."
-        : isDeposit
-          ? "Money was added to your Slice wallet."
-          : "Money was withdrawn from your Slice wallet.",
+          : isDeposit
+            ? "Money was added to your Slice wallet."
+            : "Money was withdrawn from your Slice wallet.",
       occurredAt: item.effectiveAt,
       typeLabel: isDistribution ? "Distribution" : isDemoFunding ? "Demo funding" : "Cash",
       tone: isWithdrawal ? "debit" : "credit",
@@ -4049,9 +4072,9 @@ function buildPortfolioActivityEvents(
           ? "Distribution credited"
           : isDemoFunding
             ? "Internal demo funding"
-          : isDeposit
-            ? "Added to wallet"
-            : "Withdrawn from wallet",
+            : isDeposit
+              ? "Added to wallet"
+              : "Withdrawn from wallet",
         ...(item.reference ? [`Reference: ${item.reference}`] : []),
       ],
       moneyMinor: item.amountMinor,

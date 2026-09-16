@@ -2487,7 +2487,7 @@ function TradingPanel({
             </summary>
             <div className="asset-order-head">
               <span>Side</span>
-              <span>Ownership units</span>
+              <span aria-label="Ownership units">Slices</span>
               <span>Price</span>
               <span>Orders</span>
             </div>
@@ -2665,7 +2665,7 @@ function SimilarAssets({
         <div>
           <p className="asset-section-label">Similar assets</p>
           <p className="asset-similar-section__subtitle">
-            Discover other collectibles in the same category.
+            Closely related collectibles, never unrelated market listings.
           </p>
         </div>
         <div>

@@ -18,6 +18,40 @@ export function parseWalletGbp(value: string) {
   return (BigInt(match[1]!) * 100n + BigInt((match[2] ?? "").padEnd(2, "0"))).toString();
 }
 
+export const MIN_DEPOSIT_MINOR = 100n;
+export const MAX_DEPOSIT_MINOR = 2_500_000n;
+
+export type DepositAmountValidation = Readonly<{
+  amountMinor: string | null;
+  message: string | null;
+}>;
+
+/** Client-side counterpart of the API boundary. Never send an invalid amount
+ * into a verification or payment flow. */
+export function validateDepositAmount(value: string): DepositAmountValidation {
+  if (!value.trim()) {
+    return {
+      amountMinor: null,
+      message: "Enter a deposit amount between £1.00 and £25,000.00.",
+    };
+  }
+  const amountMinor = parseWalletGbp(value);
+  if (!amountMinor) {
+    return {
+      amountMinor: null,
+      message: "Enter a valid GBP amount with no more than two decimal places.",
+    };
+  }
+  const amount = BigInt(amountMinor);
+  if (amount < MIN_DEPOSIT_MINOR) {
+    return { amountMinor: null, message: "The minimum deposit is £1.00." };
+  }
+  if (amount > MAX_DEPOSIT_MINOR) {
+    return { amountMinor: null, message: "The maximum deposit is £25,000.00." };
+  }
+  return { amountMinor, message: null };
+}
+
 /** Display-only insight from settled provider movements. Pending/failed records are excluded. */
 export function settledMovementFlow(items: WalletMovementView[]) {
   const settled = items.filter((item) => item.status === "SETTLED");

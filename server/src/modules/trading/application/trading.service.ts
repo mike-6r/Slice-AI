@@ -1271,7 +1271,9 @@ export class TradingService {
           userId,
           status: { in: [...activeStatuses] },
         },
-        include: { asset: { select: { slug: true, status: true, title: true } } },
+        include: {
+          asset: { select: { slug: true, status: true, title: true } },
+        },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: 3,
       }),
@@ -2178,6 +2180,11 @@ export class TradingService {
     });
     if (!reservation || reservation.status !== 'ACTIVE')
       throw conflict('SETTLEMENT_CONFLICT', 'Cash reservation is unavailable.');
+    if (reservation.amountMinor < reserveReduction)
+      throw conflict(
+        'SETTLEMENT_INVARIANT_VIOLATION',
+        'Cash reservation amount is below the unsettled order amount.',
+      );
     const buyerBalance = await this.lockBalance(db, buyer.id);
     if ((buyerBalance?.reservedMinor ?? 0n) < reserveReduction)
       throw conflict(
@@ -2191,6 +2198,14 @@ export class TradingService {
         postedDebitMinor: { increment: gross + buyerFee },
         version: { increment: 1 },
       },
+    });
+    // CashReservation is the customer-explanation record for an open buy
+    // order. Keep it at the unsettled amount as fills consume cash, otherwise
+    // a partially filled order can make the Wallet display a stale original
+    // reservation even while AccountBalance is correct.
+    await db.cashReservation.update({
+      where: { id: reservation.id },
+      data: { amountMinor: { decrement: reserveReduction } },
     });
     if (seller.normalSide === 'DEBIT') {
       await db.accountBalance.upsert({

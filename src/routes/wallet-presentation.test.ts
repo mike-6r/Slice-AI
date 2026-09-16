@@ -5,6 +5,7 @@ import {
   formatWalletMoney,
   parseWalletGbp,
   settledMovementFlow,
+  validateDepositAmount,
   WALLET_EMPTY_STATES,
   WALLET_ERROR_STATES,
 } from "./-wallet-presentation";
@@ -26,6 +27,26 @@ describe("Document 016 wallet presentation authority", () => {
     expect(formatWalletMoney("9007199254740993")).toBe("£90,071,992,547,409.93");
     expect(parseWalletGbp("125.50")).toBe("12550");
     expect(parseWalletGbp("1.234")).toBeNull();
+  });
+
+  it("blocks blank, malformed, under-minimum, and over-maximum deposits before payment", () => {
+    expect(validateDepositAmount("")).toMatchObject({
+      amountMinor: null,
+      message: "Enter a deposit amount between £1.00 and £25,000.00.",
+    });
+    expect(validateDepositAmount("1.234")).toMatchObject({
+      amountMinor: null,
+      message: "Enter a valid GBP amount with no more than two decimal places.",
+    });
+    expect(validateDepositAmount("0.50")).toMatchObject({
+      amountMinor: null,
+      message: "The minimum deposit is £1.00.",
+    });
+    expect(validateDepositAmount("25000.01")).toMatchObject({
+      amountMinor: null,
+      message: "The maximum deposit is £25,000.00.",
+    });
+    expect(validateDepositAmount("1.00")).toEqual({ amountMinor: "100", message: null });
   });
 
   it("derives cash-flow insight only from settled authoritative movements", () => {

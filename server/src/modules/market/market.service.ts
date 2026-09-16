@@ -772,34 +772,12 @@ export class MarketService {
       orderBy: [{ title: 'asc' }, { id: 'asc' }],
       take: boundedLimit,
     });
-    const categoryRows =
-      sameSetRows.length >= boundedLimit || !asset.setId
-        ? sameSetRows
-        : [
-            ...sameSetRows,
-            ...(await this.db.asset.findMany({
-              where: { ...baseWhere, setId: { not: asset.setId } },
-              select: projection,
-              orderBy: [{ title: 'asc' }, { id: 'asc' }],
-              take: boundedLimit - sameSetRows.length,
-            })),
-          ];
-    const rows =
-      categoryRows.length >= boundedLimit
-        ? categoryRows
-        : [
-            ...categoryRows,
-            ...(await this.db.asset.findMany({
-              where: {
-                status: 'PUBLISHED',
-                ...publicBetaAssetWhere(this.config.isBeta),
-                id: { notIn: [asset.id, ...categoryRows.map((row) => row.id)] },
-              },
-              select: projection,
-              orderBy: [{ publishedAt: 'desc' }, { id: 'asc' }],
-              take: boundedLimit - categoryRows.length,
-            })),
-          ];
+    // Similarity must never become a generic "recently published" rail. A
+    // same-set match is the strongest public relationship we persist; when a
+    // set is known, showing another card merely because it shares the broad
+    // trading-card category is misleading (for example, baseball beside an
+    // unrelated anime card). Assets without a set retain the category match.
+    const rows = sameSetRows;
     const assetIds = rows.map((row) => row.id);
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const executionSelect = {
