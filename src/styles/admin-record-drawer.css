@@ -1,85 +1,110 @@
 .admin-record-drawer-layer {
   position: fixed;
-  z-index: 80;
+  z-index: 120;
   inset: 0;
-  display: flex;
-  justify-content: flex-end;
+  display: block;
+  background: #071016;
+  animation: admin-record-workspace-enter 180ms ease-out;
 }
 
 .admin-record-drawer-scrim {
-  position: absolute;
-  inset: 0;
-  border: 0;
-  background: color-mix(in srgb, #101818 68%, transparent);
-  cursor: default;
+  display: none;
 }
 
 .admin-record-drawer {
   position: relative;
-  width: min(760px, 100vw);
-  height: 100%;
+  isolation: isolate;
+  width: 100%;
+  height: 100dvh;
   overflow: hidden;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  border-left: 1px solid color-mix(in srgb, var(--border, #d5ddd7) 90%, transparent);
-  background: var(--surface, #f7faf7);
-  box-shadow: -24px 0 64px rgba(10, 24, 20, 0.25);
-  animation: admin-record-drawer-enter 180ms ease-out;
+  color: #d5e7e4;
+  background:
+    radial-gradient(circle at 88% -8%, rgba(35, 159, 135, 0.17), transparent 30rem),
+    linear-gradient(135deg, #071319 0%, #091820 48%, #061015 100%);
 }
 
 .admin-record-drawer--wide {
-  width: min(1280px, 100vw);
+  width: 100%;
 }
 
 .admin-record-drawer__header {
-  min-height: 90px;
+  min-height: 78px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--border, #d5ddd7);
-  background: var(--surface-raised, #ffffff);
+  gap: 1rem;
+  padding: 1rem clamp(1.1rem, 3vw, 3.5rem);
+  border-bottom: 1px solid rgba(82, 145, 153, 0.28);
+  background: linear-gradient(90deg, rgba(7, 20, 26, 0.98), rgba(10, 29, 36, 0.94));
+  box-shadow: 0 0.55rem 1.5rem rgba(1, 9, 13, 0.2);
 }
 
 .admin-record-drawer__header p {
   margin: 0 0 3px;
-  color: var(--muted-foreground, #64716a);
-  font-size: 0.71rem;
-  font-weight: 750;
-  letter-spacing: 0.1em;
+  color: #54d9bc;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
 }
 
 .admin-record-drawer__header h2 {
   margin: 0;
-  font-size: 1.2rem;
-  color: var(--foreground, #17251e);
+  color: #edf8f5;
+  font-size: clamp(1.08rem, 1.6vw, 1.45rem);
+  line-height: 1.2;
 }
 .admin-record-drawer__header span {
   display: block;
   margin-top: 4px;
-  color: var(--muted-foreground, #64716a);
-  font-size: 0.84rem;
+  color: #9bb4b8;
+  font-size: 0.78rem;
+  line-height: 1.35;
 }
 .admin-record-drawer__close {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--border, #d5ddd7);
-  border-radius: 10px;
-  background: transparent;
-  color: var(--foreground, #17251e);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  min-height: 2.45rem;
+  padding: 0.48rem 0.7rem;
+  border: 1px solid rgba(84, 217, 188, 0.48);
+  border-radius: 0.55rem;
+  background: rgba(12, 37, 43, 0.86);
+  color: #c8f4e9;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 750;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    color 150ms ease;
+}
+.admin-record-drawer__close:hover {
+  border-color: #5ce8c8;
+  background: rgba(25, 91, 82, 0.78);
+  color: #fff;
+}
+.admin-record-drawer__close:focus-visible {
+  outline: 2px solid #62ebc9;
+  outline-offset: 3px;
 }
 .admin-record-drawer__close svg {
-  width: 17px;
-  height: 17px;
+  width: 0.9rem;
+  height: 0.9rem;
 }
 .admin-record-drawer__body {
+  box-sizing: border-box;
   min-height: 0;
   overflow: auto;
-  padding: 22px;
+  padding: clamp(1rem, 2.4vw, 2rem) clamp(1rem, 3vw, 3.5rem) 3.5rem;
+  scrollbar-color: #2d8e7d #08141a;
+}
+.admin-record-drawer__body > * {
+  width: min(100%, 100rem);
+  margin-inline: auto;
 }
 .admin-record-drawer__body > .admin-account-detail {
   min-width: 0;
@@ -88,66 +113,86 @@
   display: grid;
   gap: 1px;
   margin: 0;
-  border: 1px solid var(--border, #d5ddd7);
-  border-radius: 12px;
+  border: 1px solid #294953;
+  border-radius: 0.75rem;
   overflow: hidden;
-  background: var(--border, #d5ddd7);
+  background: #294953;
+  box-shadow: 0 1rem 2.4rem rgba(1, 12, 16, 0.2);
 }
 .admin-record-inspector div {
   display: grid;
-  grid-template-columns: minmax(130px, 0.72fr) minmax(0, 1.3fr);
+  grid-template-columns: minmax(150px, 0.72fr) minmax(0, 1.3fr);
   gap: 14px;
-  padding: 11px 13px;
-  background: var(--surface-raised, #fff);
+  padding: 0.82rem 0.95rem;
+  background: linear-gradient(90deg, rgba(12, 32, 39, 0.98), rgba(8, 24, 31, 0.98));
 }
 .admin-record-inspector dt {
-  color: var(--muted-foreground, #64716a);
-  font-size: 0.78rem;
+  color: #91aab0;
+  font-size: 0.72rem;
 }
 .admin-record-inspector dd {
   margin: 0;
-  color: var(--foreground, #17251e);
+  color: #e0f2ed;
   font-weight: 650;
   overflow-wrap: anywhere;
 }
 .admin-record-inspector-note,
 .admin-record-inspector-empty {
   margin: 14px 0 0;
-  color: var(--muted-foreground, #64716a);
+  color: #a6bec0;
   font-size: 0.85rem;
   line-height: 1.5;
 }
 .admin-finance-open-record {
-  border: 1px solid var(--border, #d5ddd7);
+  border: 1px solid rgba(84, 217, 188, 0.42);
   border-radius: 8px;
   padding: 5px 8px;
-  background: transparent;
-  color: var(--foreground, #17251e);
+  background: rgba(12, 41, 45, 0.76);
+  color: #c6f3e8;
   font: inherit;
   font-size: 0.78rem;
   font-weight: 750;
 }
 
-@keyframes admin-record-drawer-enter {
+body:has(.admin-record-drawer-layer) {
+  overflow: hidden;
+}
+
+@keyframes admin-record-workspace-enter {
   from {
-    transform: translateX(28px);
     opacity: 0;
   }
   to {
-    transform: translateX(0);
     opacity: 1;
   }
 }
 
 @media (max-width: 720px) {
-  .admin-record-drawer {
-    width: 100vw;
-  }
   .admin-record-drawer__header {
-    padding: 16px;
+    align-items: flex-start;
+    padding: 0.85rem 1rem;
+  }
+  .admin-record-drawer__header span {
+    max-width: 19rem;
+    font-size: 0.68rem;
+  }
+  .admin-record-drawer__close {
+    width: 2.35rem;
+    min-width: 2.35rem;
+    padding: 0;
+  }
+  .admin-record-drawer__close span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
   .admin-record-drawer__body {
-    padding: 14px;
+    padding: 1rem 0.8rem 2rem;
   }
   .admin-record-inspector div {
     grid-template-columns: 1fr;
