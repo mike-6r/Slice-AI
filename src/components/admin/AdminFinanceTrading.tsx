@@ -14,6 +14,8 @@ import type {
   AdminFinanceRecordsResponse,
 } from "@/data/repositories";
 import { GuidancePanel } from "./OperationalGuidance";
+import { AdminRecordDrawer } from "./AdminRecordDrawer";
+import { adminStatusLabel } from "./admin-status";
 import "@/styles/admin-finance.css";
 
 type FinanceTab =
@@ -32,6 +34,7 @@ type Props = {
   dataClass: "OPERATIONAL" | "QA_DEMO" | "ALL";
   page: number;
   simplified?: boolean;
+  recordId?: string;
   update: (patch: Record<string, string | undefined>) => void;
 };
 
@@ -177,6 +180,7 @@ export function AdminFinanceTrading({
   dataClass,
   page,
   simplified = false,
+  recordId,
   update,
 }: Props) {
   const activeTab: FinanceTab = tabs.some((entry) => entry.id === rawTab)
@@ -207,6 +211,12 @@ export function AdminFinanceTrading({
     [update],
   );
   const selectTab = (next: FinanceTab) => update({ tab: next, status: undefined, page: "1" });
+  const openRecord = useCallback(
+    (id: string) => update({ record: id, recordType: "money" }),
+    [update],
+  );
+  const closeRecord = () => update({ record: undefined, recordType: undefined });
+  const selectedRecord = recordId ? records?.items.find((row) => row.id === recordId) : undefined;
   const pageInfo = records?.pagination ?? { page, pageSize: 10, total: 0, totalPages: 0 };
   const visibleTabs = !simplified
     ? tabs
@@ -311,13 +321,19 @@ export function AdminFinanceTrading({
           </thead>
           <tbody>
             {rows.map((row) => (
-              <FinanceRow key={row.id} row={row} tab={activeTab} openUser={openUser} />
+              <FinanceRow
+                key={row.id}
+                row={row}
+                tab={activeTab}
+                openUser={openUser}
+                openRecord={openRecord}
+              />
             ))}
           </tbody>
         </table>
       </div>
     );
-  }, [activeTab, records?.items, recordsLoading, openUser]);
+  }, [activeTab, records?.items, recordsLoading, openUser, openRecord]);
 
   if (failed)
     return (
@@ -411,10 +427,12 @@ export function AdminFinanceTrading({
           </div>
           <footer className="admin-finance-domain-footer">
             <span>
-              Withdrawal eligible {money(financialSeparation?.customerLiabilities.withdrawalEligibleMinor)}
+              Withdrawal eligible{" "}
+              {money(financialSeparation?.customerLiabilities.withdrawalEligibleMinor)}
             </span>
             <span>
-              Collector proceeds {money(financialSeparation?.customerLiabilities.collectorProceedsMinor)}
+              Collector proceeds{" "}
+              {money(financialSeparation?.customerLiabilities.collectorProceedsMinor)}
             </span>
             <p>
               Pending deposits {money(dashboard.kpis.pendingDepositsMinor)} · pending withdrawals{" "}
@@ -486,7 +504,8 @@ export function AdminFinanceTrading({
             <span>
               Pending at Stripe{" "}
               {providerMoney(
-                separatedStripe?.providerPendingMinor ?? dashboard.payoutLiquidity?.providerPendingMinor,
+                separatedStripe?.providerPendingMinor ??
+                  dashboard.payoutLiquidity?.providerPendingMinor,
                 separatedStripe?.payoutLiquidityStatus ??
                   dashboard.payoutLiquidity?.providerLiquidityStatus,
               )}
@@ -574,18 +593,20 @@ export function AdminFinanceTrading({
               : `${titleCase(activeTab)} · ${dataClass === "QA_DEMO" ? "QA / demo" : "all data"}`}
           </b>
         </header>
-        {visibleTabs.length ? <nav className="admin-finance-tabs" aria-label="Finance sections">
-          {visibleTabs.map((entry) => (
-            <button
-              className={entry.id === activeTab ? "active" : ""}
-              key={entry.id}
-              onClick={() => selectTab(entry.id)}
-              type="button"
-            >
-              {entry.label}
-            </button>
-          ))}
-        </nav> : null}
+        {visibleTabs.length ? (
+          <nav className="admin-finance-tabs" aria-label="Finance sections">
+            {visibleTabs.map((entry) => (
+              <button
+                className={entry.id === activeTab ? "active" : ""}
+                key={entry.id}
+                onClick={() => selectTab(entry.id)}
+                type="button"
+              >
+                {entry.label}
+              </button>
+            ))}
+          </nav>
+        ) : null}
         <div className="admin-finance-toolbar">
           <label className="admin-finance-search">
             <Search size={15} />
@@ -640,6 +661,10 @@ export function AdminFinanceTrading({
         )}
         {records ? <FinancePagination info={pageInfo} update={update} /> : null}
       </section>
+
+      {recordId ? (
+        <FinanceRecordDrawer record={selectedRecord} recordId={recordId} onClose={closeRecord} />
+      ) : null}
 
       <section className="admin-finance-insights-grid" aria-label="Finance operations insight">
         <article className="admin-finance-insight-card is-volume">
@@ -905,7 +930,8 @@ function FinanceHeader({ tab }: { tab: FinanceTab }) {
       "Expected",
       "Observed",
       "Difference",
-      "Created",
+      "Exceptions",
+      "Last run",
     ],
     adjustments: [
       "Request",
@@ -923,6 +949,9 @@ function FinanceHeader({ tab }: { tab: FinanceTab }) {
       {columns[tab].map((column) => (
         <th key={column}>{column}</th>
       ))}
+      <th>
+        <span className="sr-only">Open record</span>
+      </th>
     </tr>
   );
 }
@@ -930,10 +959,12 @@ function FinanceRow({
   row,
   tab,
   openUser,
+  openRecord,
 }: {
   row: AdminFinanceRecord;
   tab: FinanceTab;
   openUser: (id: string, detailTab?: string) => void;
+  openRecord: (id: string) => void;
 }) {
   const value = (key: string) => row[key];
   const user = row.user ?? row.collector;
@@ -1020,6 +1051,7 @@ function FinanceRow({
           <td>{money(value("expectedMinor"))}</td>
           <td>{money(value("observedMinor"))}</td>
           <td>{money(value("differenceMinor"))}</td>
+          <td>{text(value("mismatchCodes"))}</td>
           <td>{date(value("createdAt"))}</td>
         </>
       ) : null}
@@ -1039,9 +1071,72 @@ function FinanceRow({
           <td>{date(value("appliedAt"))}</td>
         </>
       ) : null}
+      <td>
+        <button
+          type="button"
+          className="admin-finance-open-record"
+          onClick={() => openRecord(row.id)}
+        >
+          Open
+        </button>
+      </td>
     </tr>
   );
 }
+
+function FinanceRecordDrawer({
+  record,
+  recordId,
+  onClose,
+}: {
+  record?: AdminFinanceRecord;
+  recordId: string;
+  onClose: () => void;
+}) {
+  const title = record ? `${titleCase(record.kind)} record` : "Money record";
+  const subtitle = record
+    ? `Reference ${recordId}. Values are read from the authoritative financial projection.`
+    : "The selected record is outside the current page or filter. Clear the filters or return to the result.";
+  return (
+    <AdminRecordDrawer title={title} subtitle={subtitle} onClose={onClose}>
+      {record ? (
+        <dl className="admin-record-inspector">
+          {Object.entries(record)
+            .filter(
+              ([key, value]) =>
+                !["id", "kind"].includes(key) && value !== null && value !== undefined,
+            )
+            .map(([key, value]) => (
+              <div key={key}>
+                <dt>{titleCase(key)}</dt>
+                <dd>{financeRecordValue(value)}</dd>
+              </div>
+            ))}
+        </dl>
+      ) : (
+        <p className="admin-record-inspector-empty">No record data is loaded for this selection.</p>
+      )}
+      <p className="admin-record-inspector-note">
+        Money state is read-only in this drawer. Any permitted correction remains in the protected
+        Adjustments workflow.
+      </p>
+    </AdminRecordDrawer>
+  );
+}
+
+function financeRecordValue(value: unknown) {
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+    return String(value).replaceAll("_", " ");
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return String(record.displayName ?? record.name ?? record.email ?? record.id ?? "Recorded");
+  }
+  return "—";
+}
 function Status({ value }: { value: unknown }) {
-  return <span className="admin-finance-status">{titleCase(value)}</span>;
+  return (
+    <span className="admin-finance-status" title={titleCase(value)}>
+      {adminStatusLabel(value)}
+    </span>
+  );
 }

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import {
   Activity,
   AlertTriangle,
@@ -40,7 +40,7 @@ export const Route = createFileRoute("/operations/submissions")({
     submission: typeof search.submission === "string" ? search.submission : undefined,
     ...(typeof search.tab === "string" ? { tab: search.tab } : {}),
   }),
-  component: SubmissionOperationsPage,
+  component: SubmissionOperationsRoute,
 });
 
 type Decision = "CHANGES_REQUESTED" | "APPROVED" | "REJECTED";
@@ -78,19 +78,69 @@ function openDecisionDialog(
   setDecision(value);
 }
 
+function SubmissionOperationsRoute() {
+  const { submission } = Route.useSearch();
+  return (
+    <Navigate
+      to="/admin"
+      replace
+      search={{ section: "assets", view: "pipeline", ...(submission ? { submission } : {}) }}
+    />
+  );
+}
+
 export function SubmissionOperationsPage() {
+  const navigate = Route.useNavigate();
+  const { submission } = Route.useSearch();
+  return (
+    <SubmissionReviewWorkspace
+      initialSubmission={submission}
+      onSelectSubmission={(id) => void navigate({ search: { submission: id } })}
+    />
+  );
+}
+
+/** The same authoritative review workflow, rendered within Assets' shared record drawer. */
+export function EmbeddedSubmissionReview({
+  submission,
+  onClose,
+  onSelectSubmission,
+}: {
+  submission: string;
+  onClose: () => void;
+  onSelectSubmission: (id: string) => void;
+}) {
+  return (
+    <SubmissionReviewWorkspace
+      initialSubmission={submission}
+      embedded
+      onClose={onClose}
+      onSelectSubmission={onSelectSubmission}
+    />
+  );
+}
+
+function SubmissionReviewWorkspace({
+  initialSubmission,
+  embedded = false,
+  onClose,
+  onSelectSubmission,
+}: {
+  initialSubmission?: string;
+  embedded?: boolean;
+  onClose?: () => void;
+  onSelectSubmission?: (id: string) => void;
+}) {
   const services = useAppServices();
   const session = useSession();
   const client = useQueryClient();
-  const navigate = Route.useNavigate();
-  const { submission: initial } = Route.useSearch();
   const currentUser = useQuery({
     queryKey: ["user", "current"],
     queryFn: () => services.repositories.users.getCurrentUser(),
     enabled: session.isAuthenticated,
     staleTime: 60_000,
   });
-  const [selected, setSelected] = useState<string | null>(initial ?? null);
+  const [selected, setSelected] = useState<string | null>(initialSubmission ?? null);
   const [guidedStep, setGuidedStep] = useState<string | null>(null);
   const [condition, setCondition] = useState("");
   const [conditionNote, setConditionNote] = useState("");
@@ -152,6 +202,7 @@ export function SubmissionOperationsPage() {
   const [researchCurrency, setResearchCurrency] = useState("");
   const [researchValueMinor, setResearchValueMinor] = useState("");
   const [researchNote, setResearchNote] = useState("");
+  useEffect(() => setSelected(initialSubmission ?? null), [initialSubmission]);
   const refresh = () => void client.invalidateQueries({ queryKey: ["review"] });
   const queue = useQuery({
     queryKey: ["review", "queue", "detail-navigation"],
@@ -443,7 +494,7 @@ export function SubmissionOperationsPage() {
     setSelected(id);
     setGuidedStep(null);
     setStaleReview(false);
-    void navigate({ search: { submission: id } });
+    onSelectSubmission?.(id);
   };
   const focusReviewStep = (step: string) => {
     setGuidedStep(step);
@@ -466,28 +517,28 @@ export function SubmissionOperationsPage() {
     );
   if (!selected)
     return (
-      <ReviewShell user={currentUser.data}>
+      <ReviewFrame embedded={embedded} user={currentUser.data}>
         <PageState
           title="Select a submission"
           detail="Open a submission from Review Queue to begin guided review."
         />
-      </ReviewShell>
+      </ReviewFrame>
     );
   if (detail.isLoading)
     return (
-      <ReviewShell user={currentUser.data}>
+      <ReviewFrame embedded={embedded} user={currentUser.data}>
         <ReviewLoadingSkeleton />
-      </ReviewShell>
+      </ReviewFrame>
     );
   if (detail.isError || !detail.data)
     return (
-      <ReviewShell user={currentUser.data}>
+      <ReviewFrame embedded={embedded} user={currentUser.data}>
         <PageState
           title="Submission review unavailable"
           detail={friendlyError(detail.error)}
           retry={() => void detail.refetch()}
         />
-      </ReviewShell>
+      </ReviewFrame>
     );
 
   const review = detail.data;
@@ -499,13 +550,14 @@ export function SubmissionOperationsPage() {
   const next = navigation.index >= 0 ? navigation.items[navigation.index + 1] : undefined;
   const previous = navigation.index > 0 ? navigation.items[navigation.index - 1] : undefined;
   return (
-    <ReviewShell user={currentUser.data}>
+    <ReviewFrame embedded={embedded} user={currentUser.data}>
       <section className="admin-review-workspace">
         <ReviewWorkspaceToolbar
           position={position}
           previous={previous?.id}
           next={next?.id}
           choose={choose}
+          onClose={onClose}
         />
         <div className="admin-review-workspace-grid">
           <main className="admin-review-workspace-main">
@@ -927,7 +979,7 @@ export function SubmissionOperationsPage() {
           <ManageSubmissionDialog detail={review} onClose={() => setManageOpen(false)} />
         ) : null}
       </section>
-    </ReviewShell>
+    </ReviewFrame>
   );
 }
 
@@ -935,14 +987,27 @@ type ReviewShellUser = {
   profile: { displayName: string; username: string | null };
 };
 
+function ReviewFrame({
+  embedded,
+  user,
+  children,
+}: {
+  embedded: boolean;
+  user?: ReviewShellUser;
+  children: ReactNode;
+}) {
+  return embedded ? <>{children}</> : <ReviewShell user={user}>{children}</ReviewShell>;
+}
+
 function ReviewShell({ children, user }: { children: ReactNode; user?: ReviewShellUser }) {
-  const navItems: Array<{ label: string; section: AdminSection; view: string; icon: LucideIcon }> = [
-    { label: "Home", section: "home", view: "action-queue", icon: LayoutDashboard },
-    { label: "Customers", section: "customers", view: "directory", icon: Users },
-    { label: "Assets", section: "assets", view: "pipeline", icon: ClipboardCheck },
-    { label: "Money", section: "money", view: "wallets-movements", icon: WalletCards },
-    { label: "Platform", section: "platform", view: "health", icon: HeartPulse },
-  ];
+  const navItems: Array<{ label: string; section: AdminSection; view: string; icon: LucideIcon }> =
+    [
+      { label: "Home", section: "home", view: "action-queue", icon: LayoutDashboard },
+      { label: "Customers", section: "customers", view: "directory", icon: Users },
+      { label: "Assets", section: "assets", view: "pipeline", icon: ClipboardCheck },
+      { label: "Money", section: "money", view: "wallets-movements", icon: WalletCards },
+      { label: "Platform", section: "platform", view: "health", icon: HeartPulse },
+    ];
   const name = user?.profile.displayName ?? "Admin account";
   return (
     <div className="admin-console-shell admin-review-console-shell">
@@ -994,11 +1059,13 @@ function ReviewWorkspaceToolbar({
   previous,
   next,
   choose,
+  onClose,
 }: {
   position: string;
   previous: string | undefined;
   next: string | undefined;
   choose: (id: string) => void;
+  onClose?: () => void;
 }) {
   return (
     <header className="admin-review-workspace-toolbar">
@@ -1009,9 +1076,19 @@ function ReviewWorkspaceToolbar({
         <h1 className="sr-only">Submission Review</h1>
       </div>
       <div className="admin-review-toolbar-actions">
-        <Link className="admin-review-back-link" to="/admin" search={{ section: "assets", view: "pipeline" }}>
-          <ArrowLeft aria-hidden="true" /> Back to queue
-        </Link>
+        {onClose ? (
+          <button type="button" className="admin-review-back-link" onClick={onClose}>
+            <ArrowLeft aria-hidden="true" /> Back to queue
+          </button>
+        ) : (
+          <Link
+            className="admin-review-back-link"
+            to="/admin"
+            search={{ section: "assets", view: "pipeline" }}
+          >
+            <ArrowLeft aria-hidden="true" /> Back to queue
+          </Link>
+        )}
         <div className="admin-review-nav-actions" aria-label="Review queue navigation">
           <button type="button" onClick={() => previous && choose(previous)} disabled={!previous}>
             <ArrowLeft aria-hidden="true" /> Previous
@@ -1113,11 +1190,7 @@ function ReviewNextAction({
   const evidenceRemaining = evidence
     ? Math.max(0, evidence.required - evidence.acceptedRequired)
     : 0;
-  const nextActor = waitingForCollector
-    ? "COLLECTOR"
-    : selfReviewBlocked
-      ? "REVIEWER"
-      : "REVIEWER";
+  const nextActor = waitingForCollector ? "COLLECTOR" : selfReviewBlocked ? "REVIEWER" : "REVIEWER";
 
   let eyebrow = "NEXT ACTION";
   let title = "Review required checks";
@@ -2973,7 +3046,11 @@ function PostApproval({
             >
               Open Collectible
             </Link>
-            <Link className="button-primary" to="/admin" search={{ section: "assets", view: "intake-custody" }}>
+            <Link
+              className="button-primary"
+              to="/admin"
+              search={{ section: "assets", view: "intake-custody" }}
+            >
               Open Physical Intake
             </Link>
           </>

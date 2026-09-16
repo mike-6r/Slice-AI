@@ -836,6 +836,7 @@ export class QualificationService {
   async updatePolicy(
     actor: Actor,
     input: Partial<typeof DEFAULT_AUTO_REVIEW_POLICY>,
+    reason: string,
   ) {
     if (!actor.roles.includes('ADMIN')) throw new Error('Admin role required.');
     return this.prisma.$transaction(async (db) => {
@@ -866,13 +867,14 @@ export class QualificationService {
             source: 'ADMIN',
             changed: Object.keys(input),
             version: row.version,
+            reason,
           }),
         },
       });
       return this.projectPolicy(row);
     });
   }
-  async rerun(actor: Actor, submissionId: string) {
+  async rerun(actor: Actor, submissionId: string, reason: string) {
     if (
       !actor.roles.some((role) => role === 'ADMIN' || role === 'ASSET_REVIEWER')
     )
@@ -881,10 +883,22 @@ export class QualificationService {
       where: { submissionId },
       orderBy: { createdAt: 'desc' },
     });
-    return this.runForSubmission(submissionId, {
+    const run = await this.runForSubmission(submissionId, {
       trigger: 'ADMIN_RERUN',
       retryOfId: latest?.id,
     });
+    await this.prisma.auditEvent.create({
+      data: {
+        actorUserId: actor.userId,
+        actorType: 'USER',
+        action: 'QUALIFICATION_RERUN_REQUESTED',
+        resourceType: 'submission',
+        resourceId: submissionId,
+        result: 'SUCCESS',
+        metadata: json({ reason, runId: run.runId }),
+      },
+    });
+    return run;
   }
 
   /**

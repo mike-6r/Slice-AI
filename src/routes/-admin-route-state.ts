@@ -30,6 +30,9 @@ export type AdminSearch = {
   view?: string;
   user?: string;
   asset?: string;
+  submission?: string;
+  record?: string;
+  recordType?: string;
   cataloguePreview?: string;
   membership?: string;
   intake?: string;
@@ -95,6 +98,11 @@ export type AdminSearch = {
   accountSort?: string;
   accountPage?: string;
   financeDataClass?: string;
+  queueSeverity?: string;
+  queueDomain?: string;
+  queueActor?: string;
+  queueOverdue?: string;
+  queueAssignment?: string;
 };
 
 const navigableSections: AdminDestination[] = ["home", "customers", "assets", "money", "platform"];
@@ -105,12 +113,50 @@ function isAdminSection(value: unknown): value is AdminDestination {
 
 export function normalizeAdminSection(value: unknown): AdminDestination {
   const section = String(value);
-  if (section === "customers" || ["users", "memberships", "compliance", "support", "restrictions", "cases", "escalations"].includes(section))
+  if (
+    section === "customers" ||
+    [
+      "users",
+      "memberships",
+      "compliance",
+      "support",
+      "restrictions",
+      "cases",
+      "escalations",
+    ].includes(section)
+  )
     return "customers";
-  if (section === "assets" || ["moderation", "intake", "intakeLocations", "collectibles", "assetOperations", "valuations", "custody", "marketplace"].includes(section))
+  if (
+    section === "assets" ||
+    [
+      "moderation",
+      "intake",
+      "intakeLocations",
+      "collectibles",
+      "assetOperations",
+      "valuations",
+      "custody",
+      "marketplace",
+    ].includes(section)
+  )
     return "assets";
   if (section === "money" || section === "payments") return "money";
-  if (section === "platform" || ["health", "audit", "flags", "integrations", "settings", "system-health", "jobs", "webhooks", "feature-flags", "maintenance", "deployments"].includes(section))
+  if (
+    section === "platform" ||
+    [
+      "health",
+      "audit",
+      "flags",
+      "integrations",
+      "settings",
+      "system-health",
+      "jobs",
+      "webhooks",
+      "feature-flags",
+      "maintenance",
+      "deployments",
+    ].includes(section)
+  )
     return "platform";
   return isAdminSection(value) ? value : "home";
 }
@@ -128,7 +174,8 @@ function defaultView(section: unknown, tab: unknown): string {
   if (value === "compliance" || value === "restrictions") return "verification-compliance";
   if (value === "support" || value === "cases" || value === "escalations") return "support";
   if (value === "assets" || value === "moderation") return "pipeline";
-  if (value === "intake" || value === "intakeLocations" || value === "custody") return "intake-custody";
+  if (value === "intake" || value === "intakeLocations" || value === "custody")
+    return "intake-custody";
   if (value === "collectibles" || value === "marketplace") return "catalogue";
   if (value === "assetOperations" || value === "valuations") return "valuation-launch";
   if (value === "money" || value === "payments") {
@@ -182,9 +229,13 @@ export function normalizeAdminSearch(search: Record<string, unknown>): AdminSear
     typeof search[key] === "string" ? search[key] : undefined;
   const nonEmptyValue = (key: keyof Omit<AdminSearch, "section">) =>
     typeof search[key] === "string" && search[key].length > 0 ? search[key] : undefined;
+  const normalizedSection = normalizeAdminSection(search.section);
+  const migratingLegacyLocation = Boolean(search.location) && normalizedSection === "assets";
   return {
-    section: normalizeAdminSection(search.section),
-    view: nonEmptyValue("view") ?? defaultView(search.section, search.tab),
+    section: migratingLegacyLocation ? "platform" : normalizedSection,
+    view: migratingLegacyLocation
+      ? "audit-settings"
+      : (nonEmptyValue("view") ?? defaultView(search.section, search.tab)),
     category: stringValue("category"),
     catalogueCategory: stringValue("catalogueCategory"),
     grader: stringValue("grader"),
@@ -205,6 +256,9 @@ export function normalizeAdminSearch(search: Record<string, unknown>): AdminSear
     operationsSelected: nonEmptyValue("operationsSelected"),
     user: nonEmptyValue("user"),
     asset: nonEmptyValue("asset"),
+    submission: nonEmptyValue("submission"),
+    record: nonEmptyValue("record"),
+    recordType: nonEmptyValue("recordType"),
     cataloguePreview: nonEmptyValue("cataloguePreview"),
     membership: nonEmptyValue("membership"),
     intake: nonEmptyValue("intake"),
@@ -253,6 +307,11 @@ export function normalizeAdminSearch(search: Record<string, unknown>): AdminSear
     accountSort: stringValue("accountSort"),
     accountPage: stringValue("accountPage"),
     financeDataClass: stringValue("financeDataClass"),
+    queueSeverity: stringValue("queueSeverity"),
+    queueDomain: stringValue("queueDomain"),
+    queueActor: stringValue("queueActor"),
+    queueOverdue: stringValue("queueOverdue"),
+    queueAssignment: stringValue("queueAssignment"),
   };
 }
 

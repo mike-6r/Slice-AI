@@ -22,6 +22,8 @@ import type {
   AdminPlatformRecord,
 } from "@/data/repositories";
 import "@/styles/admin-platform-operations.css";
+import { AdminRecordDrawer } from "./AdminRecordDrawer";
+import { adminStatusLabel, adminStatusTone } from "./admin-status";
 
 type PlatformTab =
   "health" | "jobs" | "webhooks" | "integrations" | "audit" | "feature-flags" | "settings";
@@ -37,6 +39,7 @@ type Props = {
   status: string;
   page: number;
   simplified?: boolean;
+  recordId?: string;
   update: (patch: Record<string, string | undefined>) => void;
 };
 
@@ -88,12 +91,9 @@ const date = (value: unknown) => {
 };
 
 function Status({ value }: { value: unknown }) {
-  const normalized = String(value ?? "unknown").toLowerCase();
   return (
-    <span
-      className={`admin-platform-status ${normalized.includes("fail") || normalized.includes("reject") || normalized.includes("unavailable") ? "danger" : normalized.includes("degrad") || normalized.includes("attention") || normalized.includes("not_configured") ? "warning" : normalized.includes("unknown") || normalized.includes("beta_disabled") ? "muted" : "ok"}`}
-    >
-      {label(value)}
+    <span className={`admin-platform-status ${adminStatusTone(value)}`} title={label(value)}>
+      {adminStatusLabel(value)}
     </span>
   );
 }
@@ -113,7 +113,15 @@ function Empty({ title, detail, retry }: { title: string; detail: string; retry?
   );
 }
 
-function RecordTable({ tab, items }: { tab: PlatformTab; items: AdminPlatformRecord[] }) {
+function RecordTable({
+  tab,
+  items,
+  onOpen,
+}: {
+  tab: PlatformTab;
+  items: AdminPlatformRecord[];
+  onOpen: (id: string) => void;
+}) {
   const columns: Record<PlatformTab, Array<[string, string]>> = {
     health: [],
     jobs: [
@@ -160,6 +168,9 @@ function RecordTable({ tab, items }: { tab: PlatformTab; items: AdminPlatformRec
             {activeColumns.map(([key, heading]) => (
               <th key={key}>{heading}</th>
             ))}
+            <th>
+              <span className="sr-only">Open record</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -176,6 +187,15 @@ function RecordTable({ tab, items }: { tab: PlatformTab; items: AdminPlatformRec
                   )}
                 </td>
               ))}
+              <td>
+                <button
+                  type="button"
+                  className="admin-finance-open-record"
+                  onClick={() => onOpen(item.id)}
+                >
+                  Open
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -196,6 +216,7 @@ export function AdminPlatformOperations({
   status,
   page,
   simplified = false,
+  recordId,
   update,
 }: Props) {
   const activeTab: PlatformTab = tabs.some((item) => item.id === rawTab)
@@ -211,6 +232,11 @@ export function AdminPlatformOperations({
     return () => window.clearTimeout(timer);
   }, [query, search, update]);
   const selectTab = (next: PlatformTab) => update({ tab: next, status: undefined, page: "1" });
+  const openRecord = (id: string) => update({ record: id, recordType: "platform" });
+  const closeRecord = () => update({ record: undefined, recordType: undefined });
+  const selectedRecord = recordId
+    ? records?.items.find((record) => record.id === recordId)
+    : undefined;
   const activeStatus = statuses[activeTab].includes(status) ? status : "";
   const loading = dashboardLoading || (activeTab !== "health" && recordsLoading);
   const pageInfo = records?.pagination ?? { page, pageSize: 10, total: 0, totalPages: 0 };
@@ -276,18 +302,20 @@ export function AdminPlatformOperations({
           />
         ) : null}
       </div>
-      {visibleTabs.length ? <div className="admin-platform-tabs">
-        {visibleTabs.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={activeTab === item.id ? "active" : ""}
-            onClick={() => selectTab(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div> : null}
+      {visibleTabs.length ? (
+        <div className="admin-platform-tabs">
+          {visibleTabs.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={activeTab === item.id ? "active" : ""}
+              onClick={() => selectTab(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {failed ? (
         <Empty
           title="Platform operations unavailable"
@@ -311,8 +339,12 @@ export function AdminPlatformOperations({
           status={activeStatus}
           update={update}
           pageInfo={pageInfo}
+          onOpenRecord={openRecord}
         />
       )}
+      {recordId ? (
+        <PlatformRecordDrawer record={selectedRecord} recordId={recordId} onClose={closeRecord} />
+      ) : null}
     </section>
   );
 }
@@ -449,13 +481,25 @@ function Health({
             <div className="admin-platform-card-heading">
               <h3>Quick actions</h3>
             </div>
-            <button type="button" className="admin-platform-action" onClick={retryAction(onTab, "jobs")}>
+            <button
+              type="button"
+              className="admin-platform-action"
+              onClick={retryAction(onTab, "jobs")}
+            >
               View all jobs <span>→</span>
             </button>
-            <button type="button" className="admin-platform-action" onClick={retryAction(onTab, "webhooks")}>
+            <button
+              type="button"
+              className="admin-platform-action"
+              onClick={retryAction(onTab, "webhooks")}
+            >
               View webhooks <span>→</span>
             </button>
-            <button type="button" className="admin-platform-action" onClick={retryAction(onTab, "audit")}>
+            <button
+              type="button"
+              className="admin-platform-action"
+              onClick={retryAction(onTab, "audit")}
+            >
               View audit logs <span>→</span>
             </button>
           </div>
@@ -475,6 +519,7 @@ function Records({
   status,
   update,
   pageInfo,
+  onOpenRecord,
 }: {
   tab: PlatformTab;
   records?: AdminPlatformRecordsResponse;
@@ -483,6 +528,7 @@ function Records({
   status: string;
   update: (patch: Record<string, string | undefined>) => void;
   pageInfo: { page: number; pageSize: number; total: number; totalPages: number };
+  onOpenRecord: (id: string) => void;
 }) {
   const supported = records?.supported ?? true;
   return (
@@ -516,7 +562,7 @@ function Records({
           detail={records?.message ?? "This read model is not configured."}
         />
       ) : records?.items.length ? (
-        <RecordTable tab={tab} items={records.items} />
+        <RecordTable tab={tab} items={records.items} onOpen={onOpenRecord} />
       ) : (
         <Empty
           title={`No ${tab} records`}
@@ -549,4 +595,56 @@ function Records({
       </div>
     </div>
   );
+}
+
+function PlatformRecordDrawer({
+  record,
+  recordId,
+  onClose,
+}: {
+  record?: AdminPlatformRecord;
+  recordId: string;
+  onClose: () => void;
+}) {
+  return (
+    <AdminRecordDrawer
+      title={record ? `${label(record.kind)} record` : "Platform record"}
+      subtitle={
+        record
+          ? `Reference ${recordId}. This is the server-authoritative delivery, integration, or audit record.`
+          : "The selected record is outside the current page or filter."
+      }
+      onClose={onClose}
+    >
+      {record ? (
+        <dl className="admin-record-inspector">
+          {Object.entries(record)
+            .filter(
+              ([key, value]) =>
+                !["id", "kind"].includes(key) && value !== null && value !== undefined,
+            )
+            .map(([key, value]) => (
+              <div key={key}>
+                <dt>{label(key)}</dt>
+                <dd>{platformRecordValue(value)}</dd>
+              </div>
+            ))}
+        </dl>
+      ) : (
+        <p className="admin-record-inspector-empty">
+          No authoritative record data is currently loaded.
+        </p>
+      )}
+      <p className="admin-record-inspector-note">
+        Retry and remediation actions remain available only when the server exposes a valid action
+        and its audit requirements.
+      </p>
+    </AdminRecordDrawer>
+  );
+}
+
+function platformRecordValue(value: unknown) {
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+    return String(value).replaceAll("_", " ");
+  return "Recorded";
 }

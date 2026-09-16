@@ -1,0 +1,269 @@
+.admin-platform-settings-page {
+  display: grid;
+  gap: 18px;
+}
+.admin-platform-settings-page__heading p,
+.admin-platform-settings-card header p,
+.admin-platform-confirm > p {
+  margin: 0 0 4px;
+  color: var(--muted-foreground, #64716a);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.admin-platform-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.admin-platform-settings-card {
+  padding: 20px;
+  border: 1px solid var(--border, #d5ddd7);
+  border-radius: 16px;
+  background: var(--surface-raised, #fff);
+}
+.admin-platform-settings-card--wide {
+  grid-column: 1 / -1;
+}
+.admin-platform-settings-card > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.admin-platform-settings-card h3 {
+  margin: 0;
+  color: var(--foreground, #17251e);
+  font-size: 1.05rem;
+}
+.admin-platform-settings-card > p {
+  margin: 16px 0;
+  color: var(--muted-foreground, #64716a);
+  line-height: 1.55;
+}
+.admin-platform-settings-card button {
+  border: 1px solid var(--border, #d5ddd7);
+  border-radius: 9px;
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--foreground, #17251e);
+  font-weight: 700;
+}
+.admin-platform-settings-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--primary, #183d32) !important;
+  color: var(--primary-foreground, #fff) !important;
+}
+.admin-platform-settings-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-bottom: 9px;
+  border-radius: 9px;
+  color: var(--primary, #183d32);
+  background: color-mix(in srgb, var(--primary, #183d32) 10%, transparent);
+}
+.admin-platform-settings-icon svg {
+  width: 16px;
+  height: 16px;
+}
+.admin-platform-policy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+.admin-platform-policy-control,
+.admin-platform-policy-sample {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--border, #d5ddd7);
+  border-radius: 12px;
+}
+.admin-platform-policy-control strong {
+  color: var(--foreground, #17251e);
+}
+.admin-platform-policy-control p {
+  margin: 5px 0 0;
+  color: var(--muted-foreground, #64716a);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+.admin-platform-policy-control button.is-on {
+  background: #174c3d;
+  border-color: #174c3d;
+  color: #fff;
+}
+.admin-platform-policy-control.is-danger button.is-on {
+  background: #9e3330;
+  border-color: #9e3330;
+}
+.admin-platform-policy-sample {
+  align-items: center;
+}
+.admin-platform-policy-sample span {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted-foreground, #64716a);
+  font-size: 0.8rem;
+}
+.admin-platform-policy-sample span svg {
+  width: 14px;
+}
+.admin-platform-policy-sample strong {
+  font-size: 1.25rem;
+  color: var(--foreground, #17251e);
+}
+.admin-platform-settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 18px 0 10px;
+}
+.admin-platform-settings-tabs button.is-active {
+  color: #fff;
+  background: var(--primary, #183d32);
+  border-color: var(--primary, #183d32);
+}
+.admin-platform-exception-list {
+  display: grid;
+  gap: 8px;
+}
+.admin-platform-exception-list article {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 13px;
+  border-top: 1px solid var(--border, #d5ddd7);
+}
+.admin-platform-exception-list span {
+  color: var(--muted-foreground, #64716a);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.admin-platform-exception-list strong {
+  display: block;
+  color: var(--foreground, #17251e);
+  margin-top: 3px;
+}
+.admin-platform-exception-list p {
+  margin: 5px 0 0;
+  color: var(--muted-foreground, #64716a);
+  font-size: 0.82rem;
+}
+.admin-platform-settings-muted {
+  color: var(--muted-foreground, #64716a);
+}
+.admin-platform-settings-error {
+  color: #9e3330;
+}
+.admin-platform-settings-note {
+  display: block;
+  color: var(--muted-foreground, #64716a);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.admin-platform-confirm-layer {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+.admin-platform-confirm-scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(10, 24, 20, 0.65);
+}
+.admin-platform-confirm {
+  position: relative;
+  width: min(520px, 100%);
+  padding: 24px;
+  border: 1px solid var(--border, #d5ddd7);
+  border-radius: 16px;
+  background: var(--surface-raised, #fff);
+  box-shadow: 0 24px 64px rgba(10, 24, 20, 0.28);
+}
+.admin-platform-confirm h3 {
+  margin: 0;
+  color: var(--foreground, #17251e);
+}
+.admin-platform-confirm > span {
+  display: block;
+  margin: 6px 0 18px;
+  color: var(--muted-foreground, #64716a);
+}
+.admin-platform-confirm dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+.admin-platform-confirm dl div {
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--muted, #f2f5f2);
+}
+.admin-platform-confirm dt {
+  color: var(--muted-foreground, #64716a);
+  font-size: 0.72rem;
+}
+.admin-platform-confirm dd {
+  margin: 3px 0 0;
+  font-weight: 750;
+  color: var(--foreground, #17251e);
+}
+.admin-platform-confirm label {
+  display: grid;
+  gap: 6px;
+  font-weight: 700;
+  color: var(--foreground, #17251e);
+}
+.admin-platform-confirm textarea {
+  resize: vertical;
+  border: 1px solid var(--border, #d5ddd7);
+  border-radius: 9px;
+  padding: 10px;
+  font: inherit;
+}
+.admin-platform-confirm footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+.admin-platform-confirm footer button {
+  border: 1px solid var(--border, #d5ddd7);
+  border-radius: 9px;
+  padding: 9px 12px;
+  background: transparent;
+  font-weight: 750;
+}
+.admin-platform-confirm footer .is-primary {
+  background: var(--primary, #183d32);
+  border-color: var(--primary, #183d32);
+  color: #fff;
+}
+@media (max-width: 820px) {
+  .admin-platform-settings-grid,
+  .admin-platform-policy-grid {
+    grid-template-columns: 1fr;
+  }
+  .admin-platform-exception-list article {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .admin-platform-settings-card--wide {
+    grid-column: auto;
+  }
+}

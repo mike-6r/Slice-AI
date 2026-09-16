@@ -158,7 +158,7 @@ describe("admin route state", () => {
     });
   });
 
-  it("preserves an Intake Location detail route and its active tab across refresh", () => {
+  it("migrates receiving-location configuration into Platform settings", () => {
     expect(
       normalizeAdminSearch({
         section: "intakeLocations",
@@ -166,10 +166,32 @@ describe("admin route state", () => {
         locationTab: "history",
       }),
     ).toMatchObject({
-      section: "assets",
-      view: "intake-custody",
+      section: "platform",
+      view: "audit-settings",
       location: "beta-test-uk-intake",
       locationTab: "history",
+    });
+  });
+
+  it("preserves global-search record selection and Home work filters in the URL", () => {
+    expect(
+      normalizeAdminSearch({
+        section: "money",
+        view: "wallets-movements",
+        tab: "movements",
+        record: "movement-123",
+        recordType: "money",
+        queueSeverity: "HIGH",
+        queueOverdue: "overdue",
+      }),
+    ).toMatchObject({
+      section: "money",
+      view: "wallets-movements",
+      tab: "movements",
+      record: "movement-123",
+      recordType: "money",
+      queueSeverity: "HIGH",
+      queueOverdue: "overdue",
     });
   });
 

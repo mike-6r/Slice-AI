@@ -1468,8 +1468,9 @@ export class AdminService {
           'No authoritative feature-flag read is configured for this environment.',
       },
       settings: {
-        available: false,
-        message: 'Platform settings are managed outside the Admin read model.',
+        available: true,
+        message:
+          'Authoritative automated-qualification and receiving-location controls are available in Audit & Settings.',
       },
     };
   }
@@ -11005,6 +11006,9 @@ export class AdminService {
         expectedMinor: run.debitMinor.toString(),
         observedMinor: run.creditMinor.toString(),
         differenceMinor: (run.debitMinor - run.creditMinor).toString(),
+        mismatchCodes: Array.isArray(run.mismatchCodes)
+          ? run.mismatchCodes.map((code) => String(code)).join(', ')
+          : null,
         currency: run.currency,
         financialDataClass: run.financialDataClass,
         createdAt: run.createdAt.toISOString(),
@@ -11068,7 +11072,7 @@ export class AdminService {
 
   async search(actor: Actor, q: string, limit: number) {
     await this.authorization.authorize(actor, 'admin.console.read');
-    const [users, assets] = await Promise.all([
+    const [users, assets, movements, jobs, webhooks, auditEvents] = await Promise.all([
       this.db.user.findMany({
         where: {
           OR: [
@@ -11091,6 +11095,52 @@ export class AdminService {
         take: limit,
         select: { id: true, slug: true, title: true, status: true },
       }),
+      this.db.moneyMovement.findMany({
+        where: {
+          OR: [
+            { id: { contains: q, mode: 'insensitive' } },
+            { user: { email: { contains: q, mode: 'insensitive' } } },
+            { user: { profile: { displayName: { contains: q, mode: 'insensitive' } } } },
+          ],
+        },
+        take: limit,
+        select: { id: true, type: true, status: true, provider: true, amountMinor: true, currency: true },
+      }),
+      this.db.outboxEvent.findMany({
+        where: {
+          OR: [
+            { id: { contains: q, mode: 'insensitive' } },
+            { eventId: { contains: q, mode: 'insensitive' } },
+            { eventType: { contains: q, mode: 'insensitive' } },
+            { aggregateId: { contains: q, mode: 'insensitive' } },
+          ],
+        },
+        take: limit,
+        select: { id: true, eventId: true, eventType: true, status: true },
+      }),
+      this.db.webhookInbox.findMany({
+        where: {
+          OR: [
+            { id: { contains: q, mode: 'insensitive' } },
+            { eventType: { contains: q, mode: 'insensitive' } },
+            { providerEventIdHash: { contains: q, mode: 'insensitive' } },
+          ],
+        },
+        take: limit,
+        select: { id: true, provider: true, eventType: true, status: true },
+      }),
+      this.db.auditEvent.findMany({
+        where: {
+          OR: [
+            { id: { contains: q, mode: 'insensitive' } },
+            { action: { contains: q, mode: 'insensitive' } },
+            { resourceType: { contains: q, mode: 'insensitive' } },
+            { resourceId: { contains: q, mode: 'insensitive' } },
+          ],
+        },
+        take: limit,
+        select: { id: true, action: true, resourceType: true, resourceId: true, result: true },
+      }),
     ]);
     return {
       items: [
@@ -11109,6 +11159,34 @@ export class AdminService {
           title: asset.title,
           subtitle: asset.status,
           target: `/admin?section=marketplace&asset=${asset.id}&tab=overview`,
+        })),
+        ...movements.map((movement) => ({
+          entityType: 'MONEY_MOVEMENT' as const,
+          id: movement.id,
+          title: `${movement.type.replaceAll('_', ' ')} movement`,
+          subtitle: `${movement.provider} · ${movement.status} · ${movement.amountMinor.toString()} ${movement.currency} minor units`,
+          target: `/admin?section=money&view=wallets-movements&tab=movements&q=${encodeURIComponent(movement.id)}&record=${movement.id}&recordType=money`,
+        })),
+        ...jobs.map((job) => ({
+          entityType: 'PLATFORM_JOB' as const,
+          id: job.id,
+          title: job.eventType,
+          subtitle: `${job.status} · ${job.eventId}`,
+          target: `/admin?section=platform&view=delivery&tab=jobs&q=${encodeURIComponent(job.id)}&record=${job.id}&recordType=platform`,
+        })),
+        ...webhooks.map((webhook) => ({
+          entityType: 'WEBHOOK' as const,
+          id: webhook.id,
+          title: webhook.eventType,
+          subtitle: `${webhook.provider} · ${webhook.status}`,
+          target: `/admin?section=platform&view=delivery&tab=webhooks&q=${encodeURIComponent(webhook.id)}&record=${webhook.id}&recordType=platform`,
+        })),
+        ...auditEvents.map((event) => ({
+          entityType: 'AUDIT_EVENT' as const,
+          id: event.id,
+          title: event.action.replaceAll('_', ' '),
+          subtitle: `${event.resourceType}${event.resourceId ? ` · ${event.resourceId}` : ''} · ${event.result}`,
+          target: `/admin?section=platform&view=audit-settings&tab=audit&q=${encodeURIComponent(event.id)}&record=${event.id}&recordType=platform`,
         })),
       ].slice(0, limit),
     };

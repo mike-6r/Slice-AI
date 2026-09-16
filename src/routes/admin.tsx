@@ -54,7 +54,6 @@ import { logout } from "@/auth/actions";
 import { canAccessAdmin } from "@/auth/workspace-access";
 import { RoleWorkspaceGuard } from "@/components/auth/RoleWorkspaceGuard";
 import { Wordmark } from "@/components/layout/MainNavigation";
-import { AdminCollectibleDetail } from "@/components/admin/AdminCollectibleDetail";
 import { AdminCollectibleCatalogue } from "@/components/admin/AdminCollectibleCatalogue";
 import { AdminAssetOperations } from "@/components/admin/AdminAssetOperations";
 import {
@@ -66,6 +65,8 @@ import { AdminMembershipDetail } from "@/components/admin/AdminMembershipDetail"
 import { AdminFinanceTrading } from "@/components/admin/AdminFinanceTrading";
 import { AdminTrustSupport } from "@/components/admin/AdminTrustSupport";
 import { AdminPlatformOperations } from "@/components/admin/AdminPlatformOperations";
+import { AdminPlatformSettings } from "@/components/admin/AdminPlatformSettings";
+import { AdminRecordDrawer } from "@/components/admin/AdminRecordDrawer";
 import { AdminReviewMedia } from "@/components/admin/AdminReviewMedia";
 import { AdminIntakeLocations } from "@/components/admin/AdminIntakeLocations";
 import {
@@ -77,6 +78,7 @@ import "@/styles/admin-workspace-shell.css";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 import { ApiError } from "@/api/http-client";
+import { EmbeddedSubmissionReview } from "./operations.submissions";
 import {
   compactAdminAccountFilters,
   normalizeAdminSearch,
@@ -86,11 +88,7 @@ import {
   type AdminSearch,
   type AdminSection,
 } from "./-admin-route-state";
-import type {
-  AssetOperationSummary,
-  QualificationQueueItem,
-  SubmissionReviewQueueResponse,
-} from "@/domain/submission";
+import type { AssetOperationSummary, SubmissionReviewQueueResponse } from "@/domain/submission";
 import type {
   AdminAccountsSummary,
   AdminComplianceCase,
@@ -195,6 +193,9 @@ function AdminConsole() {
     view: selectedView,
     tab: selectedUserTab,
     asset: selectedAsset,
+    submission: selectedSubmission,
+    record: selectedRecord,
+    recordType: selectedRecordType,
     cataloguePreview,
     membership: selectedMembership,
     intake: selectedIntake,
@@ -258,6 +259,11 @@ function AdminConsole() {
     accountSort: accountSortParam,
     accountPage: accountPageParam,
     financeDataClass: financeDataClassParam,
+    queueSeverity,
+    queueDomain,
+    queueActor,
+    queueOverdue,
+    queueAssignment,
   } = Route.useSearch();
   const destination = section as AdminDestination;
   const destinationMeta = navItems.find((item) => item.id === destination) ?? navItems[0];
@@ -969,7 +975,12 @@ function AdminConsole() {
                   <Link
                     key={`${result.entityType}-${result.id}`}
                     to="/admin"
-                    search={{ section: "customers", view: "directory", user: result.id, tab: undefined }}
+                    search={{
+                      section: "customers",
+                      view: "directory",
+                      user: result.id,
+                      tab: undefined,
+                    }}
                     onClick={() => {
                       setSearchInput("");
                       setSearch("");
@@ -981,7 +992,12 @@ function AdminConsole() {
                   <Link
                     key={`${result.entityType}-${result.id}`}
                     to="/admin"
-                    search={{ section: "assets", view: "valuation-launch", asset: result.id, tab: "overview" }}
+                    search={{
+                      section: "assets",
+                      view: "valuation-launch",
+                      asset: result.id,
+                      tab: "overview",
+                    }}
                     onClick={() => {
                       setSearchInput("");
                       setSearch("");
@@ -1063,24 +1079,70 @@ function AdminConsole() {
             overview={overview.data}
             operational={operational.data}
             risk={riskOperations.data}
-          />
-        ) : isAssets && selectedAsset ? (
-          <AdminAssetOperationsDetail
-            assetId={selectedAsset}
-            tab={selectedUserTab}
-            onTab={(next) =>
-              void navigate({ search: (current) => ({ ...current, tab: next }), replace: true })
+            queueFilters={{
+              severity: queueSeverity ?? "",
+              domain: queueDomain ?? "",
+              actor: queueActor ?? "",
+              overdue: queueOverdue ?? "",
+              assignment: queueAssignment ?? "",
+            }}
+            updateQueueFilters={(patch) =>
+              void navigate({ search: (current) => ({ ...current, ...patch }), replace: true })
             }
-            onBack={() =>
+          />
+        ) : isAssets && selectedSubmission ? (
+          <AdminRecordDrawer
+            wide
+            title="Submission review"
+            subtitle="Review evidence, decisions, and history without leaving Assets."
+            onClose={() =>
+              void navigate({
+                search: (current) => ({ ...current, submission: undefined }),
+                replace: true,
+              })
+            }
+          >
+            <EmbeddedSubmissionReview
+              submission={selectedSubmission}
+              onClose={() =>
+                void navigate({
+                  search: (current) => ({ ...current, submission: undefined }),
+                  replace: true,
+                })
+              }
+              onSelectSubmission={(submission) =>
+                void navigate({ search: (current) => ({ ...current, submission }), replace: true })
+              }
+            />
+          </AdminRecordDrawer>
+        ) : isAssets && selectedAsset ? (
+          <AdminRecordDrawer
+            wide
+            title="Asset lifecycle record"
+            subtitle="The asset’s evidence, custody, valuation, ownership, offering, and history."
+            onClose={() =>
               void navigate({
                 search: (current) => ({ ...current, asset: undefined, tab: undefined }),
                 replace: true,
               })
             }
-          />
+          >
+            <AdminAssetOperationsDetail
+              assetId={selectedAsset}
+              tab={selectedUserTab}
+              onTab={(next) =>
+                void navigate({ search: (current) => ({ ...current, tab: next }), replace: true })
+              }
+              onBack={() =>
+                void navigate({
+                  search: (current) => ({ ...current, asset: undefined, tab: undefined }),
+                  replace: true,
+                })
+              }
+            />
+          </AdminRecordDrawer>
         ) : isAssetPipeline ? (
           <ReviewQueue
-            showPolicy={false}
             data={reviews.data}
             loading={reviews.isLoading}
             failed={reviews.isError}
@@ -1172,8 +1234,9 @@ function AdminConsole() {
               void navigate({
                 search: (current) => ({
                   ...current,
-                  section: "assets",
-                  view: "intake-custody",
+                  section: "platform",
+                  view: "audit-settings",
+                  tab: "settings",
                   intake: undefined,
                   intakeTab: undefined,
                   location: "__directory__",
@@ -1268,44 +1331,55 @@ function AdminConsole() {
             }
           />
         ) : isCustomerMemberships && selectedMembership ? (
-          <AdminMembershipDetail
-            data={membershipDetail.data}
-            loading={membershipDetail.isLoading}
-            failed={membershipDetail.isError}
-            retry={() => void membershipDetail.refetch()}
-            back={() =>
+          <AdminRecordDrawer
+            title="Customer membership"
+            subtitle="Plan, billing, entitlements, permitted actions, and audit history."
+            onClose={() =>
               void navigate({
                 search: (current) => ({ ...current, membership: undefined }),
                 replace: true,
               })
             }
-            openAccount={() =>
-              void navigate({
-                search: (current) => ({
-                  ...current,
-                  section: "customers",
-                  view: "directory",
-                  user: membershipDetail.data?.collector.id,
-                  membership: undefined,
-                  tab: "membership",
-                }),
-                replace: true,
-              })
-            }
-            openAudit={() =>
-              void navigate({
-                search: (current) => ({
-                  ...current,
-                  section: "platform",
-                  view: "audit-settings",
-                  tab: "audit",
-                  q: selectedMembership,
-                  membership: undefined,
-                }),
-                replace: true,
-              })
-            }
-          />
+          >
+            <AdminMembershipDetail
+              data={membershipDetail.data}
+              loading={membershipDetail.isLoading}
+              failed={membershipDetail.isError}
+              retry={() => void membershipDetail.refetch()}
+              back={() =>
+                void navigate({
+                  search: (current) => ({ ...current, membership: undefined }),
+                  replace: true,
+                })
+              }
+              openAccount={() =>
+                void navigate({
+                  search: (current) => ({
+                    ...current,
+                    section: "customers",
+                    view: "directory",
+                    user: membershipDetail.data?.collector.id,
+                    membership: undefined,
+                    tab: "membership",
+                  }),
+                  replace: true,
+                })
+              }
+              openAudit={() =>
+                void navigate({
+                  search: (current) => ({
+                    ...current,
+                    section: "platform",
+                    view: "audit-settings",
+                    tab: "audit",
+                    q: selectedMembership,
+                    membership: undefined,
+                  }),
+                  replace: true,
+                })
+              }
+            />
+          </AdminRecordDrawer>
         ) : isCustomerMemberships ? (
           <AdminMemberships
             data={memberships.data}
@@ -1499,6 +1573,7 @@ function AdminConsole() {
             dataClass={financeDataClass}
             page={Math.max(1, Number(reviewPageParam ?? 1))}
             simplified
+            recordId={selectedRecordType === "money" ? selectedRecord : undefined}
             update={(patch) =>
               void navigate({
                 search: (current) => ({ ...current, ...patch }),
@@ -1528,6 +1603,30 @@ function AdminConsole() {
               void navigate({ search: (current) => ({ ...current, ...patch }), replace: true })
             }
           />
+        ) : isPlatformAuditSettings && (platformTab === "settings" || Boolean(selectedLocation)) ? (
+          <AdminPlatformSettings
+            locationId={selectedLocation}
+            locationTab={locationTab}
+            openLocation={(location, nextTab) =>
+              void navigate({
+                search: (current) => ({
+                  ...current,
+                  section: "platform",
+                  view: "audit-settings",
+                  tab: "settings",
+                  location,
+                  locationTab: nextTab,
+                }),
+                replace: true,
+              })
+            }
+            closeLocations={() =>
+              void navigate({
+                search: (current) => ({ ...current, location: undefined, locationTab: undefined }),
+                replace: true,
+              })
+            }
+          />
         ) : isPlatform ? (
           <AdminPlatformOperations
             dashboard={platformDashboard.data}
@@ -1544,12 +1643,16 @@ function AdminConsole() {
             status={platformStatus ?? ""}
             page={Math.max(1, Number(reviewPageParam ?? 1))}
             simplified
+            recordId={selectedRecordType === "platform" ? selectedRecord : undefined}
             update={(patch) =>
               void navigate({ search: (current) => ({ ...current, ...patch }), replace: true })
             }
           />
         ) : (
-          <AdminState title="Admin workspace unavailable" detail="Select a workspace from the admin navigation." />
+          <AdminState
+            title="Admin workspace unavailable"
+            detail="Select a workspace from the admin navigation."
+          />
         )}
       </main>
     </div>
@@ -1927,7 +2030,12 @@ function PhysicalIntakeBoard({
   const detailRow = intakeDetail.data?.row ?? selectedRow;
   if (selectedIntake && detailRow) {
     return (
-      <>
+      <AdminRecordDrawer
+        wide
+        title="Intake and custody record"
+        subtitle="Receiving destination, shipment, receipt, verification, custody, exceptions, and history."
+        onClose={closeIntake}
+      >
         <PhysicalIntakeDetailPage
           row={detailRow}
           detail={intakeDetail.data}
@@ -2024,7 +2132,7 @@ function PhysicalIntakeBoard({
             onConfirm={() => void confirmRecentAuth()}
           />
         ) : null}
-      </>
+      </AdminRecordDrawer>
     );
   }
   if (selectedIntake) {
@@ -3350,20 +3458,28 @@ function PhysicalIntakeDetailPage({
               </div>
             </div>
             <Link
-              to="/operations/submissions"
-              search={{ submission: row.submissionId, tab: "Overview" }}
+              to="/admin"
+              search={{ section: "assets", view: "pipeline", submission: row.submissionId }}
             >
               View submission <span>↗</span>
             </Link>
             {row.assetId ? (
               <Link
                 to="/admin"
-                search={{ section: "assets", view: "valuation-launch", asset: row.assetId, tab: "overview" }}
+                search={{
+                  section: "assets",
+                  view: "valuation-launch",
+                  asset: row.assetId,
+                  tab: "overview",
+                }}
               >
                 Open collectible <span>↗</span>
               </Link>
             ) : null}
-            <Link to="/admin" search={{ section: "customers", view: "directory", user: row.collector.id }}>
+            <Link
+              to="/admin"
+              search={{ section: "customers", view: "directory", user: row.collector.id }}
+            >
               Collector account <span>↗</span>
             </Link>
             <Link to="/admin" search={{ section: "assets", view: "intake-custody" }}>
@@ -4351,7 +4467,10 @@ function IntakeMovementTab({
           <button type="button" className="admin-secondary-button" onClick={onOpenException}>
             Add movement exception
           </button>
-          <Link to="/admin" search={{ section: "assets", view: "intake-custody", location: row.vault?.id }}>
+          <Link
+            to="/admin"
+            search={{ section: "assets", view: "intake-custody", location: row.vault?.id }}
+          >
             Manage destinations ↗
           </Link>
         </div>
@@ -4687,7 +4806,10 @@ function IntakeActivityPreview({ detail }: { detail: AdminIntakeDetail | undefin
           <p className="admin-console-eyebrow">Recent physical activity</p>
           <h2>Latest events</h2>
         </div>
-        <Link to="/admin" search={{ section: "assets", view: "intake-custody", intakeTab: "history" }}>
+        <Link
+          to="/admin"
+          search={{ section: "assets", view: "intake-custody", intakeTab: "history" }}
+        >
           View history ↗
         </Link>
       </div>
@@ -5157,7 +5279,19 @@ function ControlCenterRevamp({
   retry,
   select,
   operational,
-}: Parameters<typeof ControlCenter>[0] & { view: string }) {
+  queueFilters,
+  updateQueueFilters,
+}: Parameters<typeof ControlCenter>[0] & {
+  view: string;
+  queueFilters: {
+    severity: string;
+    domain: string;
+    actor: string;
+    overdue: string;
+    assignment: string;
+  };
+  updateQueueFilters: (patch: Record<string, string | undefined>) => void;
+}) {
   if (loading)
     return (
       <AdminState title="Loading Control Center" detail="Reading safe operational projections." />
@@ -5170,8 +5304,8 @@ function ControlCenterRevamp({
         retry={retry}
       />
     );
-  const center = operational?.controlCenter!;
-  if (!center)
+  const controlCenter = operational?.controlCenter;
+  if (!controlCenter)
     return (
       <AdminState
         title="Control Center projection needs refresh"
@@ -5179,6 +5313,7 @@ function ControlCenterRevamp({
         retry={retry}
       />
     );
+  const center = controlCenter;
   const open = (target: string) => select(controlCenterSection(target));
   const summaryCards = [
     {
@@ -5232,6 +5367,24 @@ function ControlCenterRevamp({
       onClick: () => select("health"),
     },
   ] as const;
+  const overdue = (ageValue: string) => {
+    const days = /([0-9]+)\s*d/i.exec(ageValue)?.[1];
+    const hours = /([0-9]+)\s*h/i.exec(ageValue)?.[1];
+    return (days ? Number(days) * 24 : 0) + (hours ? Number(hours) : 0) >= 48;
+  };
+  const queueItems = center.priorityWork.filter(
+    (item) =>
+      (!queueFilters.severity || item.severity === queueFilters.severity) &&
+      (!queueFilters.domain || item.type === queueFilters.domain) &&
+      (!queueFilters.actor || (item.owner ?? "Unassigned") === queueFilters.actor) &&
+      (!queueFilters.assignment ||
+        (queueFilters.assignment === "unassigned" ? !item.owner : Boolean(item.owner))) &&
+      (queueFilters.overdue !== "overdue" || overdue(item.age)),
+  );
+  const queueDomains = [...new Set(center.priorityWork.map((item) => item.type))].sort();
+  const queueActors = [
+    ...new Set(center.priorityWork.map((item) => item.owner ?? "Unassigned")),
+  ].sort();
   if (view === "action-queue") {
     return (
       <section className="admin-home-workspace admin-list-workspace">
@@ -5239,7 +5392,10 @@ function ControlCenterRevamp({
           <div>
             <p className="admin-console-eyebrow">Home · Action Queue</p>
             <h2>Work that needs a decision.</h2>
-            <span>Every item has one clear destination. Open it to continue in the authoritative workspace.</span>
+            <span>
+              Every item has one clear destination. Open it to continue in the authoritative
+              workspace.
+            </span>
           </div>
           <button type="button" className="admin-inline-action" onClick={retry}>
             <RefreshCw aria-hidden="true" /> Refresh queue
@@ -5266,17 +5422,78 @@ function ControlCenterRevamp({
           </button>
         </section>
         <section className="admin-panel admin-home-action-queue">
+          <div className="admin-home-action-queue__filters" aria-label="Action queue filters">
+            <select
+              value={queueFilters.severity}
+              onChange={(event) =>
+                updateQueueFilters({ queueSeverity: event.target.value || undefined })
+              }
+            >
+              <option value="">Severity: all</option>
+              {["CRITICAL", "HIGH", "MEDIUM", "LOW"].map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+            <select
+              value={queueFilters.domain}
+              onChange={(event) =>
+                updateQueueFilters({ queueDomain: event.target.value || undefined })
+              }
+            >
+              <option value="">Domain: all</option>
+              {queueDomains.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+            <select
+              value={queueFilters.actor}
+              onChange={(event) =>
+                updateQueueFilters({ queueActor: event.target.value || undefined })
+              }
+            >
+              <option value="">Next actor: all</option>
+              {queueActors.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+            <select
+              value={queueFilters.overdue}
+              onChange={(event) =>
+                updateQueueFilters({ queueOverdue: event.target.value || undefined })
+              }
+            >
+              <option value="">Service target: all</option>
+              <option value="overdue">Overdue (48h+)</option>
+            </select>
+            <select
+              value={queueFilters.assignment}
+              onChange={(event) =>
+                updateQueueFilters({ queueAssignment: event.target.value || undefined })
+              }
+            >
+              <option value="">Assignment: all</option>
+              <option value="assigned">Assigned</option>
+              <option value="unassigned">Unassigned</option>
+            </select>
+          </div>
           <div className="admin-home-action-queue__head" aria-hidden="true">
             <span>Severity</span>
             <span>Domain</span>
             <span>Record & issue</span>
             <span>Age</span>
+            <span>Service target</span>
             <span>Next actor</span>
             <span />
           </div>
-          {center.priorityWork.length ? (
+          {queueItems.length ? (
             <div className="admin-priority-list">
-              {center.priorityWork.map((item) => (
+              {queueItems.map((item) => (
                 <article className="admin-priority-row" key={item.id}>
                   <span
                     className={`admin-priority-severity is-${item.severity.toLowerCase()}`}
@@ -5288,6 +5505,15 @@ function ControlCenterRevamp({
                     <small>{item.context}</small>
                   </div>
                   <div className="admin-priority-age">{item.age}</div>
+                  <div
+                    className={
+                      overdue(item.age)
+                        ? "admin-priority-target is-overdue"
+                        : "admin-priority-target"
+                    }
+                  >
+                    {overdue(item.age) ? "Overdue" : "Within 48h"}
+                  </div>
                   <div className="admin-priority-owner">{item.owner ?? "Unassigned"}</div>
                   <button type="button" onClick={() => open(item.target)}>
                     Open action <ArrowRight aria-hidden="true" />
@@ -5296,7 +5522,13 @@ function ControlCenterRevamp({
               ))}
             </div>
           ) : (
-            <AdminEmpty detail="No action items are waiting." />
+            <AdminEmpty
+              detail={
+                center.priorityWork.length
+                  ? "No action items match these filters."
+                  : "No action items are waiting."
+              }
+            />
           )}
         </section>
       </section>
@@ -5320,7 +5552,9 @@ function ControlCenterRevamp({
             key={key}
             onClick={() => open(item.target)}
           >
-            <span className="admin-control-summary-icon"><Icon aria-hidden="true" /></span>
+            <span className="admin-control-summary-icon">
+              <Icon aria-hidden="true" />
+            </span>
             <span className="admin-control-summary-copy">
               <small>{label}</small>
               <strong>{item.count ?? "—"}</strong>
@@ -5358,7 +5592,9 @@ function ControlCenterRevamp({
               <p>Priority preview</p>
               <h3>Start with the oldest decisions</h3>
             </div>
-            <button type="button" onClick={() => select("home", "action-queue")}>Open queue</button>
+            <button type="button" onClick={() => select("home", "action-queue")}>
+              Open queue
+            </button>
           </div>
           {center.priorityWork.length ? (
             <div className="admin-home-priority-preview__list">
@@ -5372,7 +5608,11 @@ function ControlCenterRevamp({
                     <strong title={item.title}>{item.title}</strong>
                     <small>{item.context}</small>
                   </div>
-                  <button type="button" aria-label={`Open ${item.title}`} onClick={() => open(item.target)}>
+                  <button
+                    type="button"
+                    aria-label={`Open ${item.title}`}
+                    onClick={() => open(item.target)}
+                  >
                     <ArrowRight aria-hidden="true" />
                   </button>
                 </article>
@@ -5691,7 +5931,6 @@ type ReviewQueueFilters = {
 };
 
 function ReviewQueue({
-  showPolicy = true,
   data,
   loading,
   failed,
@@ -5701,7 +5940,6 @@ function ReviewQueue({
   filters,
   updateSearch,
 }: {
-  showPolicy?: boolean;
   data: SubmissionReviewQueueResponse | undefined;
   loading: boolean;
   failed: boolean;
@@ -5712,32 +5950,6 @@ function ReviewQueue({
   updateSearch: (patch: Partial<AdminSearch>) => void;
 }) {
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
-  const services = useAppServices();
-  const [qualificationTab, setQualificationTab] = useState<
-    "HUMAN_REVIEW_REQUIRED" | "COLLECTOR_ACTION_REQUIRED" | "AUTO_QUALIFIED" | "BLOCKED"
-  >("HUMAN_REVIEW_REQUIRED");
-  const qualification = useQuery({
-    queryKey: ["admin", "qualification", qualificationTab],
-    queryFn: () => services.repositories.reviews.listQualification(qualificationTab),
-  });
-  const rerun = useMutation({
-    mutationFn: (id: string) => services.repositories.reviews.rerunQualification(id),
-    onSuccess: () => void qualification.refetch(),
-  });
-  const qualificationPolicy = useQuery({
-    queryKey: ["admin", "qualification-policy"],
-    queryFn: () => services.repositories.reviews.getQualificationPolicy(),
-    enabled: showPolicy,
-  });
-  const updateQualificationPolicy = useMutation({
-    mutationFn: (input: {
-      enabled?: boolean;
-      autoPreSaleLaunch?: boolean;
-      emergencyDisabled?: boolean;
-      qaSamplingBps?: number;
-    }) => services.repositories.reviews.updateQualificationPolicy(input),
-    onSuccess: () => void qualificationPolicy.refetch(),
-  });
   const items = data?.items ?? [];
   const counts = data?.counts ?? {
     all: 0,
@@ -5868,74 +6080,6 @@ function ReviewQueue({
           tone="purple"
         />
       </div>
-      <QualificationExceptionPanel
-        activeTab={qualificationTab}
-        onTabChange={setQualificationTab}
-        items={qualification.data?.items ?? []}
-        loading={qualification.isLoading}
-        onRerun={(id) => rerun.mutate(id)}
-        rerunning={rerun.isPending}
-      />
-      {showPolicy && qualificationPolicy.data ? (
-        <section
-          className="admin-panel admin-review-policy-panel"
-          aria-label="Automated qualification policy"
-        >
-          <div className="admin-review-policy-header">
-            <div>
-              <p className="admin-console-eyebrow">Policy controls</p>
-              <h3>Automated review guardrails</h3>
-              <p>Every change is audited server-side before it reaches the queue.</p>
-            </div>
-          </div>
-          <div className="admin-review-policy-grid">
-            <label className="admin-review-policy-control">
-              <span>
-                <strong>Automation</strong>
-                <small>Run eligible qualification checks.</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={qualificationPolicy.data.enabled}
-                onChange={(event) =>
-                  updateQualificationPolicy.mutate({ enabled: event.target.checked })
-                }
-              />
-            </label>
-            <label className="admin-review-policy-control">
-              <span>
-                <strong>Conditional Pre-Sale</strong>
-                <small>Launch approved conditional listings.</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={qualificationPolicy.data.autoPreSaleLaunch}
-                onChange={(event) =>
-                  updateQualificationPolicy.mutate({ autoPreSaleLaunch: event.target.checked })
-                }
-              />
-            </label>
-            <label className="admin-review-policy-control admin-review-policy-control--danger">
-              <span>
-                <strong>Emergency stop</strong>
-                <small>Pause all automated decisions.</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={qualificationPolicy.data.emergencyDisabled}
-                onChange={(event) =>
-                  updateQualificationPolicy.mutate({ emergencyDisabled: event.target.checked })
-                }
-              />
-            </label>
-            <div className="admin-review-policy-sample">
-              <span>QA sample</span>
-              <strong>{(qualificationPolicy.data.qaSamplingBps / 100).toFixed(2)}%</strong>
-              <small>Audited sample rate</small>
-            </div>
-          </div>
-        </section>
-      ) : null}
       <div className="admin-review-queue-layout">
         <section className="admin-panel admin-review-table-panel">
           <div className="admin-review-tabs" role="tablist" aria-label="Review queue filters">
@@ -6219,13 +6363,13 @@ function ReviewQueue({
                         </span>
                       </td>
                       <td>
-                        <Link
+                        <button
+                          type="button"
                           className="admin-review-action"
-                          to="/operations/submissions"
-                          search={{ submission: item.id, tab: undefined }}
+                          onClick={() => updateSearch({ submission: item.id })}
                         >
                           {reviewActionLabel(item)} <ArrowRight aria-hidden="true" />
-                        </Link>
+                        </button>
                       </td>
                     </tr>
                   ))
@@ -6436,95 +6580,6 @@ function reviewPriorityLabel(priority: string) {
       MEDIUM: "Medium",
       LOW: "Low",
     }[priority] ?? "Low"
-  );
-}
-
-function QualificationExceptionPanel({
-  activeTab,
-  onTabChange,
-  items,
-  loading,
-  onRerun,
-  rerunning,
-}: {
-  activeTab: "HUMAN_REVIEW_REQUIRED" | "COLLECTOR_ACTION_REQUIRED" | "AUTO_QUALIFIED" | "BLOCKED";
-  onTabChange: (
-    tab: "HUMAN_REVIEW_REQUIRED" | "COLLECTOR_ACTION_REQUIRED" | "AUTO_QUALIFIED" | "BLOCKED",
-  ) => void;
-  items: QualificationQueueItem[];
-  loading: boolean;
-  onRerun: (id: string) => void;
-  rerunning: boolean;
-}) {
-  const tabs = [
-    ["HUMAN_REVIEW_REQUIRED", "Needs Review"],
-    ["COLLECTOR_ACTION_REQUIRED", "Collector Action"],
-    ["AUTO_QUALIFIED", "Auto Processed"],
-    ["BLOCKED", "Blocked"],
-  ] as const;
-  return (
-    <section
-      className="admin-panel admin-review-automation-panel"
-      aria-label="Automated qualification queue"
-    >
-      <div className="admin-review-automation-header">
-        <div>
-          <p className="admin-console-eyebrow">Automated qualification</p>
-          <h3>Automation exceptions</h3>
-          <p>Inspect the decision trail, then rerun only when new evidence changes the outcome.</p>
-        </div>
-      </div>
-      <div
-        className="admin-review-tabs admin-review-qualification-tabs"
-        role="tablist"
-        aria-label="Qualification outcomes"
-      >
-        {tabs.map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            className={activeTab === value ? "is-active" : ""}
-            onClick={() => onTabChange(value)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      {loading ? (
-        <p className="admin-muted">Loading qualification runs…</p>
-      ) : items.length === 0 ? (
-        <p className="admin-muted">No qualification runs in this view.</p>
-      ) : (
-        <div className="admin-review-qualification-list">
-          {items.slice(0, 8).map((item) => (
-            <article key={item.runId} className="admin-review-qualification-row">
-              <div>
-                <small>Submission</small>
-                <strong title={item.submission.id}>{shortId(item.submission.id)}</strong>
-                <p>
-                  {item.reasons[0] ??
-                    (item.outcome === "AUTO_QUALIFIED"
-                      ? "All mandatory checks passed."
-                      : "No additional reason recorded.")}
-                </p>
-              </div>
-              <span className="admin-status-chip">{item.outcome.replaceAll("_", " ")}</span>
-              {item.outcome === "HUMAN_REVIEW_REQUIRED" ||
-              item.outcome === "COLLECTOR_ACTION_REQUIRED" ? (
-                <button
-                  type="button"
-                  className="admin-review-refresh"
-                  onClick={() => onRerun(item.submission.id)}
-                  disabled={rerunning}
-                >
-                  Rerun
-                </button>
-              ) : null}
-            </article>
-          ))}
-        </div>
-      )}
-    </section>
   );
 }
 
@@ -6748,15 +6803,22 @@ function AccountsWorkspace({
 }) {
   if (selected || selectedLoading || selectedFailed) {
     return (
-      <ConsolidatedUserDetailExperience
-        user={selected}
-        loading={selectedLoading}
-        failed={selectedFailed}
-        retry={retry}
-        back={clearUser}
-        tab={userTab}
-        setTab={setUserTab}
-      />
+      <AdminRecordDrawer
+        wide
+        title={selected?.displayName ?? "Customer account"}
+        subtitle="Account, verification, membership, support, financial links, permitted actions, and history."
+        onClose={clearUser}
+      >
+        <ConsolidatedUserDetailExperience
+          user={selected}
+          loading={selectedLoading}
+          failed={selectedFailed}
+          retry={retry}
+          back={clearUser}
+          tab={userTab}
+          setTab={setUserTab}
+        />
+      </AdminRecordDrawer>
     );
   }
   const updateDraft = (key: string, value: string) =>
@@ -6898,7 +6960,9 @@ function AccountsWorkspace({
         <div>
           <p className="admin-console-eyebrow">Customers / Directory</p>
           <h2>Customers</h2>
-          <span>One authoritative record for access, product roles, compliance, membership, and support.</span>
+          <span>
+            One authoritative record for access, product roles, compliance, membership, and support.
+          </span>
         </div>
         <button type="button" className="admin-accounts-export" onClick={exportCurrentPage}>
           <Download aria-hidden="true" /> Export
@@ -7220,7 +7284,9 @@ function AccountsWorkspace({
                             />
                             <AccountStateCell
                               label={complianceStateLabel(user.complianceState)}
-                              reason={user.complianceReason ? sentence(user.complianceReason) : null}
+                              reason={
+                                user.complianceReason ? sentence(user.complianceReason) : null
+                              }
                               tone={complianceStateTone(user.complianceState)}
                             />
                           </div>
@@ -8253,10 +8319,13 @@ function ConsolidatedUserDetailExperience({
         <button
           type="button"
           onClick={() =>
-            user.recommendedAction ? setTab(user.recommendedAction.tab) : setGeneralControl("access")
+            user.recommendedAction
+              ? setTab(user.recommendedAction.tab)
+              : setGeneralControl("access")
           }
         >
-          {user.recommendedAction ? "Open control" : "Review access"} <ArrowRight aria-hidden="true" />
+          {user.recommendedAction ? "Open control" : "Review access"}{" "}
+          <ArrowRight aria-hidden="true" />
         </button>
       </div>
       {user.actionCenter.length ? (
@@ -8304,11 +8373,11 @@ function ConsolidatedUserDetailExperience({
             <AdminPanelHeading title="Urgent blockers" />
             <div className="admin-account-rail-list">
               {urgentBlockers.map((item) => (
-                  <button type="button" key={item.id} onClick={() => setTab(item.tab)}>
-                    <strong>{item.title}</strong>
-                    <span>{item.explanation}</span>
-                  </button>
-                ))}
+                <button type="button" key={item.id} onClick={() => setTab(item.tab)}>
+                  <strong>{item.title}</strong>
+                  <span>{item.explanation}</span>
+                </button>
+              ))}
             </div>
           </section>
         ) : null}
@@ -8339,10 +8408,16 @@ function ConsolidatedUserDetailExperience({
             <button type="button" onClick={() => setTab("History")}>
               View audit history <ArrowRight aria-hidden="true" />
             </button>
-            <Link to="/admin" search={{ section: "money", view: "wallets-movements", tab: "wallets" }}>
+            <Link
+              to="/admin"
+              search={{ section: "money", view: "wallets-movements", tab: "wallets" }}
+            >
               Open Finance workspace <ArrowRight aria-hidden="true" />
             </Link>
-            <Link to="/admin" search={{ section: "customers", view: "verification-compliance", tab: "compliance" }}>
+            <Link
+              to="/admin"
+              search={{ section: "customers", view: "verification-compliance", tab: "compliance" }}
+            >
               Open Trust &amp; Support <ArrowRight aria-hidden="true" />
             </Link>
             <Link to="/admin" search={{ section: "customers", view: "support", tab: "tickets" }}>
@@ -10880,92 +10955,98 @@ function ComplianceWorkspace({
           detail="The case detail could not be loaded safely."
         />
       ) : detail ? (
-        <section className="admin-panel">
-          <AdminPanelHeading
-            title={detail.user.displayName}
-            action="Close detail"
-            onClick={closeDetail}
-          />
-          <div className="admin-kpi-grid admin-kpi-grid--compact">
-            <AdminKpi
-              icon={ShieldCheck}
-              label="Provider status"
-              value={sentence(detail.providerStatus)}
+        <AdminRecordDrawer
+          title={detail.user.displayName}
+          subtitle="Verification, compliance, restrictions, permitted actions, and immutable decision history."
+          onClose={closeDetail}
+        >
+          <section className="admin-panel">
+            <AdminPanelHeading
+              title={detail.user.displayName}
+              action="Close detail"
+              onClick={closeDetail}
             />
-            <AdminKpi
-              icon={ShieldCheck}
-              label="Identity"
-              value={sentence(detail.identity?.state ?? detail.status)}
-            />
-            <AdminKpi
-              icon={AlertTriangle}
-              label="Risk review"
-              value={sentence(detail.riskReview?.status ?? "Not reported")}
-            />
-            <AdminKpi
-              icon={Users}
-              label="Payout readiness"
-              value={
-                detail.connectPayoutReadiness?.[0]
-                  ? sentence(detail.connectPayoutReadiness[0].status)
-                  : "Not started"
-              }
-            />
-            <AdminKpi icon={AlertTriangle} label="Decisions" value={detail.decisions.length} />
-            <AdminKpi icon={Users} label="Restrictions" value={detail.restrictions.length} />
-            <AdminKpi icon={FileClock} label="Audit events" value={detail.audit.length} />
-          </div>
-          <div className="admin-record-list">
-            <article className="admin-record">
-              <div className="min-w-0">
-                <strong>Summary</strong>
-                <small>
-                  {sentence(detail.type)} · {sentence(detail.status)} · {detail.provider} · updated{" "}
-                  {date(detail.updatedAt)}
-                </small>
-              </div>
-            </article>
-            <article className="admin-record">
-              <div className="min-w-0">
-                <strong>Provider status</strong>
-                <small>
-                  {detail.providerStatus === "Unknown"
-                    ? "Provider information is temporarily unavailable."
-                    : `Normalized provider state: ${sentence(detail.providerStatus)}`}
-                </small>
-              </div>
-            </article>
-            {detail.restrictions.map((restriction) => (
-              <article
-                className="admin-record"
-                key={`${restriction.createdAt}-${restriction.scope}`}
-              >
+            <div className="admin-kpi-grid admin-kpi-grid--compact">
+              <AdminKpi
+                icon={ShieldCheck}
+                label="Provider status"
+                value={sentence(detail.providerStatus)}
+              />
+              <AdminKpi
+                icon={ShieldCheck}
+                label="Identity"
+                value={sentence(detail.identity?.state ?? detail.status)}
+              />
+              <AdminKpi
+                icon={AlertTriangle}
+                label="Risk review"
+                value={sentence(detail.riskReview?.status ?? "Not reported")}
+              />
+              <AdminKpi
+                icon={Users}
+                label="Payout readiness"
+                value={
+                  detail.connectPayoutReadiness?.[0]
+                    ? sentence(detail.connectPayoutReadiness[0].status)
+                    : "Not started"
+                }
+              />
+              <AdminKpi icon={AlertTriangle} label="Decisions" value={detail.decisions.length} />
+              <AdminKpi icon={Users} label="Restrictions" value={detail.restrictions.length} />
+              <AdminKpi icon={FileClock} label="Audit events" value={detail.audit.length} />
+            </div>
+            <div className="admin-record-list">
+              <article className="admin-record">
                 <div className="min-w-0">
-                  <strong>Restriction · {sentence(restriction.scope)}</strong>
+                  <strong>Summary</strong>
                   <small>
-                    {sentence(restriction.status)} · {restriction.reasonCode} · source{" "}
-                    {restriction.source} · {date(restriction.createdAt)}
+                    {sentence(detail.type)} · {sentence(detail.status)} · {detail.provider} ·
+                    updated {date(detail.updatedAt)}
                   </small>
                 </div>
               </article>
-            ))}
-            {detail.decisions.map((decision) => (
-              <article
-                className="admin-record"
-                key={`${decision.createdAt}-${decision.reasonCode}`}
-              >
+              <article className="admin-record">
                 <div className="min-w-0">
-                  <strong>Decision · {sentence(decision.status)}</strong>
+                  <strong>Provider status</strong>
                   <small>
-                    {decision.reasonCode} · actor{" "}
-                    {decision.actorUserId ? shortId(decision.actorUserId) : "System"} ·{" "}
-                    {date(decision.createdAt)}
+                    {detail.providerStatus === "Unknown"
+                      ? "Provider information is temporarily unavailable."
+                      : `Normalized provider state: ${sentence(detail.providerStatus)}`}
                   </small>
                 </div>
               </article>
-            ))}
-          </div>
-        </section>
+              {detail.restrictions.map((restriction) => (
+                <article
+                  className="admin-record"
+                  key={`${restriction.createdAt}-${restriction.scope}`}
+                >
+                  <div className="min-w-0">
+                    <strong>Restriction · {sentence(restriction.scope)}</strong>
+                    <small>
+                      {sentence(restriction.status)} · {restriction.reasonCode} · source{" "}
+                      {restriction.source} · {date(restriction.createdAt)}
+                    </small>
+                  </div>
+                </article>
+              ))}
+              {detail.decisions.map((decision) => (
+                <article
+                  className="admin-record"
+                  key={`${decision.createdAt}-${decision.reasonCode}`}
+                >
+                  <div className="min-w-0">
+                    <strong>Decision · {sentence(decision.status)}</strong>
+                    <small>
+                      {decision.reasonCode} · actor{" "}
+                      {decision.actorUserId ? shortId(decision.actorUserId) : "System"} ·{" "}
+                      {date(decision.createdAt)}
+                    </small>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        </AdminRecordDrawer>
       ) : null}
     </AdminPageSection>
   );

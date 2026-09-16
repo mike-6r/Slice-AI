@@ -6729,10 +6729,11 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
         const items = Array.isArray(value.items) ? (value.items as QualificationQueueItem[]) : [];
         return { items, total: Number(value.total ?? items.length) };
       },
-      async rerunQualification(id) {
+      async rerunQualification(id, input) {
         return objectField(
           await client.request<unknown>(`/reviews/submissions/${id}/qualification/rerun`, {
             method: "POST",
+            body: input,
             headers: { "Idempotency-Key": idempotencyKey() },
           }),
           "qualification rerun",

@@ -13289,6 +13289,7 @@ body:has(.portfolio-page)
   }
   .admin-home-action-queue .admin-priority-type,
   .admin-home-action-queue .admin-priority-age,
+  .admin-home-action-queue .admin-priority-target,
   .admin-home-action-queue .admin-priority-owner {
     display: none;
   }
@@ -98135,7 +98136,9 @@ body:has(.portfolio-page)
   background:
     radial-gradient(circle at 88% -25%, rgba(34, 211, 165, 0.18), transparent 23rem),
     linear-gradient(130deg, rgba(15, 57, 51, 0.85), rgba(14, 16, 21, 0.98) 56%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1.5rem 4rem rgba(0, 0, 0, 0.2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1.5rem 4rem rgba(0, 0, 0, 0.2);
 }
 .notifications-hero::after {
   position: absolute;
@@ -98491,7 +98494,12 @@ body:has(.portfolio-page)
   position: relative;
   min-height: 6.2rem;
   border-bottom: 1px solid var(--color-border);
-  background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.055) 40%, transparent 60%);
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.055) 40%,
+    transparent 60%
+  );
   background-size: 200% 100%;
   animation: notifications-shimmer 1.45s ease-in-out infinite;
 }
@@ -98710,14 +98718,20 @@ body:has(.portfolio-page)
   box-shadow: 0 1.1rem 2.6rem rgba(0, 0, 0, 0.16);
 }
 .admin-home-action-queue__head {
-  grid-template-columns: 0.5rem minmax(7.5rem, 0.7fr) minmax(22rem, 2.2fr) 4rem minmax(7.5rem, 0.75fr) auto;
+  grid-template-columns: 0.5rem minmax(7.5rem, 0.7fr) minmax(22rem, 2.2fr) 4rem minmax(
+      7.5rem,
+      0.75fr
+    ) auto;
   gap: 0.8rem;
   padding: 0.85rem 1.15rem;
   color: #7d99a5;
   font-size: 0.58rem;
 }
 .admin-home-action-queue .admin-priority-row {
-  grid-template-columns: 0.5rem minmax(7.5rem, 0.7fr) minmax(22rem, 2.2fr) 4rem minmax(7.5rem, 0.75fr) auto;
+  grid-template-columns: 0.5rem minmax(7.5rem, 0.7fr) minmax(22rem, 2.2fr) 4rem minmax(
+      7.5rem,
+      0.75fr
+    ) auto;
   gap: 0.8rem;
   min-height: 4.25rem;
   padding: 0.72rem 1.15rem;
@@ -98751,6 +98765,40 @@ body:has(.portfolio-page)
   border-radius: 0.4rem;
   padding: 0.35rem 0.62rem;
   font-size: 0.63rem;
+}
+
+.admin-home-action-queue__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.75rem 1.15rem;
+  border-bottom: 1px solid rgba(55, 83, 93, 0.62);
+  background: rgba(10, 29, 36, 0.45);
+}
+.admin-home-action-queue__filters select {
+  min-height: 2rem;
+  border: 1px solid rgba(75, 125, 132, 0.72);
+  border-radius: 0.35rem;
+  padding: 0 0.5rem;
+  background: #102832;
+  color: #dcebe9;
+  font: inherit;
+  font-size: 0.64rem;
+}
+.admin-home-action-queue__head,
+.admin-home-action-queue .admin-priority-row {
+  grid-template-columns: 0.5rem minmax(7rem, 0.65fr) minmax(18rem, 2fr) 4rem minmax(
+      5.8rem,
+      0.65fr
+    ) minmax(7rem, 0.75fr) auto;
+}
+.admin-priority-target {
+  color: #9bb0b5;
+  font-size: 0.64rem;
+  font-weight: 700;
+}
+.admin-priority-target.is-overdue {
+  color: #f7bb72;
 }
 .admin-home-summary-grid {
   gap: 0.85rem;
@@ -99134,19 +99182,33 @@ body:has(.portfolio-page)
   font-size: 0.68rem;
 }
 .admin-accounts-revamp-table th:nth-child(1),
-.admin-accounts-revamp-table td:nth-child(1) { width: 25%; }
+.admin-accounts-revamp-table td:nth-child(1) {
+  width: 25%;
+}
 .admin-accounts-revamp-table th:nth-child(2),
-.admin-accounts-revamp-table td:nth-child(2) { width: 10%; }
+.admin-accounts-revamp-table td:nth-child(2) {
+  width: 10%;
+}
 .admin-accounts-revamp-table th:nth-child(3),
-.admin-accounts-revamp-table td:nth-child(3) { width: 17%; }
+.admin-accounts-revamp-table td:nth-child(3) {
+  width: 17%;
+}
 .admin-accounts-revamp-table th:nth-child(4),
-.admin-accounts-revamp-table td:nth-child(4) { width: 17%; }
+.admin-accounts-revamp-table td:nth-child(4) {
+  width: 17%;
+}
 .admin-accounts-revamp-table th:nth-child(5),
-.admin-accounts-revamp-table td:nth-child(5) { width: 13%; }
+.admin-accounts-revamp-table td:nth-child(5) {
+  width: 13%;
+}
 .admin-accounts-revamp-table th:nth-child(6),
-.admin-accounts-revamp-table td:nth-child(6) { width: 9%; }
+.admin-accounts-revamp-table td:nth-child(6) {
+  width: 9%;
+}
 .admin-accounts-revamp-table th:nth-child(7),
-.admin-accounts-revamp-table td:nth-child(7) { width: 9%; }
+.admin-accounts-revamp-table td:nth-child(7) {
+  width: 9%;
+}
 .admin-account-user-button {
   gap: 0.7rem;
 }
@@ -99611,7 +99673,10 @@ body:has(.admin-review-detail-page) .admin-review-rail-decision .admin-review-el
   border: 0;
   background: transparent;
 }
-body:has(.admin-review-detail-page) .admin-review-rail-decision .admin-review-eligibility-state strong {
+body:has(.admin-review-detail-page)
+  .admin-review-rail-decision
+  .admin-review-eligibility-state
+  strong {
   font-size: 0.67rem;
 }
 body:has(.admin-review-detail-page) .admin-review-rail-decision .admin-review-eligibility-state p {
@@ -99643,7 +99708,9 @@ body:has(.admin-review-detail-page) .admin-review-related-workspaces summary {
   cursor: pointer;
   list-style: none;
 }
-body:has(.admin-review-detail-page) .admin-review-related-workspaces summary::-webkit-details-marker {
+body:has(.admin-review-detail-page)
+  .admin-review-related-workspaces
+  summary::-webkit-details-marker {
   display: none;
 }
 body:has(.admin-review-detail-page) .admin-review-related-workspaces summary span {

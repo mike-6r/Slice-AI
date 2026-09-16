@@ -17,6 +17,7 @@ import type {
   AdminTrustSupportRecordsResponse,
 } from "@/data/repositories";
 import "@/styles/admin-trust-support.css";
+import { adminStatusLabel } from "./admin-status";
 
 type TrustTab = "compliance" | "restrictions" | "tickets" | "escalations";
 type Props = {
@@ -96,7 +97,11 @@ function PersonCell({ value, onOpen }: { value: unknown; onOpen?: (id: string) =
 }
 
 function Status({ value, tone }: { value: unknown; tone?: string }) {
-  return <span className={`admin-trust-status ${tone ?? ""}`}>{label(value)}</span>;
+  return (
+    <span className={`admin-trust-status ${tone ?? ""}`} title={label(value)}>
+      {adminStatusLabel(value)}
+    </span>
+  );
 }
 
 export function AdminTrustSupport({
@@ -118,8 +123,8 @@ export function AdminTrustSupport({
   const activeTab: TrustTab = supportOnly
     ? "tickets"
     : tabs.some((item) => item.id === rawTab)
-    ? (rawTab as TrustTab)
-    : "compliance";
+      ? (rawTab as TrustTab)
+      : "compliance";
   const [search, setSearch] = useState(query);
   useEffect(() => setSearch(query), [query]);
   useEffect(() => {
@@ -184,58 +189,67 @@ export function AdminTrustSupport({
       <header className="admin-trust-header admin-list-workspace__heading">
         <div>
           <p className="admin-trust-breadcrumb">
-            {supportOnly ? "Customers" : "Trust & Support"} <span>›</span> {supportOnly ? "Support" : "Trust & Support Overview"}
+            {supportOnly ? "Customers" : "Trust & Support"} <span>›</span>{" "}
+            {supportOnly ? "Support" : "Trust & Support Overview"}
           </p>
           <h2>{supportOnly ? "Support" : "Trust & Support"}</h2>
-          <p>{supportOnly ? "Customer tickets and escalations that need an administrator response." : "Monitor compliance cases, restrictions, and support activity across the platform."}</p>
+          <p>
+            {supportOnly
+              ? "Customer tickets and escalations that need an administrator response."
+              : "Monitor compliance cases, restrictions, and support activity across the platform."}
+          </p>
         </div>
       </header>
-      {!supportOnly ? <div className="admin-trust-kpis">
-        <TrustKpi
-          icon={<ShieldCheck />}
-          label="Open compliance cases"
-          value={dashboard?.kpis.openComplianceCases ?? 0}
-          tone="purple"
-        />
-        <TrustKpi
-          icon={<LockKeyhole />}
-          label="Restricted accounts"
-          value={dashboard?.kpis.restrictedAccounts ?? 0}
-          tone="red"
-        />
-        <TrustKpi
-          icon={<LifeBuoy />}
-          label="Open tickets"
-          value={dashboard?.kpis.openTickets ?? 0}
-          tone="blue"
-        />
-        <TrustKpi
-          icon={<UserRound />}
-          label="Unassigned tickets"
-          value={dashboard?.kpis.unassignedTickets ?? 0}
-          tone="gold"
-        />
-        <TrustKpi
-          icon={<Flag />}
-          label="Escalations"
-          value={dashboard?.kpis.escalations ?? 0}
-          tone="purple"
-        />
-      </div> : null}
+      {!supportOnly ? (
+        <div className="admin-trust-kpis">
+          <TrustKpi
+            icon={<ShieldCheck />}
+            label="Open compliance cases"
+            value={dashboard?.kpis.openComplianceCases ?? 0}
+            tone="purple"
+          />
+          <TrustKpi
+            icon={<LockKeyhole />}
+            label="Restricted accounts"
+            value={dashboard?.kpis.restrictedAccounts ?? 0}
+            tone="red"
+          />
+          <TrustKpi
+            icon={<LifeBuoy />}
+            label="Open tickets"
+            value={dashboard?.kpis.openTickets ?? 0}
+            tone="blue"
+          />
+          <TrustKpi
+            icon={<UserRound />}
+            label="Unassigned tickets"
+            value={dashboard?.kpis.unassignedTickets ?? 0}
+            tone="gold"
+          />
+          <TrustKpi
+            icon={<Flag />}
+            label="Escalations"
+            value={dashboard?.kpis.escalations ?? 0}
+            tone="purple"
+          />
+        </div>
+      ) : null}
       <div className="admin-trust-layout">
         <div className="admin-trust-main-card">
-          {!supportOnly ? <nav className="admin-trust-tabs" aria-label="Trust and Support sections">
-            {tabs.map((item) => (
-              <button
-                className={item.id === activeTab ? "active" : ""}
-                key={item.id}
-                onClick={() => selectTab(item.id)}
-                type="button"
-              >
-                {item.label}
-              </button>
-            ))}
-          </nav> : null}
+          {!supportOnly ? (
+            <nav className="admin-trust-tabs" aria-label="Trust and Support sections">
+              {tabs.map((item) => (
+                <button
+                  className={item.id === activeTab ? "active" : ""}
+                  key={item.id}
+                  onClick={() => selectTab(item.id)}
+                  type="button"
+                >
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+          ) : null}
           <div className="admin-trust-toolbar">
             <label className="admin-trust-search">
               <Search size={15} />
@@ -302,62 +316,64 @@ export function AdminTrustSupport({
           )}
           {activeTab && records ? <TrustPagination info={pageInfo} update={update} /> : null}
         </div>
-        {!supportOnly ? <aside className="admin-trust-rail">
-          <section className="admin-trust-side-card">
-            <div className="admin-trust-side-heading">
-              <h3>Trust &amp; Support Overview</h3>
-              <span>Live projection</span>
-            </div>
-            <div className="admin-trust-count-list">
-              <CountRow
-                label="Open compliance cases"
-                value={dashboard?.overview.complianceCases ?? 0}
-                tone="purple"
-              />
-              <CountRow
-                label="Restricted accounts"
-                value={dashboard?.overview.restrictedAccounts ?? 0}
-                tone="red"
-              />
-              <CountRow
-                label="Open tickets"
-                value={dashboard?.overview.openTickets ?? 0}
-                tone="blue"
-              />
-              <CountRow
-                label="Unassigned tickets"
-                value={dashboard?.overview.unassignedTickets ?? 0}
-                tone="gold"
-              />
-              <CountRow
-                label="Escalations"
-                value={dashboard?.overview.escalations ?? 0}
-                tone="purple"
-              />
-            </div>
-            <p className="admin-trust-muted">
-              Categories can overlap; counts are not treated as exclusive percentages.
-            </p>
-          </section>
-          <section className="admin-trust-side-card">
-            <div className="admin-trust-side-heading">
-              <h3>Recent Activity</h3>
-              <button type="button" onClick={() => selectTab("compliance")}>
-                View all
-              </button>
-            </div>
-            {(dashboard?.recentActivity ?? []).map((item) => (
-              <div className="admin-trust-activity" key={item.id}>
-                <span />
-                <div>
-                  <strong>{label(item.title)}</strong>
-                  <small>{item.detail}</small>
-                </div>
-                <time>{date(item.occurredAt)}</time>
+        {!supportOnly ? (
+          <aside className="admin-trust-rail">
+            <section className="admin-trust-side-card">
+              <div className="admin-trust-side-heading">
+                <h3>Trust &amp; Support Overview</h3>
+                <span>Live projection</span>
               </div>
-            ))}
-          </section>
-        </aside> : null}
+              <div className="admin-trust-count-list">
+                <CountRow
+                  label="Open compliance cases"
+                  value={dashboard?.overview.complianceCases ?? 0}
+                  tone="purple"
+                />
+                <CountRow
+                  label="Restricted accounts"
+                  value={dashboard?.overview.restrictedAccounts ?? 0}
+                  tone="red"
+                />
+                <CountRow
+                  label="Open tickets"
+                  value={dashboard?.overview.openTickets ?? 0}
+                  tone="blue"
+                />
+                <CountRow
+                  label="Unassigned tickets"
+                  value={dashboard?.overview.unassignedTickets ?? 0}
+                  tone="gold"
+                />
+                <CountRow
+                  label="Escalations"
+                  value={dashboard?.overview.escalations ?? 0}
+                  tone="purple"
+                />
+              </div>
+              <p className="admin-trust-muted">
+                Categories can overlap; counts are not treated as exclusive percentages.
+              </p>
+            </section>
+            <section className="admin-trust-side-card">
+              <div className="admin-trust-side-heading">
+                <h3>Recent Activity</h3>
+                <button type="button" onClick={() => selectTab("compliance")}>
+                  View all
+                </button>
+              </div>
+              {(dashboard?.recentActivity ?? []).map((item) => (
+                <div className="admin-trust-activity" key={item.id}>
+                  <span />
+                  <div>
+                    <strong>{label(item.title)}</strong>
+                    <small>{item.detail}</small>
+                  </div>
+                  <time>{date(item.occurredAt)}</time>
+                </div>
+              ))}
+            </section>
+          </aside>
+        ) : null}
       </div>
     </section>
   );

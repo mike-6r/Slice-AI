@@ -275,6 +275,7 @@ const qualificationPolicy = z.object({
   enabledCategories: z.array(z.string().trim().min(1).max(80)).max(100).optional(),
   enabledGraders: z.array(z.string().trim().min(1).max(40)).max(30).optional(),
   qaSamplingBps: z.number().int().min(0).max(10000).optional(),
+  reason: z.string().trim().min(3).max(500),
   autoPreSaleLaunch: z.boolean().optional(),
   defaultPreSaleSupply: z.string().regex(/^\d+$/).optional(),
   emergencyDisabled: z.boolean().optional(),
@@ -644,8 +645,13 @@ export class SubmissionController {
   @Post('reviews/submissions/:id/qualification/rerun')
   @UseGuards(AccessTokenGuard, PermissionGuard)
   @RequirePermission('submission.review')
-  rerunQualification(@Param('id') submissionId: string, @Req() req: AuthenticatedRequest) {
-    return this.qualification.rerun(req.actor!, submissionId);
+  rerunQualification(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const reason = z.object({ reason: z.string().trim().min(3).max(500) }).strict().parse(body).reason;
+    return this.qualification.rerun(req.actor!, submissionId, reason);
   }
   @Get('admin/auto-review-policy')
   @UseGuards(AccessTokenGuard, PermissionGuard)
@@ -656,11 +662,11 @@ export class SubmissionController {
   @RequirePermission('admin.console.read')
   updateAutoReviewPolicy(@Body() body: unknown, @Req() req: AuthenticatedRequest) {
     const input = qualificationPolicy.parse(body);
-    const { defaultPreSaleSupply, ...rest } = input;
+    const { defaultPreSaleSupply, reason, ...rest } = input;
     return this.qualification.updatePolicy(req.actor!, {
       ...rest,
       ...(defaultPreSaleSupply ? { defaultPreSaleSupply: BigInt(defaultPreSaleSupply) } : {}),
-    });
+    }, reason);
   }
   @Get('reviews/submissions/:id/reviewers')
   @UseGuards(AccessTokenGuard, PermissionGuard)

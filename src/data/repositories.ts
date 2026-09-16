@@ -141,6 +141,7 @@ export interface SubmissionReviewRepository {
     qaSamplingBps?: number;
     autoPreSaleLaunch?: boolean;
     emergencyDisabled?: boolean;
+    reason?: string;
   }): Promise<{
     version: string;
     enabled: boolean;
@@ -152,7 +153,7 @@ export interface SubmissionReviewRepository {
   listQualification(
     tab?: "HUMAN_REVIEW_REQUIRED" | "COLLECTOR_ACTION_REQUIRED" | "AUTO_QUALIFIED" | "BLOCKED",
   ): Promise<{ items: QualificationQueueItem[]; total: number }>;
-  rerunQualification(id: string): Promise<QualificationQueueItem>;
+  rerunQualification(id: string, input: { reason: string }): Promise<QualificationQueueItem>;
   listQueue(input?: {
     cursor?: string;
     limit?: number;
@@ -1838,7 +1839,15 @@ export type AdminMembershipDetailResponse = {
 };
 
 export type AdminSearchResult = {
-  entityType: "USER" | "COLLECTIBLE" | "SUBMISSION" | "CASE";
+  entityType:
+    | "USER"
+    | "COLLECTIBLE"
+    | "SUBMISSION"
+    | "CASE"
+    | "MONEY_MOVEMENT"
+    | "PLATFORM_JOB"
+    | "WEBHOOK"
+    | "AUDIT_EVENT";
   id: string;
   title: string;
   subtitle: string;
