@@ -663,7 +663,33 @@ export function AdminFinanceTrading({
       </section>
 
       {recordId ? (
-        <FinanceRecordDrawer record={selectedRecord} recordId={recordId} onClose={closeRecord} />
+        <FinanceRecordDrawer
+          record={selectedRecord}
+          recordId={recordId}
+          onClose={closeRecord}
+          openUser={openUser}
+          openMovements={(value) => {
+            const person = identity(value);
+            update({
+              tab: "movements",
+              q: person.email || (person.name === "—" ? undefined : person.name),
+              status: undefined,
+              page: "1",
+              record: undefined,
+              recordType: undefined,
+            });
+          }}
+          openAdjustments={() =>
+            update({
+              tab: "adjustments",
+              q: undefined,
+              status: undefined,
+              page: "1",
+              record: undefined,
+              recordType: undefined,
+            })
+          }
+        />
       ) : null}
 
       <section className="admin-finance-insights-grid" aria-label="Finance operations insight">
@@ -889,7 +915,15 @@ function FinancePagination({
 }
 function FinanceHeader({ tab }: { tab: FinanceTab }) {
   const columns = {
-    wallets: ["Collector", "Wallet Balance", "Reserved", "Available", "Currency", "Status"],
+    wallets: [
+      "Collector",
+      "Wallet Balance",
+      "Reserved",
+      "Available",
+      "Ledger accounts",
+      "Currency",
+      "Status",
+    ],
     movements: [
       "Reference",
       "User",
@@ -978,6 +1012,7 @@ function FinanceRow({
           <td>{money(value("walletBalanceMinor"))}</td>
           <td>{money(value("reservedMinor"))}</td>
           <td>{money(value("availableMinor"))}</td>
+          <td>{number(value("accountCount"))}</td>
           <td>{text(value("currency"))}</td>
           <td>
             <Status value={value("status")} />
@@ -1088,50 +1123,281 @@ function FinanceRecordDrawer({
   record,
   recordId,
   onClose,
+  openUser,
+  openMovements,
+  openAdjustments,
 }: {
   record?: AdminFinanceRecord;
   recordId: string;
   onClose: () => void;
+  openUser: (id: string, detailTab?: string) => void;
+  openMovements: (value: unknown) => void;
+  openAdjustments: () => void;
 }) {
   const title = record ? `${titleCase(record.kind)} record` : "Money record";
   const subtitle = record
     ? `Reference ${recordId}. Values are read from the authoritative financial projection.`
     : "The selected record is outside the current page or filter. Clear the filters or return to the result.";
+  const person = record ? (record.collector ?? record.user) : undefined;
+  const personInfo = identity(person);
+  const currency = text(record?.currency) === "—" ? "GBP" : text(record?.currency);
+  const accounts = walletAccountBreakdown(record);
   return (
     <AdminRecordDrawer title={title} subtitle={subtitle} onClose={onClose}>
       {record ? (
-        <dl className="admin-record-inspector">
-          {Object.entries(record)
-            .filter(
-              ([key, value]) =>
-                !["id", "kind"].includes(key) && value !== null && value !== undefined,
-            )
-            .map(([key, value]) => (
-              <div key={key}>
-                <dt>{titleCase(key)}</dt>
-                <dd>{financeRecordValue(value)}</dd>
+        <section className="admin-finance-record-workspace">
+          <header className="admin-finance-record-hero">
+            <div>
+              <span>Authoritative finance projection</span>
+              <h3>{financeRecordHeading(record)}</h3>
+              <p>{financeRecordSummary(record)}</p>
+            </div>
+            <div className="admin-finance-record-hero__states">
+              <Status value={record.status ?? record.providerState ?? record.settlementStatus} />
+              {record.financialDataClass ? (
+                <span className="admin-finance-record-class">
+                  {titleCase(record.financialDataClass)} data
+                </span>
+              ) : null}
+            </div>
+          </header>
+
+          {record.kind === "wallet" ? (
+            <>
+              <section className="admin-finance-record-metrics" aria-label="Wallet position">
+                <RecordMetric
+                  label="Total balance"
+                  value={money(record.walletBalanceMinor, currency)}
+                  tone="primary"
+                />
+                <RecordMetric label="Available" value={money(record.availableMinor, currency)} />
+                <RecordMetric label="Reserved" value={money(record.reservedMinor, currency)} />
+                <RecordMetric
+                  label="Ledger accounts"
+                  value={`${number(record.accountCount)} protected account${Number(record.accountCount) === 1 ? "" : "s"}`}
+                />
+              </section>
+              <section className="admin-finance-record-panel">
+                <header>
+                  <div>
+                    <span>Ledger composition</span>
+                    <h4>Underlying protected accounts</h4>
+                    <p>
+                      These are ledger components of one customer wallet. They remain separate for
+                      auditability, but are not separate customer accounts.
+                    </p>
+                  </div>
+                  <span className="admin-finance-record-count">{accounts.length} shown</span>
+                </header>
+                <div className="admin-finance-account-breakdown">
+                  {accounts.map((account) => (
+                    <article key={account.id}>
+                      <div>
+                        <span>{titleCase(account.code)}</span>
+                        <small>
+                          {titleCase(account.financialDataClass)} · {date(account.lastActivityAt)}
+                        </small>
+                      </div>
+                      <strong>{money(account.balanceMinor, currency)}</strong>
+                      <dl>
+                        <div>
+                          <dt>Available</dt>
+                          <dd>{money(account.availableMinor, currency)}</dd>
+                        </div>
+                        <div>
+                          <dt>Reserved</dt>
+                          <dd>{money(account.reservedMinor, currency)}</dd>
+                        </div>
+                      </dl>
+                      <Status value={account.status} />
+                    </article>
+                  ))}
+                </div>
+              </section>
+            </>
+          ) : (
+            <section className="admin-finance-record-panel admin-finance-record-panel--details">
+              <header>
+                <div>
+                  <span>Record detail</span>
+                  <h4>Operational fields</h4>
+                  <p>Only fields relevant to this {record.kind} are shown.</p>
+                </div>
+              </header>
+              <dl className="admin-finance-record-details">
+                {financeRecordDetails(record, currency).map(([label, value]) => (
+                  <div key={label}>
+                    <dt>{label}</dt>
+                    <dd>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          )}
+
+          <section className="admin-finance-record-panel admin-finance-record-panel--controls">
+            <header>
+              <div>
+                <span>Control boundary</span>
+                <h4>Investigate without changing the ledger</h4>
+                <p>
+                  Financial state is immutable in this workspace. Corrections remain in the
+                  protected Adjustments workflow with their required approvals.
+                </p>
               </div>
-            ))}
-        </dl>
+            </header>
+            <div className="admin-finance-record-actions">
+              {personInfo.id ? (
+                <button type="button" onClick={() => openUser(personInfo.id)}>
+                  Open customer workspace <ArrowRight aria-hidden="true" />
+                </button>
+              ) : null}
+              {personInfo.name !== "—" ? (
+                <button type="button" onClick={() => openMovements(person)}>
+                  View related movements <ArrowRight aria-hidden="true" />
+                </button>
+              ) : null}
+              <button type="button" onClick={openAdjustments}>
+                Open protected adjustments <ArrowRight aria-hidden="true" />
+              </button>
+              <button type="button" onClick={onClose}>
+                Return to ledger <ArrowRight aria-hidden="true" />
+              </button>
+            </div>
+          </section>
+        </section>
       ) : (
-        <p className="admin-record-inspector-empty">No record data is loaded for this selection.</p>
+        <section className="admin-finance-record-empty">
+          <h3>Record not in the current result</h3>
+          <p>Clear the current filters or return to the ledger and select the record again.</p>
+          <button type="button" onClick={onClose}>
+            Return to ledger <ArrowRight aria-hidden="true" />
+          </button>
+        </section>
       )}
-      <p className="admin-record-inspector-note">
-        Money state is read-only in this drawer. Any permitted correction remains in the protected
-        Adjustments workflow.
-      </p>
     </AdminRecordDrawer>
   );
 }
 
-function financeRecordValue(value: unknown) {
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
-    return String(value).replaceAll("_", " ");
-  if (value && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    return String(record.displayName ?? record.name ?? record.email ?? record.id ?? "Recorded");
+function RecordMetric({ label, value, tone }: { label: string; value: string; tone?: "primary" }) {
+  return (
+    <article
+      className={tone ? `admin-finance-record-metric is-${tone}` : "admin-finance-record-metric"}
+    >
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </article>
+  );
+}
+
+function financeRecordHeading(record: AdminFinanceRecord) {
+  const person = identity(record.collector ?? record.user);
+  if (record.kind === "wallet") return `${person.name} wallet`;
+  if (record.kind === "movement") return `${titleCase(record.type)} movement`;
+  if (record.kind === "order") return text((record.asset as { title?: string } | undefined)?.title);
+  if (record.kind === "execution")
+    return `${text((record.asset as { title?: string } | undefined)?.title)} execution`;
+  if (record.kind === "reconciliation") return `${titleCase(record.scope)} reconciliation`;
+  return `${titleCase(record.status)} adjustment`;
+}
+
+function financeRecordSummary(record: AdminFinanceRecord) {
+  if (record.kind === "wallet")
+    return "A single customer-facing wallet projection, composed from protected ledger accounts.";
+  if (record.kind === "movement")
+    return "Provider and Slice settlement states are shown together without altering the source record.";
+  if (record.kind === "order" || record.kind === "execution")
+    return "Trading state is read from the authoritative order and execution projection.";
+  if (record.kind === "reconciliation")
+    return "Review the recorded ledger comparison and any backend-reported mismatch.";
+  return "Adjustment history remains reviewable and approval-gated.";
+}
+
+function financeRecordDetails(record: AdminFinanceRecord, currency: string) {
+  const person = identity(record.user ?? record.collector);
+  const asset = text((record.asset as { title?: string } | undefined)?.title);
+  const details = (fields: Array<[string, string]>) => fields.filter(([, value]) => value !== "—");
+  switch (record.kind) {
+    case "movement":
+      return details([
+        ["Reference", text(record.reference ?? record.id)],
+        ["Customer", person.name],
+        ["Type", titleCase(record.type)],
+        ["Amount", money(record.amountMinor, currency)],
+        ["Provider", text(record.provider)],
+        ["Provider state", titleCase(record.providerState)],
+        ["Slice state", titleCase(record.sliceState)],
+        ["Created", date(record.createdAt)],
+        ["Last updated", date(record.updatedAt)],
+      ]);
+    case "order":
+      return details([
+        ["Order reference", text(record.id)],
+        ["Customer", person.name],
+        ["Asset", asset],
+        ["Side", titleCase(record.side)],
+        ["Limit price", money(record.limitPriceMinor, currency)],
+        ["Original units", text(record.shares)],
+        ["Filled units", text(record.filled)],
+        ["Remaining units", text(record.remaining)],
+        ["Created", date(record.createdAt)],
+      ]);
+    case "execution":
+      return details([
+        ["Execution reference", text(record.id)],
+        ["Asset", asset],
+        ["Buyer", identity(record.buyer).name],
+        ["Seller", identity(record.seller).name],
+        ["Units", text(record.shares)],
+        ["Price", money(record.priceMinor, currency)],
+        ["Fees", money(record.feeMinor, currency)],
+        ["Executed", date(record.executedAt)],
+        ["Settlement", titleCase(record.settlementStatus)],
+      ]);
+    case "reconciliation":
+      return details([
+        ["Reference", text(record.reference ?? record.id)],
+        ["Scope", titleCase(record.scope)],
+        ["Expected", money(record.expectedMinor, currency)],
+        ["Observed", money(record.observedMinor, currency)],
+        ["Difference", money(record.differenceMinor, currency)],
+        ["Exceptions", text(record.mismatchCodes)],
+        ["Last run", date(record.createdAt)],
+      ]);
+    case "adjustment":
+      return details([
+        ["Request", text(record.id)],
+        ["Customer", person.name],
+        ["Amount", money(record.amountMinor, currency)],
+        ["Reason", text(record.reason)],
+        ["Before outstanding", money(record.beforeOutstandingMinor, currency)],
+        ["After outstanding", money(record.afterOutstandingMinor, currency)],
+        ["Requested", date(record.requestedAt)],
+        ["Applied", date(record.appliedAt)],
+      ]);
+    default:
+      return [];
   }
-  return "—";
+}
+
+function walletAccountBreakdown(record?: AdminFinanceRecord) {
+  if (!Array.isArray(record?.accountBreakdown)) return [];
+  return record.accountBreakdown.flatMap((value) => {
+    if (!value || typeof value !== "object") return [];
+    const account = value as Record<string, unknown>;
+    return [
+      {
+        id: text(account.id),
+        code: text(account.code),
+        status: text(account.status),
+        financialDataClass: text(account.financialDataClass),
+        balanceMinor: account.balanceMinor,
+        reservedMinor: account.reservedMinor,
+        availableMinor: account.availableMinor,
+        lastActivityAt: account.lastActivityAt,
+      },
+    ];
+  });
 }
 function Status({ value }: { value: unknown }) {
   return (

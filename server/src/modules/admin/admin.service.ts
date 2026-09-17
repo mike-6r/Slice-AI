@@ -10641,7 +10641,6 @@ export class AdminService {
         ownerType: 'USER',
         currency: 'GBP',
         ...financialDataClassWhere,
-        ...(input.status ? { status: input.status as never } : {}),
         ...(input.q
           ? {
               owner: {
@@ -10665,58 +10664,149 @@ export class AdminService {
             }
           : {}),
       };
-      const [rows, total] = await Promise.all([
-        this.db.financialAccount.findMany({
-          where,
-          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-          skip,
-          take,
-          include: {
-            balance: true,
-            owner: {
-              select: {
-                id: true,
-                email: true,
-                profile: {
-                  select: { displayName: true, publicUsername: true },
-                },
+      // A customer wallet is a projection of their protected ledger accounts,
+      // not a single FinancialAccount row. One user can legitimately have
+      // CASH_AVAILABLE, COLLECTOR_PROCEEDS_AVAILABLE, or a historical
+      // BACS_RISK_HOLD account. Showing every account as a wallet made one
+      // customer look like several accounts in the Finance workspace.
+      const accounts = await this.db.financialAccount.findMany({
+        where,
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        include: {
+          balance: true,
+          owner: {
+            select: {
+              id: true,
+              email: true,
+              profile: {
+                select: { displayName: true, publicUsername: true },
               },
             },
           },
-        }),
-        this.db.financialAccount.count({ where }),
-      ]);
+        },
+      });
+      const wallets = new Map<
+        string,
+        {
+          id: string;
+          collector: {
+            id: string | null;
+            displayName: string;
+            username: string | null;
+            email: string | null;
+          };
+          currency: string;
+          walletBalanceMinor: bigint;
+          reservedMinor: bigint;
+          availableMinor: bigint;
+          lastActivityAt: Date;
+          statuses: Set<string>;
+          dataClasses: Set<string>;
+          accounts: Array<{
+            id: string;
+            code: string;
+            status: string;
+            financialDataClass: string;
+            balanceMinor: bigint;
+            reservedMinor: bigint;
+            availableMinor: bigint;
+            lastActivityAt: Date;
+          }>;
+        }
+      >();
+      for (const account of accounts) {
+        const balance = account.balance;
+        const gross = balance
+          ? account.normalSide === 'DEBIT'
+            ? balance.postedDebitMinor - balance.postedCreditMinor
+            : balance.postedCreditMinor - balance.postedDebitMinor
+          : 0n;
+        const reserved = balance?.reservedMinor ?? 0n;
+        const lastActivityAt = balance?.updatedAt ?? account.updatedAt;
+        const ownerId = account.owner?.id ?? account.ownerUserId ?? account.id;
+        const key = `${ownerId}:${account.currency}`;
+        const existing = wallets.get(key);
+        const accountProjection = {
+          id: account.id,
+          code: account.code,
+          status: account.status,
+          financialDataClass: account.financialDataClass,
+          balanceMinor: gross,
+          reservedMinor: reserved,
+          availableMinor: gross - reserved,
+          lastActivityAt,
+        };
+        if (existing) {
+          existing.walletBalanceMinor += gross;
+          existing.reservedMinor += reserved;
+          existing.availableMinor += gross - reserved;
+          if (lastActivityAt > existing.lastActivityAt)
+            existing.lastActivityAt = lastActivityAt;
+          existing.statuses.add(account.status);
+          existing.dataClasses.add(account.financialDataClass);
+          existing.accounts.push(accountProjection);
+          continue;
+        }
+        wallets.set(key, {
+          id: `wallet:${ownerId}:${account.currency}`,
+          collector: {
+            id: account.owner?.id ?? account.ownerUserId ?? null,
+            displayName: account.owner?.profile?.displayName ?? 'Unnamed user',
+            username: account.owner?.profile?.publicUsername ?? null,
+            email: account.owner?.email ?? null,
+          },
+          currency: account.currency,
+          walletBalanceMinor: gross,
+          reservedMinor: reserved,
+          availableMinor: gross - reserved,
+          lastActivityAt,
+          statuses: new Set([account.status]),
+          dataClasses: new Set([account.financialDataClass]),
+          accounts: [accountProjection],
+        });
+      }
+      const walletRows = [...wallets.values()]
+        .filter((wallet) => !input.status || wallet.statuses.has(input.status))
+        .sort(
+          (left, right) =>
+            right.lastActivityAt.getTime() - left.lastActivityAt.getTime() ||
+            left.id.localeCompare(right.id),
+        )
+        .map((wallet) => ({
+          id: wallet.id,
+          kind: 'wallet',
+          collector: wallet.collector,
+          walletBalanceMinor: wallet.walletBalanceMinor.toString(),
+          reservedMinor: wallet.reservedMinor.toString(),
+          availableMinor: wallet.availableMinor.toString(),
+          currency: wallet.currency,
+          lastActivityAt: wallet.lastActivityAt.toISOString(),
+          status:
+            wallet.statuses.size === 1 ? [...wallet.statuses][0] : 'MIXED',
+          financialDataClass:
+            wallet.dataClasses.size === 1
+              ? [...wallet.dataClasses][0]
+              : 'MIXED',
+          accountCount: wallet.accounts.length,
+          accountBreakdown: wallet.accounts
+            .sort(
+              (left, right) =>
+                right.lastActivityAt.getTime() -
+                  left.lastActivityAt.getTime() ||
+                left.code.localeCompare(right.code),
+            )
+            .map((account) => ({
+              ...account,
+              balanceMinor: account.balanceMinor.toString(),
+              reservedMinor: account.reservedMinor.toString(),
+              availableMinor: account.availableMinor.toString(),
+              lastActivityAt: account.lastActivityAt.toISOString(),
+            })),
+        }));
       return this.financePage(
         input,
-        total,
-        rows.map((wallet) => {
-          const balance = wallet.balance;
-          const gross = balance
-            ? wallet.normalSide === 'DEBIT'
-              ? balance.postedDebitMinor - balance.postedCreditMinor
-              : balance.postedCreditMinor - balance.postedDebitMinor
-            : 0n;
-          const reserved = balance?.reservedMinor ?? 0n;
-          return {
-            id: wallet.id,
-            kind: 'wallet',
-            collector: {
-              id: wallet.owner?.id ?? null,
-              displayName: wallet.owner?.profile?.displayName ?? 'Unnamed user',
-              username: wallet.owner?.profile?.publicUsername ?? null,
-              email: wallet.owner?.email ?? null,
-            },
-            walletBalanceMinor: gross.toString(),
-            reservedMinor: reserved.toString(),
-            availableMinor: (gross - reserved).toString(),
-            currency: wallet.currency,
-            lastActivityAt: (
-              balance?.updatedAt ?? wallet.updatedAt
-            ).toISOString(),
-            status: wallet.status,
-            financialDataClass: wallet.financialDataClass,
-          };
-        }),
+        walletRows.length,
+        walletRows.slice(skip, skip + take),
       );
     }
     if (input.tab === 'movements') {
@@ -11072,76 +11162,100 @@ export class AdminService {
 
   async search(actor: Actor, q: string, limit: number) {
     await this.authorization.authorize(actor, 'admin.console.read');
-    const [users, assets, movements, jobs, webhooks, auditEvents] = await Promise.all([
-      this.db.user.findMany({
-        where: {
-          OR: [
-            { email: { contains: q, mode: 'insensitive' } },
-            {
-              profile: { publicUsername: { contains: q, mode: 'insensitive' } },
-            },
-            { profile: { displayName: { contains: q, mode: 'insensitive' } } },
-          ],
-        },
-        take: limit,
-        select: {
-          id: true,
-          email: true,
-          profile: { select: { displayName: true, publicUsername: true } },
-        },
-      }),
-      this.db.asset.findMany({
-        where: { title: { contains: q, mode: 'insensitive' } },
-        take: limit,
-        select: { id: true, slug: true, title: true, status: true },
-      }),
-      this.db.moneyMovement.findMany({
-        where: {
-          OR: [
-            { id: { contains: q, mode: 'insensitive' } },
-            { user: { email: { contains: q, mode: 'insensitive' } } },
-            { user: { profile: { displayName: { contains: q, mode: 'insensitive' } } } },
-          ],
-        },
-        take: limit,
-        select: { id: true, type: true, status: true, provider: true, amountMinor: true, currency: true },
-      }),
-      this.db.outboxEvent.findMany({
-        where: {
-          OR: [
-            { id: { contains: q, mode: 'insensitive' } },
-            { eventId: { contains: q, mode: 'insensitive' } },
-            { eventType: { contains: q, mode: 'insensitive' } },
-            { aggregateId: { contains: q, mode: 'insensitive' } },
-          ],
-        },
-        take: limit,
-        select: { id: true, eventId: true, eventType: true, status: true },
-      }),
-      this.db.webhookInbox.findMany({
-        where: {
-          OR: [
-            { id: { contains: q, mode: 'insensitive' } },
-            { eventType: { contains: q, mode: 'insensitive' } },
-            { providerEventIdHash: { contains: q, mode: 'insensitive' } },
-          ],
-        },
-        take: limit,
-        select: { id: true, provider: true, eventType: true, status: true },
-      }),
-      this.db.auditEvent.findMany({
-        where: {
-          OR: [
-            { id: { contains: q, mode: 'insensitive' } },
-            { action: { contains: q, mode: 'insensitive' } },
-            { resourceType: { contains: q, mode: 'insensitive' } },
-            { resourceId: { contains: q, mode: 'insensitive' } },
-          ],
-        },
-        take: limit,
-        select: { id: true, action: true, resourceType: true, resourceId: true, result: true },
-      }),
-    ]);
+    const [users, assets, movements, jobs, webhooks, auditEvents] =
+      await Promise.all([
+        this.db.user.findMany({
+          where: {
+            OR: [
+              { email: { contains: q, mode: 'insensitive' } },
+              {
+                profile: {
+                  publicUsername: { contains: q, mode: 'insensitive' },
+                },
+              },
+              {
+                profile: { displayName: { contains: q, mode: 'insensitive' } },
+              },
+            ],
+          },
+          take: limit,
+          select: {
+            id: true,
+            email: true,
+            profile: { select: { displayName: true, publicUsername: true } },
+          },
+        }),
+        this.db.asset.findMany({
+          where: { title: { contains: q, mode: 'insensitive' } },
+          take: limit,
+          select: { id: true, slug: true, title: true, status: true },
+        }),
+        this.db.moneyMovement.findMany({
+          where: {
+            OR: [
+              { id: { contains: q, mode: 'insensitive' } },
+              { user: { email: { contains: q, mode: 'insensitive' } } },
+              {
+                user: {
+                  profile: {
+                    displayName: { contains: q, mode: 'insensitive' },
+                  },
+                },
+              },
+            ],
+          },
+          take: limit,
+          select: {
+            id: true,
+            type: true,
+            status: true,
+            provider: true,
+            amountMinor: true,
+            currency: true,
+          },
+        }),
+        this.db.outboxEvent.findMany({
+          where: {
+            OR: [
+              { id: { contains: q, mode: 'insensitive' } },
+              { eventId: { contains: q, mode: 'insensitive' } },
+              { eventType: { contains: q, mode: 'insensitive' } },
+              { aggregateId: { contains: q, mode: 'insensitive' } },
+            ],
+          },
+          take: limit,
+          select: { id: true, eventId: true, eventType: true, status: true },
+        }),
+        this.db.webhookInbox.findMany({
+          where: {
+            OR: [
+              { id: { contains: q, mode: 'insensitive' } },
+              { eventType: { contains: q, mode: 'insensitive' } },
+              { providerEventIdHash: { contains: q, mode: 'insensitive' } },
+            ],
+          },
+          take: limit,
+          select: { id: true, provider: true, eventType: true, status: true },
+        }),
+        this.db.auditEvent.findMany({
+          where: {
+            OR: [
+              { id: { contains: q, mode: 'insensitive' } },
+              { action: { contains: q, mode: 'insensitive' } },
+              { resourceType: { contains: q, mode: 'insensitive' } },
+              { resourceId: { contains: q, mode: 'insensitive' } },
+            ],
+          },
+          take: limit,
+          select: {
+            id: true,
+            action: true,
+            resourceType: true,
+            resourceId: true,
+            result: true,
+          },
+        }),
+      ]);
     return {
       items: [
         ...users.map((user) => ({

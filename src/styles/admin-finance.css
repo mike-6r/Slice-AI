@@ -993,16 +993,12 @@
   border-color: rgba(58, 207, 177, 0.52);
   border-radius: 0.78rem;
   padding: 1rem 1.1rem;
-  background:
-    linear-gradient(105deg, rgba(19, 74, 73, 0.68), rgba(8, 27, 35, 0.94) 46%),
-    #081c25;
+  background: linear-gradient(105deg, rgba(19, 74, 73, 0.68), rgba(8, 27, 35, 0.94) 46%), #081c25;
   box-shadow: 0 1.1rem 2.5rem rgba(0, 0, 0, 0.14);
 }
 .admin-finance-page .admin-finance-action-center.tone-red {
   border-color: rgba(235, 111, 111, 0.48);
-  background:
-    linear-gradient(105deg, rgba(83, 38, 42, 0.7), rgba(20, 26, 34, 0.94) 46%),
-    #101b24;
+  background: linear-gradient(105deg, rgba(83, 38, 42, 0.7), rgba(20, 26, 34, 0.94) 46%), #101b24;
 }
 .admin-finance-page .admin-finance-action-center .admin-guidance-primary {
   gap: 0.5rem;
@@ -1025,7 +1021,10 @@
   gap: 0.7rem;
 }
 .admin-finance-page .admin-finance-action-center .admin-guidance-owner,
-.admin-finance-page .admin-finance-action-center .admin-guidance-primary__meta > div:not(.admin-guidance-owner) {
+.admin-finance-page
+  .admin-finance-action-center
+  .admin-guidance-primary__meta
+  > div:not(.admin-guidance-owner) {
   min-width: 0;
   border: 1px solid rgba(83, 122, 130, 0.38);
   border-radius: 0.48rem;
@@ -1265,5 +1264,306 @@
   }
   .admin-finance-toolbar {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Authoritative record workspace: financial records are operational views, not raw JSON. */
+.admin-finance-record-workspace {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-finance-record-hero,
+.admin-finance-record-panel,
+.admin-finance-record-metric,
+.admin-finance-record-empty {
+  border: 1px solid #294954;
+  border-radius: 0.8rem;
+  background: linear-gradient(135deg, rgba(12, 38, 46, 0.98), rgba(7, 23, 30, 0.98));
+  box-shadow: 0 1rem 2.3rem rgba(0, 0, 0, 0.15);
+}
+
+.admin-finance-record-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: clamp(1rem, 2.25vw, 1.45rem);
+  border-color: rgba(69, 182, 157, 0.47);
+  background:
+    radial-gradient(circle at 86% 0%, rgba(38, 170, 144, 0.2), transparent 20rem),
+    linear-gradient(125deg, rgba(16, 59, 64, 0.96), rgba(7, 25, 33, 0.98));
+}
+
+.admin-finance-record-hero > div:first-child > span,
+.admin-finance-record-panel header span {
+  display: block;
+  color: #51d6b8;
+  font-size: 0.61rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.admin-finance-record-hero h3,
+.admin-finance-record-panel h4,
+.admin-finance-record-empty h3 {
+  margin: 0.35rem 0 0;
+  color: #effaf7;
+  font-size: clamp(1.2rem, 1.8vw, 1.6rem);
+  letter-spacing: -0.035em;
+}
+
+.admin-finance-record-hero p,
+.admin-finance-record-panel header p,
+.admin-finance-record-empty p {
+  max-width: 52rem;
+  margin: 0.45rem 0 0;
+  color: #9bb6bd;
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+
+.admin-finance-record-hero__states {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.admin-finance-record-class,
+.admin-finance-record-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.65rem;
+  box-sizing: border-box;
+  border: 1px solid rgba(81, 145, 155, 0.48);
+  border-radius: 999px;
+  padding: 0.26rem 0.52rem;
+  color: #b4d2d0;
+  font-size: 0.59rem;
+  font-weight: 700;
+}
+
+.admin-finance-record-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.admin-finance-record-metric {
+  min-height: 5.1rem;
+  padding: 0.78rem 0.85rem;
+}
+
+.admin-finance-record-metric.is-primary {
+  border-color: rgba(78, 216, 182, 0.56);
+  background: linear-gradient(135deg, rgba(17, 77, 73, 0.96), rgba(8, 35, 41, 0.98));
+}
+
+.admin-finance-record-metric span {
+  display: block;
+  color: #94afb5;
+  font-size: 0.62rem;
+}
+
+.admin-finance-record-metric strong {
+  display: block;
+  margin-top: 0.4rem;
+  color: #eaf9f5;
+  font-size: clamp(0.88rem, 1.15vw, 1.15rem);
+  overflow-wrap: anywhere;
+}
+
+.admin-finance-record-panel {
+  padding: clamp(0.9rem, 1.8vw, 1.2rem);
+}
+
+.admin-finance-record-panel > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid rgba(49, 88, 99, 0.62);
+}
+
+.admin-finance-record-panel h4 {
+  font-size: 1rem;
+}
+
+.admin-finance-account-breakdown {
+  display: grid;
+  gap: 0.58rem;
+  margin-top: 0.8rem;
+}
+
+.admin-finance-account-breakdown > article {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1.4fr) minmax(7rem, 0.75fr) minmax(12rem, 1.1fr) max-content;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.8rem;
+  border: 1px solid rgba(52, 95, 106, 0.72);
+  border-radius: 0.58rem;
+  background: rgba(4, 19, 26, 0.46);
+}
+
+.admin-finance-account-breakdown > article > div > span {
+  display: block;
+  color: #e2f3ef;
+  font-size: 0.72rem;
+  font-weight: 760;
+}
+
+.admin-finance-account-breakdown > article > div > small {
+  display: block;
+  margin-top: 0.24rem;
+  color: #86a4aa;
+  font-size: 0.61rem;
+}
+
+.admin-finance-account-breakdown > article > strong {
+  color: #e8fbf6;
+  font-size: 0.85rem;
+  text-align: right;
+}
+
+.admin-finance-account-breakdown dl,
+.admin-finance-record-details {
+  margin: 0;
+}
+
+.admin-finance-account-breakdown dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.admin-finance-account-breakdown dl div {
+  min-width: 0;
+}
+
+.admin-finance-account-breakdown dt,
+.admin-finance-record-details dt {
+  color: #839fa7;
+  font-size: 0.57rem;
+  text-transform: uppercase;
+}
+
+.admin-finance-account-breakdown dd,
+.admin-finance-record-details dd {
+  margin: 0.2rem 0 0;
+  color: #d9eeea;
+  font-size: 0.67rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.admin-finance-record-details {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 0.8rem;
+  overflow: hidden;
+  border: 1px solid rgba(48, 89, 100, 0.74);
+  border-radius: 0.62rem;
+  background: rgba(48, 89, 100, 0.74);
+}
+
+.admin-finance-record-details > div {
+  min-height: 4rem;
+  padding: 0.74rem 0.8rem;
+  background: rgba(5, 24, 31, 0.96);
+}
+
+.admin-finance-record-panel--controls {
+  border-color: rgba(68, 172, 151, 0.44);
+  background: linear-gradient(120deg, rgba(7, 35, 40, 0.97), rgba(7, 22, 29, 0.98));
+}
+
+.admin-finance-record-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.84rem;
+}
+
+.admin-finance-record-actions button,
+.admin-finance-record-empty button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 2.35rem;
+  border: 1px solid rgba(80, 204, 179, 0.48);
+  border-radius: 0.48rem;
+  padding: 0.48rem 0.72rem;
+  background: rgba(8, 46, 50, 0.88);
+  color: #bff6e8;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 750;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    color 150ms ease;
+}
+
+.admin-finance-record-actions button:hover,
+.admin-finance-record-empty button:hover {
+  border-color: #60e8cb;
+  background: rgba(21, 98, 85, 0.86);
+  color: #fff;
+}
+
+.admin-finance-record-actions svg,
+.admin-finance-record-empty svg {
+  width: 0.88rem;
+  height: 0.88rem;
+}
+
+.admin-finance-record-empty {
+  padding: 1.25rem;
+  text-align: center;
+}
+
+.admin-finance-record-empty button {
+  margin-top: 0.9rem;
+}
+
+@media (max-width: 860px) {
+  .admin-finance-record-metrics,
+  .admin-finance-record-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .admin-finance-account-breakdown > article {
+    grid-template-columns: minmax(0, 1fr) max-content;
+  }
+  .admin-finance-account-breakdown dl {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .admin-finance-record-hero {
+    flex-direction: column;
+  }
+  .admin-finance-record-hero__states {
+    justify-content: flex-start;
+  }
+  .admin-finance-record-metrics,
+  .admin-finance-record-details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .admin-finance-account-breakdown > article {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .admin-finance-account-breakdown > article > strong {
+    text-align: left;
+  }
+  .admin-finance-account-breakdown dl {
+    grid-column: auto;
   }
 }
