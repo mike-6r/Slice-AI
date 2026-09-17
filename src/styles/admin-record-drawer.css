@@ -106,6 +106,14 @@
   width: min(100%, 100rem);
   margin-inline: auto;
 }
+.admin-record-drawer__body:has(> .asset-record) {
+  padding: 0;
+}
+.admin-record-drawer__body > .asset-record {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
 .admin-record-drawer__body > .admin-account-detail {
   min-width: 0;
 }

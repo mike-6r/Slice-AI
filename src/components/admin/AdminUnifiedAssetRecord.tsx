@@ -1,0 +1,1405 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  AlertTriangle,
+  ArrowRight,
+  BadgeCheck,
+  Banknote,
+  Box,
+  CheckCircle2,
+  ClipboardCheck,
+  FileCheck2,
+  FileImage,
+  Fingerprint,
+  History,
+  Image as ImageIcon,
+  Landmark,
+  PackageCheck,
+  Rocket,
+  ShieldCheck,
+  Sparkles,
+  Tag,
+  TrendingUp,
+  UserRound,
+  Users,
+  WalletCards,
+} from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+
+import type {
+  AdminCollectibleDetail,
+  AdminIntakeDetail,
+  AssetOperationDetailProjection,
+} from "@/data/repositories";
+import type { SubmissionReviewDetail } from "@/domain/submission";
+import { useAppServices } from "@/providers/AppServicesProvider";
+import { AdminReviewMedia } from "./AdminReviewMedia";
+import "@/styles/admin-unified-asset-record.css";
+
+export type AssetRecordFocus =
+  | "summary"
+  | "submission"
+  | "identity"
+  | "evidence"
+  | "checks"
+  | "intake"
+  | "verification"
+  | "valuation"
+  | "ownership"
+  | "offering"
+  | "blockers"
+  | "money"
+  | "history"
+  | "actions";
+
+export const assetRecordSections: ReadonlyArray<{ id: AssetRecordFocus; label: string }> = [
+  { id: "summary", label: "Summary" },
+  { id: "submission", label: "Submission" },
+  { id: "identity", label: "Identity" },
+  { id: "evidence", label: "Evidence" },
+  { id: "checks", label: "Checks" },
+  { id: "intake", label: "Intake & custody" },
+  { id: "verification", label: "Verification" },
+  { id: "valuation", label: "Valuation" },
+  { id: "ownership", label: "Ownership" },
+  { id: "offering", label: "Offering" },
+  { id: "blockers", label: "Blockers" },
+  { id: "money", label: "Money" },
+  { id: "history", label: "History" },
+  { id: "actions", label: "Actions" },
+];
+
+type Command =
+  | "CLAIM_REVIEW"
+  | "RELEASE_REVIEW"
+  | "APPROVE_SUBMISSION"
+  | "REQUEST_CHANGES"
+  | "REJECT_SUBMISSION"
+  | "CANONICALIZE"
+  | "CONFIRM_DELIVERY"
+  | "CONFIRM_RECEIPT"
+  | "START_VERIFICATION"
+  | "COMPLETE_VERIFICATION"
+  | "RECORD_VALUATION"
+  | "PUBLISH";
+
+export function AdminUnifiedAssetRecord({
+  reference,
+  kind,
+  focus,
+  onFocus,
+}: {
+  reference: string;
+  kind: "asset" | "submission";
+  focus?: string;
+  onFocus: (focus: AssetRecordFocus) => void;
+}) {
+  const services = useAppServices();
+  const queryClient = useQueryClient();
+  const [decisionReason, setDecisionReason] = useState("ADMIN_REVIEW_DECISION");
+  const [decisionNote, setDecisionNote] = useState("");
+  const [valuationMinor, setValuationMinor] = useState("");
+  const [verification, setVerification] = useState({
+    identityMatch: false,
+    certificationMatch: false,
+    gradeMatch: false,
+    variantMatch: false,
+  });
+
+  const resolution = useQuery({
+    queryKey: ["admin", "asset-record", "resolve", reference],
+    queryFn: () => services.repositories.admin.resolveAssetRecord(reference),
+    retry: false,
+  });
+  const resolvedSubmissionId = resolution.data?.submissionId ?? null;
+  const resolvedAssetId = resolution.data?.assetId ?? null;
+  const reviewQuery = useQuery({
+    queryKey: ["admin", "asset-record", "review", resolvedSubmissionId],
+    queryFn: () => services.repositories.reviews.getDetail(resolvedSubmissionId!),
+    enabled: Boolean(resolvedSubmissionId),
+    retry: false,
+  });
+  const assetQuery = useQuery({
+    queryKey: ["admin", "asset-record", "asset", resolvedAssetId],
+    queryFn: () => services.repositories.admin.getCollectibleDetail(resolvedAssetId!, "record"),
+    enabled: Boolean(resolvedAssetId),
+    retry: false,
+  });
+  const intake = useQuery({
+    queryKey: ["admin", "asset-record", "intake", resolvedSubmissionId],
+    queryFn: () => services.repositories.admin.getIntakeDetail(resolvedSubmissionId!),
+    enabled: Boolean(resolvedSubmissionId),
+    retry: false,
+  });
+  const operations = useQuery({
+    queryKey: ["admin", "asset-record", "operations", resolvedAssetId],
+    queryFn: () => services.repositories.lifecycle.getOperationDetail(resolvedAssetId!),
+    enabled: Boolean(resolvedAssetId),
+    retry: false,
+  });
+
+  const review = reviewQuery.data ?? null;
+  const asset = assetQuery.data ?? null;
+  const intakeDetail = intake.data ?? null;
+  const operation = operations.data ?? null;
+  const activeFocus = assetRecordSections.some((section) => section.id === focus)
+    ? (focus as AssetRecordFocus)
+    : resolution.data?.authority === "SUBMISSION" || kind === "submission"
+      ? "submission"
+      : "summary";
+
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ["admin", "asset-record"] });
+    void queryClient.invalidateQueries({ queryKey: ["admin", "intake"] });
+    void queryClient.invalidateQueries({ queryKey: ["admin", "reviews"] });
+    void queryClient.invalidateQueries({ queryKey: ["asset-operations"] });
+  };
+
+  const command = useMutation({
+    mutationFn: async (value: Command) => {
+      if (value === "CLAIM_REVIEW" && review)
+        return services.repositories.reviews.claim(review.id, review.version);
+      if (value === "RELEASE_REVIEW" && review)
+        return services.repositories.reviews.release(review.id, review.version);
+      if (value === "APPROVE_SUBMISSION" && review)
+        return services.repositories.reviews.decide(review.id, "APPROVED", {
+          version: review.version,
+          reasonCode: decisionReason,
+          note: decisionNote || undefined,
+        });
+      if (value === "REQUEST_CHANGES" && review)
+        return services.repositories.reviews.decide(review.id, "CHANGES_REQUESTED", {
+          version: review.version,
+          reasonCode: decisionReason,
+          note: decisionNote || undefined,
+          customerMessage: decisionNote || "Please address the outstanding review requirements.",
+          requestedItems: review.readiness?.requiredBlockers ?? [],
+        });
+      if (value === "REJECT_SUBMISSION" && review)
+        return services.repositories.reviews.decide(review.id, "REJECTED", {
+          version: review.version,
+          reasonCode: decisionReason,
+          note: decisionNote || undefined,
+        });
+      if (value === "CANONICALIZE" && review)
+        return services.repositories.reviews.canonicalize(review.id, review.version);
+      if (value === "CONFIRM_DELIVERY" && intakeDetail?.row.id)
+        return services.repositories.admin.confirmIntakeDelivery(intakeDetail.row.id);
+      if (value === "CONFIRM_RECEIPT" && intakeDetail?.row.id)
+        return services.repositories.admin.confirmIntakeReceipt(intakeDetail.row.id, {
+          packageCondition: "Recorded by administrator from the unified asset record.",
+        });
+      if (value === "START_VERIFICATION" && intakeDetail?.row.id)
+        return services.repositories.admin.startIntakeVerification(intakeDetail.row.id);
+      if (value === "COMPLETE_VERIFICATION" && intakeDetail?.row.id)
+        return services.repositories.admin.completeIntakeVerification(intakeDetail.row.id, {
+          ...verification,
+          note: "Recorded by administrator from the unified asset record.",
+        });
+      if (value === "RECORD_VALUATION" && resolvedAssetId)
+        return services.repositories.lifecycle.recordValuation(resolvedAssetId, {
+          valueMinor: valuationMinor,
+          confidence: 80,
+          methodologyCode: "ADMIN_ASSET_RECORD",
+          sourceType: "STAFF_REVIEW",
+        });
+      if (value === "PUBLISH" && resolvedAssetId)
+        return services.repositories.lifecycle.publish(resolvedAssetId);
+      throw new Error("This command is not available for the current asset state.");
+    },
+    onSuccess: refresh,
+  });
+
+  const evidence = useMutation({
+    mutationFn: ({ mediaId, action }: { mediaId: string; action: "accept" | "flag" }) => {
+      if (!review) throw new Error("Submission review is unavailable.");
+      return action === "accept"
+        ? services.repositories.reviews.acceptEvidence(review.id, mediaId, {
+            version: review.version,
+          })
+        : services.repositories.reviews.flagEvidence(review.id, mediaId, {
+            version: review.version,
+            note: "Flagged for follow-up from the unified asset record.",
+            customerAction: true,
+          });
+    },
+    onSuccess: refresh,
+  });
+
+  useEffect(() => {
+    const node = document.getElementById(`asset-record-${activeFocus}`);
+    if (!node) return;
+    const timer = window.setTimeout(() => node.scrollIntoView({ block: "start" }), 40);
+    return () => window.clearTimeout(timer);
+  }, [activeFocus, reference]);
+
+  const loading =
+    resolution.isLoading ||
+    (Boolean(resolvedSubmissionId) && reviewQuery.isLoading) ||
+    (Boolean(resolvedAssetId) && assetQuery.isLoading);
+  const failed = resolution.isError;
+  if (loading)
+    return <RecordState title="Loading asset record" detail="Joining lifecycle authorities." />;
+  if (failed)
+    return (
+      <RecordState
+        title="Asset record unavailable"
+        detail="The authoritative record could not be resolved from this reference."
+      />
+    );
+
+  const title = asset?.title ?? review?.collectible?.title ?? "Untitled collectible";
+  const front =
+    asset?.media.find((item) => /front|primary|hero/i.test(item.slot)) ??
+    asset?.media[0] ??
+    review?.media.find((item) => /front|primary|hero/i.test(item.slot)) ??
+    review?.media[0];
+  const lifecycle = lifecycleRows(asset, review, intakeDetail, operation);
+  const blockers = collectBlockers(review, asset, intakeDetail, operation);
+  const nextAction = nextAssetAction(review, intakeDetail, operation);
+  const historyRows = combinedHistory(review, asset, intakeDetail);
+
+  return (
+    <main className="asset-record">
+      <header className="asset-record__hero">
+        <div className="asset-record__media">
+          <AdminReviewMedia
+            src={mediaSource(front)}
+            alt={title}
+            fallback={<ImageIcon aria-hidden="true" />}
+          />
+        </div>
+        <div className="asset-record__identity">
+          <p>Assets · authoritative lifecycle record</p>
+          <h1>{title}</h1>
+          <span>{identityLine(asset, review)}</span>
+          <div className="asset-record__badges">
+            <Status value={asset ? "Canonical asset" : "Pre-canonical submission"} tone="mint" />
+            <Status value={review?.status ?? asset?.status ?? "Unknown"} />
+            {asset?.dossier.workType ? <Status value={asset.dossier.workType} /> : null}
+          </div>
+          <dl className="asset-record__hero-facts">
+            <Fact label="Asset ID" value={asset?.publicId ?? "Created after approval"} />
+            <Fact label="Submission" value={resolvedSubmissionId ?? "Not linked"} />
+            <Fact
+              label="Collector"
+              value={
+                review?.collectorSummary?.displayName ??
+                asset?.collector?.displayName ??
+                "Not linked"
+              }
+            />
+            <Fact label="Updated" value={date(asset?.updatedAt ?? review?.submittedAt)} />
+          </dl>
+        </div>
+        <aside className="asset-record__next">
+          <small>Next required action</small>
+          <strong>{nextAction.label}</strong>
+          <span>{nextAction.detail}</span>
+          <button type="button" onClick={() => selectSection(nextAction.focus, onFocus)}>
+            Go to action <ArrowRight aria-hidden="true" />
+          </button>
+        </aside>
+      </header>
+
+      <nav className="asset-record__nav" aria-label="Asset record sections">
+        {assetRecordSections.map((section) => (
+          <button
+            key={section.id}
+            type="button"
+            className={activeFocus === section.id ? "is-active" : ""}
+            onClick={() => selectSection(section.id, onFocus)}
+          >
+            {section.label}
+          </button>
+        ))}
+      </nav>
+
+      <div className="asset-record__layout">
+        <div className="asset-record__content">
+          <RecordSection
+            id="summary"
+            eyebrow="Summary / lifecycle"
+            title="One asset, one record"
+            icon={<Box />}
+          >
+            <p className="asset-record__section-intro">
+              Every stage below is joined by submission and canonical asset identity. Missing stages
+              remain visible as not started; they do not become separate records.
+            </p>
+            <div className="asset-record__lifecycle">
+              {lifecycle.map((item, index) => (
+                <div key={item.label} className={`is-${item.tone}`}>
+                  <i>{index + 1}</i>
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                  <small>{item.detail}</small>
+                </div>
+              ))}
+            </div>
+          </RecordSection>
+
+          <RecordSection
+            id="submission"
+            eyebrow="Submission + collector"
+            title="Source and ownership context"
+            icon={<Users />}
+          >
+            <DefinitionGrid
+              values={[
+                ["Submission state", review?.status ?? asset?.dossier.provenance?.submissionStatus],
+                ["Submitted", date(review?.submittedAt ?? asset?.dossier.provenance?.submittedAt)],
+                [
+                  "Collector",
+                  review?.collectorSummary?.displayName ?? asset?.collector?.displayName,
+                ],
+                ["Username", review?.collectorSummary?.username ?? asset?.collector?.username],
+                ["Membership", review?.collectorSummary?.membership],
+                ["Source", review?.submissionDetails?.source ?? "Collector submission"],
+                ["Submission ID", resolvedSubmissionId],
+                ["Canonical asset ID", asset?.publicId],
+              ]}
+            />
+          </RecordSection>
+
+          <RecordSection
+            id="identity"
+            eyebrow="Canonical identity"
+            title="Submitted and Slice-reviewed identity"
+            icon={<Fingerprint />}
+          >
+            <div className="asset-record__compare">
+              <RecordCard title="Collector submitted">
+                <DefinitionGrid values={submissionIdentity(review)} compact />
+              </RecordCard>
+              <RecordCard title="Canonical / reviewed">
+                <DefinitionGrid values={canonicalIdentity(asset, review)} compact />
+              </RecordCard>
+            </div>
+          </RecordSection>
+
+          <RecordSection
+            id="evidence"
+            eyebrow="Images & evidence"
+            title="Evidence stays with the asset"
+            icon={<FileImage />}
+          >
+            <div className="asset-record__evidence-grid">
+              {(review?.evidenceSummary?.items ?? review?.media ?? asset?.evidence ?? []).map(
+                (item, index) => {
+                  const mediaId = "id" in item ? String(item.id) : `asset-${index}`;
+                  const source = mediaSource(item);
+                  const state = "reviewState" in item ? item.reviewState : item.status;
+                  return (
+                    <article key={mediaId}>
+                      <div className="asset-record__evidence-image">
+                        <AdminReviewMedia
+                          src={source}
+                          alt={String(item.slot ?? "Evidence")}
+                          fallback={<ImageIcon />}
+                        />
+                      </div>
+                      <div>
+                        <strong>{sentence(item.slot ?? "Evidence")}</strong>
+                        <Status
+                          value={String(state)}
+                          tone={String(state) === "ACCEPTED" ? "mint" : "amber"}
+                        />
+                      </div>
+                      {review && "id" in item ? (
+                        <div className="asset-record__evidence-actions">
+                          <button
+                            type="button"
+                            disabled={evidence.isPending || state === "ACCEPTED"}
+                            onClick={() => evidence.mutate({ mediaId, action: "accept" })}
+                          >
+                            Accept
+                          </button>
+                          <button
+                            type="button"
+                            disabled={evidence.isPending}
+                            onClick={() => evidence.mutate({ mediaId, action: "flag" })}
+                          >
+                            Flag issue
+                          </button>
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                },
+              )}
+            </div>
+            {!review?.media.length && !asset?.evidence.length ? (
+              <Empty text="No evidence is attached to this asset." />
+            ) : null}
+          </RecordSection>
+
+          <RecordSection
+            id="checks"
+            eyebrow="Automated checks"
+            title="Qualification and readiness"
+            icon={<ClipboardCheck />}
+          >
+            <div className="asset-record__checks">
+              {(review?.readiness?.progress ?? []).map((check) => (
+                <div key={check.key}>
+                  {check.status === "COMPLETE" ? <CheckCircle2 /> : <AlertTriangle />}
+                  <span>
+                    <strong>{check.label}</strong>
+                    <small>{check.summary}</small>
+                  </span>
+                  <Status
+                    value={check.status}
+                    tone={check.status === "COMPLETE" ? "mint" : "amber"}
+                  />
+                </div>
+              ))}
+              {review?.certificationVerification ? (
+                <div>
+                  <BadgeCheck />
+                  <span>
+                    <strong>Certification</strong>
+                    <small>
+                      {review.certificationVerification.companyCode} ·{" "}
+                      {review.certificationVerification.certificationNumber}
+                    </small>
+                  </span>
+                  <Status value={review.certificationVerification.status} />
+                </div>
+              ) : null}
+              {!review?.readiness?.progress.length ? (
+                <Empty text="Automated review checks are not available for this lifecycle stage." />
+              ) : null}
+            </div>
+          </RecordSection>
+
+          <RecordSection
+            id="intake"
+            eyebrow="Physical intake & chain of custody"
+            title="Movement, receipt and custody"
+            icon={<PackageCheck />}
+          >
+            <DefinitionGrid values={intakeFacts(intakeDetail, asset)} />
+            <div className="asset-record__timeline">
+              {(intakeDetail?.history ?? asset?.custody.history ?? []).map((event, index) => (
+                <div key={("id" in event ? event.id : undefined) ?? `${index}`}>
+                  <i />
+                  <span>
+                    <strong>{sentence("action" in event ? event.action : event.status)}</strong>
+                    <small>{date("occurredAt" in event ? event.occurredAt : event.at)}</small>
+                  </span>
+                </div>
+              ))}
+            </div>
+            {!intakeDetail?.intake && !asset?.intake ? (
+              <Empty
+                title="Physical intake not started"
+                text="Destination, tracking, receipt, verification and custody remain on this record until started."
+              />
+            ) : null}
+          </RecordSection>
+
+          <RecordSection
+            id="verification"
+            eyebrow="Verification"
+            title="Review and physical truth"
+            icon={<ShieldCheck />}
+          >
+            <DefinitionGrid values={verificationFacts(review, intakeDetail, asset)} />
+          </RecordSection>
+
+          <RecordSection
+            id="valuation"
+            eyebrow="Valuation"
+            title="Current decision and evidence"
+            icon={<TrendingUp />}
+          >
+            <DefinitionGrid values={valuationFacts(review, asset)} />
+            {asset?.valuation.history.length ? (
+              <DataTable
+                headers={["Value", "Date", "Method", "Status"]}
+                rows={asset.valuation.history.map((item) => [
+                  money(item.minor, item.currency),
+                  date(item.asOf),
+                  item.method,
+                  sentence(item.status),
+                ])}
+              />
+            ) : null}
+          </RecordSection>
+
+          <RecordSection
+            id="ownership"
+            eyebrow="Ownership / Slice issuance"
+            title="Supply and positions"
+            icon={<Landmark />}
+          >
+            <DefinitionGrid values={ownershipFacts(asset)} />
+            {asset?.ownership.holders?.length ? (
+              <DataTable
+                headers={["Holder", "Units", "Share"]}
+                rows={asset.ownership.holders.map((holder) => [
+                  holder.displayName,
+                  holder.units,
+                  holder.percentage === null ? "—" : `${holder.percentage}%`,
+                ])}
+              />
+            ) : null}
+          </RecordSection>
+
+          <RecordSection
+            id="offering"
+            eyebrow="Offering / market state"
+            title="Launch and market readiness"
+            icon={<Rocket />}
+          >
+            <DefinitionGrid values={offeringFacts(asset, operation)} />
+            {operation?.economicWorkflow?.length ? (
+              <div className="asset-record__workflow">
+                {operation.economicWorkflow.map((step) => (
+                  <div key={step.key}>
+                    <Status
+                      value={step.state}
+                      tone={step.state === "COMPLETE" || step.state === "LIVE" ? "mint" : "amber"}
+                    />
+                    <span>
+                      <strong>{step.label}</strong>
+                      <small>{step.detail}</small>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </RecordSection>
+
+          <RecordSection
+            id="blockers"
+            eyebrow="Blockers + next action"
+            title="What needs attention"
+            icon={<AlertTriangle />}
+          >
+            <div className="asset-record__blockers">
+              {blockers.length ? (
+                blockers.map((blocker) => (
+                  <div key={blocker}>
+                    <AlertTriangle />
+                    <span>
+                      <strong>{sentence(blocker)}</strong>
+                      <small>
+                        Resolve this condition before the dependent lifecycle action can continue.
+                      </small>
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="is-clear">
+                  <CheckCircle2 />
+                  <span>
+                    <strong>No active blockers</strong>
+                    <small>The current stage has no reported blocking condition.</small>
+                  </span>
+                </div>
+              )}
+            </div>
+          </RecordSection>
+
+          <RecordSection
+            id="money"
+            eyebrow="Related Money records"
+            title="Economic links without duplicated authority"
+            icon={<WalletCards />}
+          >
+            <DefinitionGrid values={moneyFacts(asset)} />
+            <a
+              className="asset-record__money-link"
+              href={`/admin?section=money&view=wallets-movements&q=${encodeURIComponent(asset?.publicId ?? resolvedSubmissionId ?? reference)}`}
+            >
+              Open matching Money records <ArrowRight />
+            </a>
+          </RecordSection>
+
+          <RecordSection
+            id="history"
+            eyebrow="History"
+            title="Joined lifecycle audit"
+            icon={<History />}
+          >
+            {historyRows.length ? (
+              <DataTable headers={["When", "Event", "Actor", "Source"]} rows={historyRows} />
+            ) : (
+              <Empty text="No lifecycle history has been recorded." />
+            )}
+          </RecordSection>
+
+          <RecordSection
+            id="actions"
+            eyebrow="Valid actions"
+            title="Only server-authorized controls"
+            icon={<Sparkles />}
+          >
+            <ActionCenter
+              review={review}
+              intake={intakeDetail}
+              asset={asset}
+              operation={operation}
+              command={command}
+              decisionReason={decisionReason}
+              setDecisionReason={setDecisionReason}
+              decisionNote={decisionNote}
+              setDecisionNote={setDecisionNote}
+              valuationMinor={valuationMinor}
+              setValuationMinor={setValuationMinor}
+              verification={verification}
+              setVerification={setVerification}
+            />
+          </RecordSection>
+        </div>
+
+        <aside className="asset-record__rail">
+          <RecordCard title="Lifecycle snapshot">
+            {lifecycle.map((item) => (
+              <Fact key={item.label} label={item.label} value={item.value} />
+            ))}
+          </RecordCard>
+          <RecordCard title="Next action">
+            <strong className="asset-record__rail-action">{nextAction.label}</strong>
+            <p>{nextAction.detail}</p>
+            <button type="button" onClick={() => selectSection(nextAction.focus, onFocus)}>
+              Open section <ArrowRight />
+            </button>
+          </RecordCard>
+          <RecordCard title="Record authority">
+            <p>
+              Submission, intake, catalogue, valuation and launch are sections of this asset record.
+              Money remains a separate ledger authority and is linked contextually.
+            </p>
+          </RecordCard>
+        </aside>
+      </div>
+      {(command.error ?? evidence.error) ? (
+        <div className="asset-record__error" role="alert">
+          {errorMessage(command.error ?? evidence.error)}
+        </div>
+      ) : null}
+    </main>
+  );
+}
+
+function ActionCenter({
+  review,
+  intake,
+  asset,
+  operation,
+  command,
+  decisionReason,
+  setDecisionReason,
+  decisionNote,
+  setDecisionNote,
+  valuationMinor,
+  setValuationMinor,
+  verification,
+  setVerification,
+}: {
+  review: SubmissionReviewDetail | null;
+  intake: AdminIntakeDetail | null;
+  asset: AdminCollectibleDetail | null;
+  operation: AssetOperationDetailProjection | null;
+  command: ReturnType<typeof useMutation<unknown, Error, Command>>;
+  decisionReason: string;
+  setDecisionReason: (value: string) => void;
+  decisionNote: string;
+  setDecisionNote: (value: string) => void;
+  valuationMinor: string;
+  setValuationMinor: (value: string) => void;
+  verification: {
+    identityMatch: boolean;
+    certificationMatch: boolean;
+    gradeMatch: boolean;
+    variantMatch: boolean;
+  };
+  setVerification: (value: typeof verification) => void;
+}) {
+  const allowed = review?.allowedActions;
+  const intakeActions = intake?.row.allowedActions ?? [];
+  const pending = command.isPending;
+  return (
+    <div className="asset-record__action-center">
+      <RecordCard title="Submission decision">
+        <div className="asset-record__action-row">
+          <button
+            type="button"
+            disabled={pending || !allowed?.canClaim}
+            onClick={() => command.mutate("CLAIM_REVIEW")}
+          >
+            Claim review
+          </button>
+          <button
+            type="button"
+            disabled={pending || !allowed?.canRelease}
+            onClick={() => command.mutate("RELEASE_REVIEW")}
+          >
+            Release
+          </button>
+          <button
+            type="button"
+            disabled={pending || !review?.reviewWorkspace?.canCanonicalize}
+            onClick={() => command.mutate("CANONICALIZE")}
+          >
+            Create canonical record
+          </button>
+        </div>
+        <label>
+          Reason code
+          <input
+            value={decisionReason}
+            onChange={(event) => setDecisionReason(event.target.value)}
+          />
+        </label>
+        <label>
+          Decision note
+          <textarea
+            value={decisionNote}
+            onChange={(event) => setDecisionNote(event.target.value)}
+            placeholder="Required context for changes or rejection."
+          />
+        </label>
+        <div className="asset-record__action-row">
+          <button
+            className="is-primary"
+            type="button"
+            disabled={pending || !allowed?.canAccept}
+            onClick={() => command.mutate("APPROVE_SUBMISSION")}
+          >
+            Approve
+          </button>
+          <button
+            type="button"
+            disabled={pending || !allowed?.canRequestChanges || !decisionNote.trim()}
+            onClick={() => command.mutate("REQUEST_CHANGES")}
+          >
+            Request changes
+          </button>
+          <button
+            className="is-danger"
+            type="button"
+            disabled={pending || !allowed?.canReject || !decisionNote.trim()}
+            onClick={() => command.mutate("REJECT_SUBMISSION")}
+          >
+            Reject
+          </button>
+        </div>
+      </RecordCard>
+      <RecordCard title="Physical intake">
+        <div className="asset-record__action-row">
+          <button
+            type="button"
+            disabled={pending || !intakeActions.includes("CONFIRM_DELIVERY")}
+            onClick={() => command.mutate("CONFIRM_DELIVERY")}
+          >
+            Confirm delivery
+          </button>
+          <button
+            type="button"
+            disabled={pending || !intakeActions.includes("CONFIRM_RECEIPT")}
+            onClick={() => command.mutate("CONFIRM_RECEIPT")}
+          >
+            Record receipt
+          </button>
+          <button
+            type="button"
+            disabled={pending || !intakeActions.includes("START_VERIFICATION")}
+            onClick={() => command.mutate("START_VERIFICATION")}
+          >
+            Start verification
+          </button>
+        </div>
+        <div className="asset-record__check-inputs">
+          {Object.entries(verification).map(([key, checked]) => (
+            <label key={key}>
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={(event) =>
+                  setVerification({ ...verification, [key]: event.target.checked })
+                }
+              />
+              {sentence(key)}
+            </label>
+          ))}
+        </div>
+        <button
+          className="is-primary"
+          type="button"
+          disabled={
+            pending ||
+            !intakeActions.includes("COMPLETE_VERIFICATION") ||
+            !verification.identityMatch
+          }
+          onClick={() => command.mutate("COMPLETE_VERIFICATION")}
+        >
+          Complete physical verification
+        </button>
+      </RecordCard>
+      <RecordCard title="Valuation and launch">
+        <label>
+          Valuation in minor units
+          <input
+            inputMode="numeric"
+            value={valuationMinor}
+            onChange={(event) => setValuationMinor(event.target.value.replace(/\D/g, ""))}
+            placeholder="e.g. 25000"
+          />
+        </label>
+        <div className="asset-record__action-row">
+          <button
+            type="button"
+            disabled={pending || !operation?.availableCommands.recordValuation || !valuationMinor}
+            onClick={() => command.mutate("RECORD_VALUATION")}
+          >
+            Record valuation
+          </button>
+          <button
+            className="is-primary"
+            type="button"
+            disabled={pending || !operation?.availableCommands.publish}
+            onClick={() => command.mutate("PUBLISH")}
+          >
+            Publish asset
+          </button>
+        </div>
+        <div className="asset-record__command-matrix">
+          {Object.entries(operation?.availableCommands ?? {}).map(([key, value]) => (
+            <span key={key} className={value ? "is-available" : ""}>
+              <i />
+              {sentence(key)} <b>{value ? "Available" : "Unavailable"}</b>
+            </span>
+          ))}
+        </div>
+        {!asset ? (
+          <p>Canonical asset controls become available after approval and canonicalisation.</p>
+        ) : null}
+      </RecordCard>
+      {command.isPending ? (
+        <p className="asset-record__saving">Applying the audited command…</p>
+      ) : null}
+    </div>
+  );
+}
+
+function RecordSection({
+  id,
+  eyebrow,
+  title,
+  icon,
+  children,
+}: {
+  id: AssetRecordFocus;
+  eyebrow: string;
+  title: string;
+  icon: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section id={`asset-record-${id}`} className="asset-record__section">
+      <header>
+        <span>{icon}</span>
+        <div>
+          <p>{eyebrow}</p>
+          <h2>{title}</h2>
+        </div>
+      </header>
+      {children}
+    </section>
+  );
+}
+
+function RecordCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="asset-record__card">
+      <h3>{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+function DefinitionGrid({
+  values,
+  compact = false,
+}: {
+  values: Array<[string, ReactNode]>;
+  compact?: boolean;
+}) {
+  return (
+    <dl className={`asset-record__definitions${compact ? " is-compact" : ""}`}>
+      {values.map(([label, value]) => (
+        <div key={label}>
+          <dt>{label}</dt>
+          <dd>{present(value)}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="asset-record__fact">
+      <dt>{label}</dt>
+      <dd>{present(value)}</dd>
+    </div>
+  );
+}
+
+function Status({
+  value,
+  tone = "neutral",
+}: {
+  value: string;
+  tone?: "neutral" | "mint" | "amber";
+}) {
+  return <span className={`asset-record__status is-${tone}`}>{sentence(value)}</span>;
+}
+
+function Empty({ title = "Not recorded", text }: { title?: string; text: string }) {
+  return (
+    <div className="asset-record__empty">
+      <Box />
+      <strong>{title}</strong>
+      <span>{text}</span>
+    </div>
+  );
+}
+
+function DataTable({ headers, rows }: { headers: string[]; rows: ReactNode[][] }) {
+  return (
+    <div className="asset-record__table-wrap">
+      <table>
+        <thead>
+          <tr>
+            {headers.map((header) => (
+              <th key={header}>{header}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr key={index}>
+              {row.map((cell, cellIndex) => (
+                <td key={cellIndex}>{present(cell)}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function RecordState({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className="asset-record__state">
+      <PackageCheck />
+      <h2>{title}</h2>
+      <p>{detail}</p>
+    </div>
+  );
+}
+
+function selectSection(id: AssetRecordFocus, onFocus: (focus: AssetRecordFocus) => void) {
+  onFocus(id);
+  document
+    .getElementById(`asset-record-${id}`)
+    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function lifecycleRows(
+  asset: AdminCollectibleDetail | null,
+  review: SubmissionReviewDetail | null,
+  intake: AdminIntakeDetail | null,
+  operation: AssetOperationDetailProjection | null,
+) {
+  return [
+    {
+      label: "Submission",
+      value: review?.status ?? asset?.dossier.provenance?.submissionStatus ?? "Not started",
+      detail: review?.readiness?.state ? sentence(review.readiness.state) : "Collector source",
+      tone: review ? "current" : "future",
+    },
+    {
+      label: "Physical intake",
+      value: intake?.row.stageLabel ?? asset?.dossier.snapshot.physical ?? "Not started",
+      detail: intake?.row.nextAction ?? "Destination and receipt",
+      tone: intake?.intake ? "current" : "future",
+    },
+    {
+      label: "Verification",
+      value:
+        intake?.intake?.verification?.status ??
+        asset?.dossier.snapshot.verification ??
+        "Not started",
+      detail: "Identity and physical truth",
+      tone: asset?.verification.verifiedAt ? "complete" : "future",
+    },
+    {
+      label: "Valuation",
+      value:
+        asset?.dossier.snapshot.valuation ??
+        (review?.staffReview?.valuation ? "Review valuation" : "Not started"),
+      detail: asset?.valuation.current
+        ? money(asset.valuation.current.minor, asset.valuation.current.currency)
+        : "Staff decision",
+      tone: asset?.valuation.current ? "complete" : "future",
+    },
+    {
+      label: "Ownership",
+      value: asset?.dossier.snapshot.ownership ?? "Not started",
+      detail: asset?.ownership.totalUnits
+        ? `${asset.ownership.totalUnits} total units`
+        : "Slice issuance",
+      tone: asset?.ownership.totalUnits ? "complete" : "future",
+    },
+    {
+      label: "Offering / market",
+      value: asset?.dossier.snapshot.market ?? operation?.operations.stage ?? "Not started",
+      detail: asset?.market.trading?.status ?? "Launch readiness",
+      tone: asset?.market.trading?.tradingEnabled ? "complete" : "future",
+    },
+  ];
+}
+
+function collectBlockers(
+  review: SubmissionReviewDetail | null,
+  asset: AdminCollectibleDetail | null,
+  intake: AdminIntakeDetail | null,
+  operation: AssetOperationDetailProjection | null,
+) {
+  return Array.from(
+    new Set([
+      ...(review?.readiness?.blockers ?? []),
+      ...(review?.reviewWorkspace?.blockingIssues ?? []),
+      ...(intake?.row.issues.map((issue) => issue.label) ?? []),
+      ...(asset?.dossier.restrictions.map((item) => item.reason) ?? []),
+      ...(operation?.operations.blockers ?? []),
+    ]),
+  ).filter(Boolean);
+}
+
+function nextAssetAction(
+  review: SubmissionReviewDetail | null,
+  intake: AdminIntakeDetail | null,
+  operation: AssetOperationDetailProjection | null,
+): { label: string; detail: string; focus: AssetRecordFocus } {
+  if (review && !review.assetId && review.readiness?.nextAction !== "COMPLETE")
+    return {
+      label: sentence(review.readiness?.nextAction ?? "Review submission"),
+      detail:
+        review.reviewPresentation?.nextActionReason ??
+        review.readiness?.blockers[0] ??
+        "Continue the submission review.",
+      focus: "actions",
+    };
+  if (intake && intake.row.nextActor !== "NONE")
+    return { label: intake.row.nextAction, detail: intake.row.stageReason, focus: "intake" };
+  if (operation && operation.operations.nextActor !== "NONE")
+    return {
+      label: operation.operations.nextAction.label,
+      detail: operation.operations.blockers[0]
+        ? sentence(operation.operations.blockers[0])
+        : "Continue the asset lifecycle.",
+      focus: operation.operations.nextAction.target === "VALUATION" ? "valuation" : "actions",
+    };
+  return {
+    label: "Monitor asset",
+    detail: "No active staff action is required.",
+    focus: "summary",
+  };
+}
+
+function submissionIdentity(review: SubmissionReviewDetail | null): Array<[string, ReactNode]> {
+  const metadata = review?.declaredMetadata ?? {};
+  const value = (key: string) => {
+    const field = metadata[key];
+    return typeof field === "string" || typeof field === "number" ? field : null;
+  };
+  return [
+    ["Title", value("name")],
+    ["Year", value("year")],
+    ["Set", value("set")],
+    ["Card number", value("cardNumber")],
+    ["Variant", value("variant")],
+    ["Grader", value("grader")],
+    ["Grade", value("grade")],
+    ["Certification", value("certificationNumber")],
+  ];
+}
+
+function canonicalIdentity(
+  asset: AdminCollectibleDetail | null,
+  review: SubmissionReviewDetail | null,
+): Array<[string, ReactNode]> {
+  return [
+    ["Title", asset?.title ?? review?.collectible?.title],
+    ["Category", asset?.identity.category ?? review?.collectible?.category],
+    ["Year", asset?.identity.year ?? review?.collectible?.year],
+    ["Set", asset?.identity.set ?? review?.collectible?.set],
+    ["Card number", asset?.identity.cardNumber ?? review?.collectible?.cardNumber],
+    ["Variant", asset?.identity.variant ?? review?.collectible?.variant],
+    [
+      "Grading",
+      asset?.grading
+        ? `${asset.grading.company} ${asset.grading.grade}`
+        : review?.collectible?.grader,
+    ],
+    [
+      "Certification",
+      asset?.grading?.certificationNumber ?? review?.collectible?.certificationNumber,
+    ],
+  ];
+}
+
+function intakeFacts(
+  detail: AdminIntakeDetail | null,
+  asset: AdminCollectibleDetail | null,
+): Array<[string, ReactNode]> {
+  return [
+    ["Destination", detail?.intake?.destination.displayName ?? asset?.intake?.vault],
+    ["Delivery method", detail?.intake?.deliveryMethod ?? asset?.intake?.deliveryMethod],
+    ["Carrier", detail?.intake?.shipment?.carrier ?? asset?.intake?.carrier],
+    ["Tracking", detail?.intake?.shipment?.trackingNumber ?? asset?.intake?.tracking],
+    ["Carrier delivery", date(detail?.intake?.shipment?.deliveredAt ?? asset?.intake?.deliveredAt)],
+    [
+      "Physical receipt",
+      date(detail?.intake?.receipt?.confirmedAt ?? asset?.intake?.receiptConfirmedAt),
+    ],
+    ["Custody status", detail?.custody?.status ?? asset?.custody.status],
+    ["Custody location", asset?.custody.location],
+    ["Open exceptions", detail?.intake?.exceptions.filter((item) => !item.resolvedAt).length ?? 0],
+  ];
+}
+
+function verificationFacts(
+  review: SubmissionReviewDetail | null,
+  intake: AdminIntakeDetail | null,
+  asset: AdminCollectibleDetail | null,
+): Array<[string, ReactNode]> {
+  const physical = intake?.intake?.verification;
+  return [
+    [
+      "Review identity",
+      review?.readiness?.progress.find((item) => item.key === "identity")?.status,
+    ],
+    ["Evidence", review?.evidenceSummary?.status],
+    [
+      "Certification",
+      review?.certificationVerification?.status ?? asset?.grading?.certificationNumber,
+    ],
+    ["Physical verification", physical?.status ?? asset?.verification.status],
+    ["Identity match", boolean(physical?.identityMatch)],
+    ["Certification match", boolean(physical?.certificationMatch)],
+    ["Grade match", boolean(physical?.gradeMatch)],
+    ["Variant match", boolean(physical?.variantMatch)],
+    ["Verified at", date(physical?.completedAt ?? asset?.verification.verifiedAt)],
+  ];
+}
+
+function valuationFacts(
+  review: SubmissionReviewDetail | null,
+  asset: AdminCollectibleDetail | null,
+): Array<[string, ReactNode]> {
+  return [
+    [
+      "Current valuation",
+      asset?.valuation.current
+        ? money(asset.valuation.current.minor, asset.valuation.current.currency)
+        : review?.staffReview?.valuation
+          ? money(review.staffReview.valuation.valueMinor, review.staffReview.valuation.currency)
+          : null,
+    ],
+    [
+      "Status",
+      asset?.dossier.snapshot.valuation ??
+        (review?.staffReview?.valuation ? "Review-stage" : "Not started"),
+    ],
+    ["Method", asset?.valuation.current?.method ?? review?.staffReview?.valuation?.basis],
+    [
+      "Confidence",
+      review?.staffReview?.valuation?.confidence
+        ? `${review.staffReview.valuation.confidence}%`
+        : null,
+    ],
+    ["As of", date(asset?.valuation.current?.asOf ?? review?.staffReview?.valuation?.updatedAt)],
+    [
+      "Market references",
+      asset?.valuation.marketData.references.length ?? review?.researchReferences?.length ?? 0,
+    ],
+  ];
+}
+
+function ownershipFacts(asset: AdminCollectibleDetail | null): Array<[string, ReactNode]> {
+  return [
+    ["State", asset?.dossier.snapshot.ownership],
+    ["Policy", asset?.issuance?.policy.label],
+    ["Total units", asset?.ownership.totalUnits],
+    ["Issued units", asset?.ownership.issuedUnits],
+    ["Available units", asset?.ownership.availableUnits],
+    ["Owners", asset?.ownership.ownerCount],
+    [
+      "Issuance readiness",
+      asset?.issuance?.readiness.ready ? "Ready" : asset?.issuance?.readiness.blockers.join(", "),
+    ],
+  ];
+}
+
+function offeringFacts(
+  asset: AdminCollectibleDetail | null,
+  operation: AssetOperationDetailProjection | null,
+): Array<[string, ReactNode]> {
+  return [
+    ["Lifecycle stage", operation?.operations.stage ?? asset?.lifecycle.current],
+    ["Offering", asset?.initialOffering?.status ?? "Not created"],
+    ["Offered units", asset?.initialOffering?.offeredUnits],
+    [
+      "Price per unit",
+      asset?.initialOffering
+        ? money(asset.initialOffering.pricePerUnitMinor, asset.initialOffering.currency)
+        : null,
+    ],
+    ["Publication", asset?.market.publication],
+    ["Market", asset?.market.trading?.status ?? "Not created"],
+    ["Launch readiness", operation?.launchReadiness.state ?? asset?.market.readiness.status],
+    ["Trading enabled", boolean(asset?.market.trading?.tradingEnabled)],
+  ];
+}
+
+function moneyFacts(asset: AdminCollectibleDetail | null): Array<[string, ReactNode]> {
+  return [
+    [
+      "Collector proceeds posted",
+      asset?.initialOffering
+        ? money(asset.initialOffering.proceeds.postedMinor, asset.initialOffering.proceeds.currency)
+        : null,
+    ],
+    [
+      "Collector proceeds reserved",
+      asset?.initialOffering
+        ? money(
+            asset.initialOffering.proceeds.reservedMinor,
+            asset.initialOffering.proceeds.currency,
+          )
+        : null,
+    ],
+    [
+      "Collector proceeds available",
+      asset?.initialOffering
+        ? money(
+            asset.initialOffering.proceeds.availableMinor,
+            asset.initialOffering.proceeds.currency,
+          )
+        : null,
+    ],
+    ["Treasury settled units", asset?.treasuryLiquidity?.settledUnits],
+    ["Treasury reserved units", asset?.treasuryLiquidity?.reservedUnits],
+    ["Open treasury orders", asset?.treasuryLiquidity?.openSellOrders],
+    ["Market status", asset?.treasuryLiquidity?.marketStatus],
+  ];
+}
+
+function combinedHistory(
+  review: SubmissionReviewDetail | null,
+  asset: AdminCollectibleDetail | null,
+  intake: AdminIntakeDetail | null,
+): ReactNode[][] {
+  const rows = [
+    ...(review?.activity ?? []).map((item) => ({
+      at: item.occurredAt,
+      event: sentence(item.action),
+      actor: item.actor,
+      source: "Submission",
+    })),
+    ...(intake?.history ?? []).map((item) => ({
+      at: item.occurredAt,
+      event: sentence(item.action),
+      actor: item.actor ?? "System",
+      source: sentence(item.source),
+    })),
+    ...(asset?.activity ?? []).map((item) => ({
+      at: item.occurredAt,
+      event: sentence(item.action),
+      actor: item.actor,
+      source: "Canonical asset",
+    })),
+  ];
+  return rows
+    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+    .map((item) => [dateTime(item.at), item.event, item.actor, item.source]);
+}
+
+function identityLine(asset: AdminCollectibleDetail | null, review: SubmissionReviewDetail | null) {
+  return (
+    [
+      asset?.identity.year ?? review?.collectible?.year,
+      asset?.identity.set ?? review?.collectible?.set,
+      asset?.identity.cardNumber ?? review?.collectible?.cardNumber,
+    ]
+      .filter(Boolean)
+      .join(" · ") || "Identity pending review"
+  );
+}
+
+function present(value: ReactNode) {
+  return value === null || value === undefined || value === "" ? "Not recorded" : value;
+}
+
+function mediaSource(value: unknown) {
+  if (!value || typeof value !== "object") return null;
+  const item = value as { url?: unknown; previewUrl?: unknown; thumbnailUrl?: unknown };
+  for (const source of [item.url, item.previewUrl, item.thumbnailUrl]) {
+    if (typeof source === "string" && source.length > 0) return source;
+  }
+  return null;
+}
+
+function boolean(value: boolean | null | undefined) {
+  return value === null || value === undefined ? "Not recorded" : value ? "Yes" : "No";
+}
+
+function sentence(value: unknown) {
+  return String(value ?? "Not recorded")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function money(minor: string, currency: string) {
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(
+    Number(minor) / 100,
+  );
+}
+
+function date(value: string | null | undefined) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? value
+    : new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" }).format(
+        parsed,
+      );
+}
+
+function dateTime(value: string) {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? value
+    : new Intl.DateTimeFormat("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(parsed);
+}
+
+function errorMessage(value: unknown) {
+  return value instanceof Error
+    ? value.message
+    : "The command could not be completed. No state was changed.";
+}

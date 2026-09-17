@@ -83,6 +83,16 @@ const total = (money: Money, units: number) => gbp((money.amount / 100) * units)
 
 export const mockRepositories: AppRepositories = {
   admin: {
+    async resolveAssetRecord(reference) {
+      return {
+        recordId: reference,
+        authority: "ASSET" as const,
+        assetId: reference,
+        submissionId: reference,
+        title: "Mock asset",
+        lifecycleStatus: "UNKNOWN",
+      };
+    },
     async listCatalogueCategories() {
       return [];
     },

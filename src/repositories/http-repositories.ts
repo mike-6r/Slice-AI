@@ -4746,6 +4746,11 @@ const adminRepository = (client: ApiClient): AdminRepository => {
     };
   };
   return {
+    async resolveAssetRecord(reference) {
+      return client.get<import("@/data/repositories").AdminAssetRecordResolution>(
+        `/admin/asset-records/${encodeURIComponent(reference)}/resolve`,
+      );
+    },
     async listCatalogueCategories() {
       const value = objectField(
         await client.get<unknown>("/admin/categories"),

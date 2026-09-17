@@ -56,10 +56,11 @@ import { RoleWorkspaceGuard } from "@/components/auth/RoleWorkspaceGuard";
 import { Wordmark } from "@/components/layout/MainNavigation";
 import { AdminCollectibleCatalogue } from "@/components/admin/AdminCollectibleCatalogue";
 import { AdminAssetOperations } from "@/components/admin/AdminAssetOperations";
+import { AdminRecentAuthDialog } from "@/components/admin/AdminAssetOperationsDetail";
 import {
-  AdminAssetOperationsDetail,
-  AdminRecentAuthDialog,
-} from "@/components/admin/AdminAssetOperationsDetail";
+  AdminUnifiedAssetRecord,
+  type AssetRecordFocus,
+} from "@/components/admin/AdminUnifiedAssetRecord";
 import { AdminMemberships } from "@/components/admin/AdminMemberships";
 import { AdminMembershipDetail } from "@/components/admin/AdminMembershipDetail";
 import { AdminFinanceTrading } from "@/components/admin/AdminFinanceTrading";
@@ -78,7 +79,6 @@ import "@/styles/admin-workspace-shell.css";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 import { ApiError } from "@/api/http-client";
-import { EmbeddedSubmissionReview } from "./operations.submissions";
 import {
   compactAdminAccountFilters,
   normalizeAdminSearch,
@@ -192,6 +192,9 @@ function AdminConsole() {
     section,
     view: selectedView,
     tab: selectedUserTab,
+    assetRecord: selectedAssetRecord,
+    assetRecordKind: selectedAssetRecordKind,
+    assetFocus,
     asset: selectedAsset,
     submission: selectedSubmission,
     record: selectedRecord,
@@ -289,6 +292,11 @@ function AdminConsole() {
   const isPlatformDelivery = isPlatform && view === "delivery";
   const isPlatformIntegrations = isPlatform && view === "integrations";
   const isPlatformAuditSettings = isPlatform && view === "audit-settings";
+  const openAssetRecord =
+    selectedAssetRecord ?? selectedAsset ?? selectedSubmission ?? selectedIntake;
+  const openAssetRecordKind = selectedAssetRecordKind ?? (selectedAsset ? "asset" : "submission");
+  const openAssetFocus =
+    assetFocus ?? (selectedIntake ? "intake" : selectedSubmission ? "submission" : "summary");
   const { user: selectedUser } = Route.useSearch();
   const membershipStatus = [
     "INCOMPLETE",
@@ -995,8 +1003,9 @@ function AdminConsole() {
                     search={{
                       section: "assets",
                       view: "valuation-launch",
-                      asset: result.id,
-                      tab: "overview",
+                      assetRecord: result.id,
+                      assetRecordKind: "asset",
+                      assetFocus: "summary",
                     }}
                     onClick={() => {
                       setSearchInput("");
@@ -1036,7 +1045,11 @@ function AdminConsole() {
                     view: item.id,
                     tab: undefined,
                     user: undefined,
+                    assetRecord: undefined,
+                    assetRecordKind: undefined,
+                    assetFocus: undefined,
                     asset: undefined,
+                    submission: undefined,
                     intake: undefined,
                     location: undefined,
                   }),
@@ -1090,52 +1103,35 @@ function AdminConsole() {
               void navigate({ search: (current) => ({ ...current, ...patch }), replace: true })
             }
           />
-        ) : isAssets && selectedSubmission ? (
+        ) : isAssets && openAssetRecord ? (
           <AdminRecordDrawer
             wide
-            title="Submission review"
-            subtitle="Review evidence, decisions, and history without leaving Assets."
+            title="Asset record"
+            subtitle="One authoritative record from submission through custody, ownership, launch, and market."
             onClose={() =>
               void navigate({
-                search: (current) => ({ ...current, submission: undefined }),
+                search: (current) => ({
+                  ...current,
+                  assetRecord: undefined,
+                  assetRecordKind: undefined,
+                  assetFocus: undefined,
+                  asset: undefined,
+                  submission: undefined,
+                  intake: undefined,
+                  intakeTab: undefined,
+                  tab: undefined,
+                }),
                 replace: true,
               })
             }
           >
-            <EmbeddedSubmissionReview
-              submission={selectedSubmission}
-              onClose={() =>
+            <AdminUnifiedAssetRecord
+              reference={openAssetRecord}
+              kind={openAssetRecordKind}
+              focus={openAssetFocus}
+              onFocus={(next: AssetRecordFocus) =>
                 void navigate({
-                  search: (current) => ({ ...current, submission: undefined }),
-                  replace: true,
-                })
-              }
-              onSelectSubmission={(submission) =>
-                void navigate({ search: (current) => ({ ...current, submission }), replace: true })
-              }
-            />
-          </AdminRecordDrawer>
-        ) : isAssets && selectedAsset ? (
-          <AdminRecordDrawer
-            wide
-            title="Asset lifecycle record"
-            subtitle="The asset’s evidence, custody, valuation, ownership, offering, and history."
-            onClose={() =>
-              void navigate({
-                search: (current) => ({ ...current, asset: undefined, tab: undefined }),
-                replace: true,
-              })
-            }
-          >
-            <AdminAssetOperationsDetail
-              assetId={selectedAsset}
-              tab={selectedUserTab}
-              onTab={(next) =>
-                void navigate({ search: (current) => ({ ...current, tab: next }), replace: true })
-              }
-              onBack={() =>
-                void navigate({
-                  search: (current) => ({ ...current, asset: undefined, tab: undefined }),
+                  search: (current) => ({ ...current, assetFocus: next }),
                   replace: true,
                 })
               }
@@ -1208,8 +1204,11 @@ function AdminConsole() {
                   ...current,
                   section: "assets",
                   view: "intake-custody",
-                  intake: submissionId,
-                  intakeTab: "overview",
+                  assetRecord: submissionId,
+                  assetRecordKind: "submission",
+                  assetFocus: "intake",
+                  intake: undefined,
+                  intakeTab: undefined,
                 }),
               })
             }
@@ -1288,7 +1287,10 @@ function AdminConsole() {
                   ...current,
                   section: "assets",
                   view: "catalogue",
-                  asset: assetId,
+                  assetRecord: assetId,
+                  assetRecordKind: "asset",
+                  assetFocus: "summary",
+                  asset: undefined,
                 }),
                 replace: true,
               })
@@ -1299,7 +1301,10 @@ function AdminConsole() {
                   ...current,
                   section: "assets",
                   view: "intake-custody",
-                  intake: submissionId,
+                  assetRecord: submissionId,
+                  assetRecordKind: "submission",
+                  assetFocus: "intake",
+                  intake: undefined,
                 }),
               })
             }
@@ -6366,7 +6371,14 @@ function ReviewQueue({
                         <button
                           type="button"
                           className="admin-review-action"
-                          onClick={() => updateSearch({ submission: item.id })}
+                          onClick={() =>
+                            updateSearch({
+                              assetRecord: item.id,
+                              assetRecordKind: "submission",
+                              assetFocus: "submission",
+                              submission: undefined,
+                            })
+                          }
                         >
                           {reviewActionLabel(item)} <ArrowRight aria-hidden="true" />
                         </button>

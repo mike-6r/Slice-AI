@@ -2412,6 +2412,15 @@ export type AdminCatalogueResponse = {
   };
 };
 
+export type AdminAssetRecordResolution = {
+  recordId: string;
+  authority: "ASSET" | "SUBMISSION";
+  assetId: string | null;
+  submissionId: string;
+  title: string;
+  lifecycleStatus: string;
+};
+
 export type AdminCatalogueCategory = {
   id: string;
   slug: string;
@@ -2472,6 +2481,7 @@ export type InitialOfferingPreview = Omit<
 > & { valuationMinor: string; feePolicyStatus: string };
 
 export interface AdminRepository {
+  resolveAssetRecord(reference: string): Promise<AdminAssetRecordResolution>;
   listCatalogueCategories(): Promise<AdminCatalogueCategory[]>;
   createCatalogueCategory(input: {
     name: string;

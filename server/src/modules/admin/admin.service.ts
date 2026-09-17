@@ -11306,6 +11306,58 @@ export class AdminService {
     };
   }
 
+  async resolveAssetRecord(actor: Actor, reference: string) {
+    await this.authorization.authorize(actor, 'admin.console.read');
+    const submission = await this.db.assetSubmission.findFirst({
+      where: {
+        OR: [
+          { id: reference },
+          { assetId: reference },
+          { asset: { is: { publicId: reference } } },
+          { asset: { is: { slug: reference } } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        status: true,
+        declaredMetadata: true,
+        asset: {
+          select: {
+            id: true,
+            publicId: true,
+            slug: true,
+            title: true,
+            status: true,
+          },
+        },
+      },
+    });
+    if (!submission)
+      throw new NotFoundException({
+        code: 'ASSET_RECORD_NOT_FOUND',
+        message: 'Asset lifecycle record not found.',
+      });
+    const metadata = submission.declaredMetadata as Record<
+      string,
+      unknown
+    > | null;
+    return {
+      recordId: submission.asset?.id ?? submission.id,
+      authority: submission.asset
+        ? ('ASSET' as const)
+        : ('SUBMISSION' as const),
+      assetId: submission.asset?.id ?? null,
+      submissionId: submission.id,
+      title:
+        submission.asset?.title ??
+        (typeof metadata?.name === 'string'
+          ? metadata.name
+          : 'Untitled collectible'),
+      lifecycleStatus: submission.asset?.status ?? submission.status,
+    };
+  }
+
   async collectibleDetail(actor: Actor, reference: string, tab?: string) {
     await this.authorization.authorize(actor, 'admin.console.read');
     // The tab is accepted so the frontend can lazy-load by URL without changing the

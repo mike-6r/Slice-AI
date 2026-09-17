@@ -979,6 +979,15 @@ export class AdminController {
     return this.admin.search(request.actor!, input.q, input.limit ?? 20);
   }
 
+  @Get('asset-records/:reference/resolve')
+  @RequirePermission('admin.console.read')
+  resolveAssetRecord(
+    @Param('reference') reference: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.admin.resolveAssetRecord(request.actor!, reference);
+  }
+
   @Get('assets/:id')
   @RequirePermission('admin.console.read')
   collectible(

@@ -158,6 +158,24 @@ describe("admin route state", () => {
     });
   });
 
+  it("preserves the shared authoritative asset record from every Assets view", () => {
+    expect(
+      normalizeAdminSearch({
+        section: "assets",
+        view: "intake-custody",
+        assetRecord: "submission-123",
+        assetRecordKind: "submission",
+        assetFocus: "intake",
+      }),
+    ).toMatchObject({
+      section: "assets",
+      view: "intake-custody",
+      assetRecord: "submission-123",
+      assetRecordKind: "submission",
+      assetFocus: "intake",
+    });
+  });
+
   it("migrates receiving-location configuration into Platform settings", () => {
     expect(
       normalizeAdminSearch({

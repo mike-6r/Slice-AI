@@ -122,14 +122,22 @@ export function AdminAssetOperations(props: Props) {
   if (board.isError || !board.data)
     return (
       <OperationsState
-        title="Asset Operations unavailable"
-        detail="The operations authority could not be loaded. No lifecycle state has been inferred."
+        title="Valuation & Launch unavailable"
+        detail="The asset lifecycle authority could not be loaded. No valuation, ownership, offering, or market state has been inferred."
         retry={() => void board.refetch()}
       />
     );
 
   const openItem = (item: AssetOperationsBoardItem) =>
-    props.update({ section: "assets", view: "valuation-launch", asset: item.id, tab: "overview" });
+    props.update({
+      section: "assets",
+      view: "valuation-launch",
+      assetRecord: item.id,
+      assetRecordKind: "asset",
+      assetFocus: "offering",
+      asset: undefined,
+      tab: undefined,
+    });
   const clear = () =>
     props.update({
       q: undefined,
@@ -148,17 +156,14 @@ export function AdminAssetOperations(props: Props) {
       <header className="asset-operations-header admin-list-workspace__heading">
         <div>
           <p>
-            Admin Console <span>›</span> Asset Operations
+            Assets <span>›</span> Valuation &amp; Launch
           </p>
-          <h2>Asset Operations</h2>
+          <h2>Valuation &amp; Launch</h2>
           <span>
             Manage post-receipt assets from valuation through launch and live market operations.
           </span>
         </div>
         <div className="asset-operations-header-actions">
-          <a className="admin-ops-button" href="/admin?section=intake">
-            <ArrowRight aria-hidden="true" /> Open Physical Intake
-          </a>
           <div className="asset-operations-view-menu">
             <button
               type="button"
@@ -216,7 +221,7 @@ export function AdminAssetOperations(props: Props) {
         <div className="asset-operations-primary">
           <Metrics counts={board.data.counts} />
           <section className="asset-operations-workspace">
-            <nav className="asset-operations-tabs" aria-label="Asset Operations queues">
+            <nav className="asset-operations-tabs" aria-label="Valuation and launch queues">
               {assetOperationsTabs.map(([key, label]) => (
                 <button
                   type="button"
@@ -236,7 +241,7 @@ export function AdminAssetOperations(props: Props) {
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Search collectible, collector, asset ID, cert…"
-                  aria-label="Search Asset Operations"
+                  aria-label="Search valuation and launch records"
                 />
               </label>
               <Filter
@@ -360,7 +365,15 @@ export function AdminAssetOperations(props: Props) {
               <OperationalInsights
                 data={board.data}
                 onOpen={(itemId) =>
-                  props.update({ section: "assets", view: "valuation-launch", asset: itemId, tab: "overview" })
+                  props.update({
+                    section: "assets",
+                    view: "valuation-launch",
+                    assetRecord: itemId,
+                    assetRecordKind: "asset",
+                    assetFocus: "offering",
+                    asset: undefined,
+                    tab: undefined,
+                  })
                 }
                 onReviewBlockers={() =>
                   props.update({
@@ -397,7 +410,7 @@ function Metrics({ counts }: { counts: AssetOperationsBoardResponse["counts"] })
     ["Exceptions", counts.exceptions, ShieldAlert, "red", "Policy or process exceptions"],
   ] as const;
   return (
-    <section className="asset-operations-metrics" aria-label="Asset Operations summary">
+    <section className="asset-operations-metrics" aria-label="Valuation and launch summary">
       {cards.map(([label, value, Icon, tone, detail]) => (
         <article
           key={label}
@@ -558,25 +571,8 @@ function RowActions({ item, onOpen }: { item: AssetOperationsBoardItem; onOpen: 
   return (
     <div className="asset-operations-row-menu" role="menu">
       <button type="button" role="menuitem" onClick={onOpen}>
-        Open Asset Operations
+        Open asset record
       </button>
-      <a role="menuitem" href={`/admin?section=collectibles&asset=${encodeURIComponent(item.id)}`}>
-        View Collectible
-      </a>
-      <a
-        role="menuitem"
-        href={`/admin?section=moderation&submission=${encodeURIComponent(item.sourceContext.submissionId)}`}
-      >
-        View source submission
-      </a>
-      {item.sourceContext.intakeId ? (
-        <a
-          role="menuitem"
-          href={`/admin?section=intake&intake=${encodeURIComponent(item.sourceContext.intakeId)}`}
-        >
-          Open Physical Intake
-        </a>
-      ) : null}
       {item.collector ? (
         <a
           role="menuitem"
@@ -726,25 +722,10 @@ function QueuePreview({
           </div>
         </div>
         <div className="asset-operations-preview-links">
-          <span>Quick links</span>
+          <span>Record actions</span>
           <button type="button" onClick={onOpen}>
-            Open Asset Operations <ArrowRight aria-hidden="true" />
+            Open asset record <ArrowRight aria-hidden="true" />
           </button>
-          <a href={`/admin?section=collectibles&asset=${encodeURIComponent(item.id)}`}>
-            View Collectible <ExternalLink aria-hidden="true" />
-          </a>
-          <a
-            href={`/admin?section=moderation&submission=${encodeURIComponent(item.sourceContext.submissionId)}`}
-          >
-            View Source Submission <ExternalLink aria-hidden="true" />
-          </a>
-          {item.sourceContext.intakeId ? (
-            <a
-              href={`/admin?section=intake&intake=${encodeURIComponent(item.sourceContext.intakeId)}`}
-            >
-              Open Physical Intake <ExternalLink aria-hidden="true" />
-            </a>
-          ) : null}
           {item.collector ? (
             <a href={`/admin?section=users&user=${encodeURIComponent(item.collector.id)}`}>
               View Collector <ExternalLink aria-hidden="true" />
@@ -1022,9 +1003,6 @@ function EmptyQueue({ filtered }: { filtered: boolean }) {
       <CheckCircle2 aria-hidden="true" />
       <h3>{copy.title}</h3>
       <p>{copy.detail}</p>
-      <a href="/admin?section=intake">
-        Open Physical Intake <ArrowRight aria-hidden="true" />
-      </a>
     </div>
   );
 }
@@ -1058,7 +1036,7 @@ function OperationsLoading() {
         <b />
         <span />
       </div>
-      <div className="asset-operations-desktop-layout" aria-label="Loading Asset Operations">
+      <div className="asset-operations-desktop-layout" aria-label="Loading valuation and launch">
         <div className="asset-operations-primary">
           <div className="asset-operations-skeleton-metrics">
             {Array.from({ length: 6 }, (_, index) => (

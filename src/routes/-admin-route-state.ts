@@ -29,6 +29,9 @@ export type AdminSearch = {
   section: AdminSection;
   view?: string;
   user?: string;
+  assetRecord?: string;
+  assetRecordKind?: "asset" | "submission";
+  assetFocus?: string;
   asset?: string;
   submission?: string;
   record?: string;
@@ -255,6 +258,12 @@ export function normalizeAdminSearch(search: Record<string, unknown>): AdminSear
     operationsAssignee: stringValue("operationsAssignee"),
     operationsSelected: nonEmptyValue("operationsSelected"),
     user: nonEmptyValue("user"),
+    assetRecord: nonEmptyValue("assetRecord"),
+    assetRecordKind:
+      search.assetRecordKind === "asset" || search.assetRecordKind === "submission"
+        ? search.assetRecordKind
+        : undefined,
+    assetFocus: nonEmptyValue("assetFocus"),
     asset: nonEmptyValue("asset"),
     submission: nonEmptyValue("submission"),
     record: nonEmptyValue("record"),
