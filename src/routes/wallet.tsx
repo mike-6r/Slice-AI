@@ -59,13 +59,15 @@ import { useCurrency } from "@/currency/CurrencyProvider";
 import { queryKeys } from "@/queries/keys";
 import { CapabilityRequiredDialog } from "@/components/account/CapabilityRequiredDialog";
 import { KpiIconTile } from "@/components/ui/KpiIconTile";
+import { WalletMovementHistory } from "@/components/wallet/WalletMovementHistory";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import "@/components/wallet/wallet.css";
 import {
-  filterWalletMovements,
   formatWalletMoney,
+  formatWalletGbp,
   parseWalletGbp,
   validateDepositAmount,
   walletAccessPresentation,
-  type WalletMovementFilter,
 } from "./-wallet-presentation";
 
 export const Route = createFileRoute("/wallet")({
@@ -90,7 +92,6 @@ export function Wallet() {
   const [amount, setAmount] = useState("");
   const [action, setAction] = useState<WalletMovementType>("DEPOSIT");
   const [depositRail, setDepositRail] = useState<DepositRail>("BACS_DIRECT_DEBIT");
-  const [movementFilter, setMovementFilter] = useState<WalletMovementFilter>("ALL");
   const [capabilityDialog, setCapabilityDialog] = useState<AccountCapability | null>(null);
   const [withdrawalReviewAmount, setWithdrawalReviewAmount] = useState<string | null>(null);
   const [recentAuthAmount, setRecentAuthAmount] = useState<string | null>(null);
@@ -168,7 +169,8 @@ export function Wallet() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.portfolio.insights });
     void queryClient.invalidateQueries({ queryKey: queryKeys.portfolio.transactions() });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.compliance });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.providers.movements() });
+    void queryClient.invalidateQueries({ queryKey: ["providers", "movements"] });
+    void queryClient.invalidateQueries({ queryKey: ["providers", "movement"] });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.bankConnections });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.connectPayoutSetup });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.payoutDestinations });
@@ -296,16 +298,24 @@ export function Wallet() {
   if (authRequired) return <WalletAccessRequired />;
 
   return (
-    <main className="wallet-page">
+    <main className="wallet-page wallet-page--redesigned">
       <div className="page-shell wallet-shell">
-        <WalletHeading />
+        <WalletHeading
+          onRefresh={refreshWallet}
+          refreshing={portfolio.isFetching || movements.isFetching}
+        />
         <WalletKpis query={portfolio} withdrawal={withdrawalOverview} />
-        <section className="wallet-row wallet-row--primary" aria-label="Wallet access and actions">
-          <ConnectedBankPanel
-            query={banks}
-            connectPayout={connectPayout}
-            refreshWallet={refreshWallet}
-          />
+        <nav className="wallet-section-nav" aria-label="Wallet sections">
+          <a href="#wallet-funding">Move money</a>
+          <a href="#wallet-history">Movement history</a>
+          <a href="#wallet-insights">Insights & settlement</a>
+          <a href="#wallet-help">Wallet guide</a>
+        </nav>
+        <section
+          id="wallet-funding"
+          className="wallet-row wallet-row--primary"
+          aria-label="Wallet access and actions"
+        >
           <MoveMoneyPanel
             action={action}
             setAction={setAction}
@@ -335,33 +345,37 @@ export function Wallet() {
               cardFunding.mutate({ amount, savePaymentMethod })
             }
           />
-          <AccountStatusPanel
-            query={compliance}
-            banks={banks}
-            capabilities={capabilities.data?.capabilities}
-            verification={verification}
-            connectPayout={connectPayout}
-            onCreateConnect={services.providers.createConnectOnboarding}
-          />
+          <div className="wallet-account-stack">
+            <ConnectedBankPanel
+              query={banks}
+              connectPayout={connectPayout}
+              refreshWallet={refreshWallet}
+            />
+            <AccountStatusPanel
+              query={compliance}
+              banks={banks}
+              capabilities={capabilities.data?.capabilities}
+              verification={verification}
+              connectPayout={connectPayout}
+              onCreateConnect={services.providers.createConnectOnboarding}
+            />
+          </div>
         </section>
         <section
           className="wallet-row wallet-row--history"
           aria-label="Wallet history and insights"
         >
           <MovementsPanel
-            query={movements}
             demoFundingCount={
               (portfolioTransactions.data?.items ?? []).filter(
                 (item) => item.type.toUpperCase() === "DEMO_FUNDING" && item.side === "CREDIT",
               ).length
             }
-            filter={movementFilter}
-            setFilter={setMovementFilter}
             onTimelineSelect={setTimelineMovement}
             onResumeCardFunding={(movementId) => resumeCardFunding.mutateAsync(movementId)}
             onCancelCardFunding={(movementId) => cancelCardFunding.mutateAsync(movementId)}
           />
-          <div className="wallet-side-stack">
+          <div className="wallet-side-stack" id="wallet-insights">
             <SettlementTimelinePanel
               portfolio={portfolio}
               compliance={compliance}
@@ -372,6 +386,7 @@ export function Wallet() {
             <WalletInsightsPanel />
           </div>
         </section>
+        <WalletGuide />
         <CapabilityRequiredDialog
           decision={capabilityDialog}
           onClose={() => setCapabilityDialog(null)}
@@ -502,12 +517,68 @@ function PayoutSetupPanel({
   );
 }
 
-function WalletHeading() {
+function WalletHeading({ onRefresh, refreshing }: { onRefresh: () => void; refreshing: boolean }) {
   return (
     <header className="wallet-heading">
-      <h1>Wallet</h1>
-      <p>Cash, funding, verification, and money movement infrastructure.</p>
+      <div>
+        <p className="wallet-eyebrow">YOUR MONEY. READY FOR WHAT’S NEXT.</p>
+        <h1>Wallet</h1>
+        <p>Fund your next find. Keep every movement in view.</p>
+      </div>
+      <div className="wallet-heading-actions">
+        <span className="wallet-currency-label">GBP account</span>
+        <button
+          className="wallet-secondary-button"
+          type="button"
+          disabled={refreshing}
+          onClick={onRefresh}
+        >
+          <RefreshCw aria-hidden="true" />
+          {refreshing ? "Refreshing…" : "Refresh wallet"}
+        </button>
+      </div>
     </header>
+  );
+}
+
+function WalletGuide() {
+  return (
+    <section id="wallet-help" className="wallet-guide" aria-labelledby="wallet-guide-title">
+      <div>
+        <p className="wallet-eyebrow">A LITTLE CLARITY</p>
+        <h2 id="wallet-guide-title">Know where your money stands.</h2>
+        <p>
+          Your wallet holds cash. Your <Link to="/portfolio">Portfolio</Link> holds your
+          investments.
+        </p>
+      </div>
+      <div>
+        <details>
+          <summary>Why are my balances different?</summary>
+          <p>
+            Your total wallet balance includes available and reserved cash. Cash reserved for orders
+            or withdrawals cannot be spent again. Pending deposits are not spendable until
+            confirmed; they are shown separately.
+          </p>
+        </details>
+        <details>
+          <summary>When can I withdraw?</summary>
+          <p>
+            Withdrawal availability depends on settlement, account eligibility, and the payment
+            provider. The available-to-withdraw balance is checked again before you submit. You will
+            review the destination and fees before confirming.
+          </p>
+        </details>
+        <details>
+          <summary>What if a payment is pending or fails?</summary>
+          <p>
+            Open its Details in movement history for the latest status, settlement updates, and any
+            available next steps. A pending request is not a completed payment. Only retry when the
+            movement details say it is safe to continue.
+          </p>
+        </details>
+      </div>
+    </section>
   );
 }
 
@@ -546,21 +617,31 @@ function WalletKpis({
       <WalletKpi
         icon={Clock3}
         label="Pending deposits"
-        value={formatWalletMoney(cash.pendingMinor ?? "0")}
+        value={cash.pendingMinor !== undefined ? formatWalletMoney(cash.pendingMinor) : "—"}
         detail={
-          cash.pendingDepositCount
-            ? `${cash.pendingDepositCount} ${cash.pendingDepositCount === 1 ? "deposit is" : "deposits are"} waiting for bank settlement`
-            : "No deposits waiting for bank settlement"
+          cash.pendingMinor === undefined
+            ? "Pending deposit details unavailable"
+            : cash.pendingDepositCount
+              ? `${cash.pendingDepositCount} ${cash.pendingDepositCount === 1 ? "deposit is" : "deposits are"} waiting for bank settlement`
+              : "No deposits waiting for bank settlement"
         }
       />
       <WalletKpi
         icon={ArrowDownToLine}
         label="Available to withdraw"
-        value={formatWalletMoney(withdrawal.data?.withdrawableMinor ?? "0")}
+        value={
+          withdrawal.isError || !withdrawal.data
+            ? "—"
+            : formatWalletMoney(withdrawal.data.withdrawableMinor)
+        }
         detail={
-          withdrawal.data?.providerLiquidityStatus === "AVAILABLE"
-            ? "Eligible for bank payout"
-            : "Provider liquidity check required"
+          withdrawal.isError
+            ? "Unable to check · refresh wallet"
+            : !withdrawal.data
+              ? "Checking withdrawal availability…"
+              : withdrawal.data?.providerLiquidityStatus === "AVAILABLE"
+                ? "Eligible for bank payout"
+                : "Provider liquidity check required"
         }
       />
       <WalletKpi
@@ -573,7 +654,7 @@ function WalletKpis({
         icon={BanknoteArrowDown}
         label="Total wallet balance"
         value={formatWalletMoney(cash.totalMinor)}
-        detail="Across all cash states"
+        detail="Available cash + reserved cash"
       />
     </section>
   );
@@ -685,8 +766,8 @@ function ConnectedBankPanel({
             <p>
               <strong>Verified payout account</strong>
               <small>
-                Standard GBP bank payout only. Faster delivery is never shown unless Stripe
-                explicitly returns it as eligible.
+                Withdraw eligible cash to your verified bank account. Available payout options
+                appear when you withdraw.
               </small>
             </p>
             <StatusPill status={connectPayout.data?.status ?? "NOT_STARTED"} />
@@ -1251,7 +1332,7 @@ function MoveMoneyPanel({
               <Landmark aria-hidden="true" />
               <span>
                 <strong>UK bank</strong>
-                <small>Free · Bacs Direct Debit</small>
+                <small>Bacs Direct Debit</small>
               </span>
             </button>
             <button
@@ -1283,7 +1364,7 @@ function MoveMoneyPanel({
               onCapabilityRequired(capability);
               return;
             }
-            if (domainBlocked) return;
+            if (domainBlocked || withdrawalBlocked || movement.isPending || cardFundingBusy) return;
             if (action === "WITHDRAWAL") {
               const amountMinor = parseWalletGbp(amount);
               if (!amountMinor || BigInt(amountMinor) <= 0n) {
@@ -1307,28 +1388,50 @@ function MoveMoneyPanel({
               onChange={(event) => setAmount(event.target.value)}
               inputMode="decimal"
               placeholder="£0.00"
-              aria-invalid={action === "DEPOSIT" && Boolean(depositValidation?.message)}
+              aria-invalid={
+                action === "DEPOSIT" && Boolean(amount) && Boolean(depositValidation?.message)
+              }
               aria-describedby={
-                action === "DEPOSIT" && depositValidation?.message
+                action === "DEPOSIT" && amount && depositValidation?.message
                   ? "wallet-deposit-amount-error"
                   : undefined
               }
             />
           </label>
-          {action === "DEPOSIT" && depositValidation?.message ? (
+          {action === "DEPOSIT" && amount && depositValidation?.message ? (
             <p id="wallet-deposit-amount-error" className="wallet-move-validation" role="alert">
               {depositValidation.message}
             </p>
           ) : null}
           {action === "DEPOSIT" ? (
+            <div className="wallet-amount-presets" aria-label="Suggested deposit amounts">
+              {[25, 50, 100, 250].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={amount === String(value)}
+                  onClick={() => setAmount(String(value))}
+                >
+                  £{value}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {action === "DEPOSIT" ? (
             <dl className="wallet-move-terms">
               <div>
                 <dt>Est. arrival</dt>
-                <dd>{isCardDeposit ? "After Stripe confirms" : "1–2 business days"}</dd>
+                <dd>{isCardDeposit ? "After payment confirmation" : "After bank settlement"}</dd>
               </div>
               <div>
                 <dt>Fee</dt>
-                <dd>{isCardDeposit ? "Shown before you confirm" : "FREE"}</dd>
+                <dd>
+                  {isCardDeposit
+                    ? "Shown before you confirm"
+                    : feePolicy.data
+                      ? formatMovementFee(feePolicy.data, action, amount)
+                      : "Checking fees…"}
+                </dd>
               </div>
               <div>
                 <dt>Min. deposit</dt>
@@ -1419,8 +1522,8 @@ function MoveMoneyPanel({
           )}
           {feePolicy.data && action === "WITHDRAWAL" && parseWalletGbp(amount) ? (
             <p className="wallet-move-fee">
-              You send: {formatWalletMoney(parseWalletGbp(amount)!)}
-              {" · "}You receive: {formatWalletMoney(withdrawalNetMinor(feePolicy.data, amount))}
+              You send: {formatWalletGbp(parseWalletGbp(amount)!)}
+              {" · "}You receive: {formatWalletGbp(withdrawalNetMinor(feePolicy.data, amount))}
             </p>
           ) : null}
           {feePolicy.data ? (
@@ -1451,7 +1554,7 @@ function MoveMoneyPanel({
                 ? amount
                   ? isCardDeposit
                     ? `Continue to secure card payment`
-                    : `Deposit ${formatWalletMoney(parseWalletGbp(amount) ?? "0")}`
+                    : `Deposit ${formatWalletGbp(parseWalletGbp(amount) ?? "0")}`
                   : "Deposit"
                 : "Request withdrawal"}
             <ArrowRight aria-hidden="true" />
@@ -1465,7 +1568,7 @@ function MoveMoneyPanel({
             (action === "DEPOSIT"
               ? isCardDeposit
                 ? "Your card payment remains pending until Stripe sends a verified confirmation."
-                : "Deposits are protected by Stripe and our bank partners."
+                : "Your balance updates after the payment provider confirms settlement."
               : "Your request will appear in wallet history once it is accepted.")}
         </p>
         {movement.error ? <InlineError error={movement.error} /> : null}
@@ -1538,15 +1641,15 @@ function WithdrawalReviewDialog({
         <dl className="wallet-withdrawal-review__summary">
           <div>
             <dt>Withdrawal amount</dt>
-            <dd>{amountMinor ? formatWalletMoney(amountMinor) : "—"}</dd>
+            <dd>{amountMinor ? formatWalletGbp(amountMinor) : "—"}</dd>
           </div>
           <div>
             <dt>Slice fee</dt>
-            <dd>{feeMinor !== null ? formatWalletMoney(feeMinor) : "Loading…"}</dd>
+            <dd>{feeMinor !== null ? formatWalletGbp(feeMinor) : "Loading…"}</dd>
           </div>
           <div>
             <dt>Estimated payout</dt>
-            <dd>{netMinor !== null ? formatWalletMoney(netMinor) : "Loading…"}</dd>
+            <dd>{netMinor !== null ? formatWalletGbp(netMinor) : "Loading…"}</dd>
           </div>
           <div>
             <dt>Currency</dt>
@@ -1705,7 +1808,7 @@ function CardFundingDialog({
         </header>
         <div className="wallet-card-funding-summary">
           <span>Amount</span>
-          <strong>{formatWalletMoney(session.movement.amountMinor)}</strong>
+          <strong>{formatWalletGbp(session.movement.amountMinor)}</strong>
           <small>
             {session.movement.reference ?? `WLT-${session.movement.id.slice(0, 8).toUpperCase()}`}
           </small>
@@ -1740,7 +1843,7 @@ function CardFundingDialog({
             onClick={() => void confirm()}
             disabled={!ready || submitting}
           >
-            {submitting ? "Confirming…" : `Pay ${formatWalletMoney(session.movement.amountMinor)}`}
+            {submitting ? "Confirming…" : `Pay ${formatWalletGbp(session.movement.amountMinor)}`}
           </button>
         </footer>
       </section>
@@ -2063,114 +2166,32 @@ function StatusRow({
       </dt>
       <dd>
         <StatusPill status={status} />
-        <ArrowRight aria-hidden="true" />
       </dd>
     </div>
   );
 }
 
 function MovementsPanel({
-  query,
   demoFundingCount,
-  filter,
-  setFilter,
   onTimelineSelect,
   onResumeCardFunding,
   onCancelCardFunding,
 }: {
-  query: UseQueryResult<WalletMovementPage>;
   demoFundingCount: number;
-  filter: WalletMovementFilter;
-  setFilter: (value: WalletMovementFilter) => void;
   onTimelineSelect: (item: WalletMovementView) => void;
   onResumeCardFunding: (movementId: string) => Promise<CardFundingSession>;
   onCancelCardFunding: (movementId: string) => Promise<WalletMovementView>;
 }) {
-  const items = filterWalletMovements(query.data?.items ?? [], filter);
   const [selected, setSelected] = useState<WalletMovementView | null>(null);
   return (
-    <WalletPanel
-      title="Movement history"
-      icon={<ArrowDownToLine />}
-      className="wallet-panel--movements"
-      action={<span>{query.data?.items.length ? `${query.data.items.length} recent` : ""}</span>}
-    >
-      <div className="wallet-panel__body">
-        <div
-          className="wallet-movement-filters"
-          role="tablist"
-          aria-label="Wallet movement categories"
-        >
-          {(["ALL", "DEPOSIT", "WITHDRAWAL"] as const).map((type) => (
-            <button
-              key={type}
-              type="button"
-              role="tab"
-              aria-selected={filter === type}
-              className={filter === type ? "is-active" : ""}
-              onClick={() => setFilter(type)}
-            >
-              {type === "ALL" ? "All" : type === "DEPOSIT" ? "Deposits" : "Withdrawals"}
-            </button>
-          ))}
-        </div>
-        {query.isLoading ? <RowsSkeleton rows={4} /> : null}
-        {query.isError ? (
-          <PanelError
-            message="Unable to load money movements."
-            retry={() => void query.refetch()}
-          />
-        ) : null}
-        {!query.isLoading && !query.isError && items.length ? (
-          <div
-            className="wallet-table-wrap"
-            tabIndex={0}
-            aria-label="Money movements; scroll horizontally on smaller screens"
-          >
-            <table className="wallet-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Type</th>
-                  <th>Amount</th>
-                  <th>Source / destination</th>
-                  <th>Reference</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => (
-                  <MovementRow
-                    key={item.id}
-                    item={item}
-                    onSelect={(selectedItem) => {
-                      setSelected(selectedItem);
-                      onTimelineSelect(selectedItem);
-                    }}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
-        {!query.isLoading && !query.isError && !items.length ? (
-          <PanelEmpty
-            icon={<Clock3 />}
-            title="No provider movements yet"
-            detail={
-              demoFundingCount
-                ? `No bank or card deposits or withdrawals have been made. ${demoFundingCount} internal demo funding ${demoFundingCount === 1 ? "credit is" : "credits are"} shown in Portfolio activity.`
-                : "Your bank and card deposits and withdrawals will appear here."
-            }
-            action={
-              <Link to={demoFundingCount ? "/portfolio" : "/how-it-works"}>
-                {demoFundingCount ? "View portfolio activity" : "Learn how it works"}{" "}
-                <ArrowRight aria-hidden="true" />
-              </Link>
-            }
-          />
-        ) : null}
-      </div>
+    <>
+      <WalletMovementHistory
+        demoFundingCount={demoFundingCount}
+        onSelect={(item) => {
+          setSelected(item);
+          onTimelineSelect(item);
+        }}
+      />
       {selected ? (
         <MovementDetail
           item={selected}
@@ -2179,44 +2200,7 @@ function MovementsPanel({
           onCancelCardFunding={onCancelCardFunding}
         />
       ) : null}
-    </WalletPanel>
-  );
-}
-
-function MovementRow({
-  item,
-  onSelect,
-}: {
-  item: WalletMovementView;
-  onSelect: (item: WalletMovementView) => void;
-}) {
-  return (
-    <tr className="wallet-movement-row" onClick={() => onSelect(item)}>
-      <td>{formatDate(item.createdAt)}</td>
-      <td>
-        <span className={`wallet-movement-icon is-${item.type.toLowerCase()}`}>
-          {item.type === "DEPOSIT" ? (
-            <ArrowDownToLine aria-hidden="true" />
-          ) : (
-            <ArrowUpFromLine aria-hidden="true" />
-          )}
-        </span>
-        {item.type === "DEPOSIT" ? "Deposit" : "Withdrawal"}
-      </td>
-      <td className={item.type === "DEPOSIT" ? "is-credit" : "is-debit"}>
-        {item.type === "DEPOSIT" ? "+" : "-"}
-        {formatWalletMoney(item.amountMinor)}
-      </td>
-      <td>{item.sourceLabel ?? "GBP wallet"}</td>
-      <td>
-        <button type="button" className="wallet-reference" onClick={() => onSelect(item)}>
-          {item.reference ?? `WLT-${item.id.slice(0, 8).toUpperCase()}`}
-        </button>
-      </td>
-      <td>
-        <StatusPill status={item.status} />
-      </td>
-    </tr>
+    </>
   );
 }
 
@@ -2278,7 +2262,9 @@ function WalletInsightsPanel() {
               label="Settled movements"
               value={String(insights.data.settledMovementCount ?? 0)}
               change={
-                insights.data.settledMovementCount ? "100% completed" : "No settled movements"
+                insights.data.settledMovementCount
+                  ? "Completed in this period"
+                  : "No settled movements"
               }
             />
           </dl>
@@ -2321,6 +2307,9 @@ function MovementDetail({
   });
   const movement = detail.data ?? item;
   const canResumeCardPayment =
+    !detail.isFetching &&
+    !detail.isError &&
+    Boolean(detail.data) &&
     movement.type === "DEPOSIT" &&
     movement.rail === "CARD" &&
     movement.status === "PENDING_PROVIDER";
@@ -2358,235 +2347,257 @@ function MovementDetail({
   };
   const cardFundingBusy = resuming || cancelling;
   return (
-    <div
-      className="wallet-detail-backdrop"
-      role="presentation"
-      onClick={cardFundingBusy ? undefined : onClose}
+    <DialogPrimitive.Root
+      open
+      onOpenChange={(open) => {
+        if (!open && !cardFundingBusy) onClose();
+      }}
     >
-      <section
-        className="wallet-detail"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="movement-detail-title"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="wallet-detail__head">
-          <div>
-            <p className="page-kicker">Movement detail</p>
-            <h3 id="movement-detail-title">
-              {movement.type === "DEPOSIT" ? "Deposit" : "Withdrawal"}
-            </h3>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="wallet-detail-backdrop" />
+        <DialogPrimitive.Content
+          className="wallet-detail wallet-detail--redesigned"
+          aria-describedby={undefined}
+          onEscapeKeyDown={(event) => {
+            if (cardFundingBusy) event.preventDefault();
+          }}
+          onInteractOutside={(event) => {
+            if (cardFundingBusy) event.preventDefault();
+          }}
+        >
+          <div className="wallet-detail__head">
+            <div>
+              <p className="page-kicker">Movement detail</p>
+              <DialogPrimitive.Title asChild>
+                <h3 id="movement-detail-title">
+                  {movement.type === "DEPOSIT" ? "Deposit" : "Withdrawal"}
+                </h3>
+              </DialogPrimitive.Title>
+            </div>
+            <button
+              type="button"
+              aria-label="Close movement detail"
+              onClick={onClose}
+              disabled={cardFundingBusy}
+            >
+              ×
+            </button>
           </div>
-          <button
-            type="button"
-            aria-label="Close movement detail"
-            onClick={onClose}
-            disabled={cardFundingBusy}
-          >
-            ×
-          </button>
-        </div>
-        <dl className="wallet-detail__grid">
-          <div>
-            <dt>Amount</dt>
-            <dd>
-              {movement.type === "DEPOSIT" ? "+" : "−"}
-              {formatWalletMoney(movement.amountMinor)}
-            </dd>
-          </div>
-          <div>
-            <dt>Status</dt>
-            <dd>
-              <StatusPill status={movement.status} />
-            </dd>
-          </div>
-          <div>
-            <dt>Reference</dt>
-            <dd>{movement.reference ?? `WLT-${movement.id.slice(0, 8).toUpperCase()}`}</dd>
-          </div>
-          <div>
-            <dt>Requested</dt>
-            <dd>{formatDate(movement.createdAt)}</dd>
-          </div>
-          <div>
-            <dt>Source / destination</dt>
-            <dd>{movement.sourceLabel ?? "GBP wallet"}</dd>
-          </div>
-          <div>
-            <dt>Currency</dt>
-            <dd>GBP</dd>
-          </div>
-        </dl>
-        <div className="wallet-detail__sections">
-          <section>
-            <p className="wallet-detail__section-label">Funding and settlement</p>
-            <dl className="wallet-detail__facts">
-              <div>
-                <dt>Method</dt>
-                <dd>{movementRailLabel(movement.rail, movement.type)}</dd>
-              </div>
-              <div>
-                <dt>Availability</dt>
-                <dd>{movement.availability?.label ?? "Waiting for provider confirmation"}</dd>
-              </div>
-              {movement.availability?.availableOn ? (
-                <div>
-                  <dt>Provider availability</dt>
-                  <dd>{formatDate(movement.availability.availableOn)}</dd>
-                </div>
-              ) : null}
-              <div>
-                <dt>Provider</dt>
-                <dd>
-                  {movement.provider
-                    ? `${movement.provider.name} · ${movement.provider.status}`
-                    : "Provider status pending"}
-                </dd>
-              </div>
-            </dl>
-          </section>
-          <section>
-            <p className="wallet-detail__section-label">Fees and payout</p>
-            <dl className="wallet-detail__facts">
-              <div>
-                <dt>Slice fee</dt>
-                <dd>
-                  {formatWalletMoney(movement.fees?.sliceFeeMinor ?? movement.sliceFeeMinor ?? "0")}
-                </dd>
-              </div>
-              <div>
-                <dt>Provider fee</dt>
-                <dd>
-                  {movement.fees?.providerFeeStatus === "KNOWN" && movement.fees.providerFeeMinor
-                    ? formatWalletMoney(movement.fees.providerFeeMinor)
-                    : "Pending provider evidence"}
-                </dd>
-              </div>
-              <div>
-                <dt>{movement.type === "WITHDRAWAL" ? "Net payout" : "Provider net"}</dt>
-                <dd>{formatWalletMoney(movement.fees?.netPayoutMinor ?? movement.amountMinor)}</dd>
-              </div>
-              <div>
-                <dt>Provider reference</dt>
-                <dd>{movement.provider?.reference ?? "Available after provider creates it"}</dd>
-              </div>
-            </dl>
-          </section>
-          {canResumeCardPayment ? (
-            <section className="wallet-detail__resume">
-              <p className="wallet-detail__section-label">Secure card payment</p>
-              <strong>Finish your secure card payment</strong>
-              <p>
-                This pending payment is still reserved with Stripe. Continue with the same secure
-                payment form — no second deposit will be created.
-              </p>
-              <div className="wallet-detail__resume-actions">
-                <button
-                  type="button"
-                  className="wallet-detail__resume-button"
-                  onClick={() => void resumeCardPayment()}
-                  disabled={cardFundingBusy}
-                >
-                  <CreditCard aria-hidden="true" />
-                  {resuming ? "Opening secure payment…" : "Continue secure card payment"}
-                  <ArrowRight aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  className="wallet-detail__cancel-button"
-                  onClick={() => {
-                    setCancelError(null);
-                    setConfirmCancellation(true);
-                  }}
-                  disabled={cardFundingBusy}
-                >
-                  Cancel payment
-                </button>
-              </div>
-              {confirmCancellation ? (
-                <div className="wallet-detail__cancel-confirmation" role="alert">
-                  <strong>Cancel this payment?</strong>
-                  <p>
-                    Stripe will cancel this unconfirmed {formatWalletMoney(movement.amountMinor)}
-                    payment. No money will be added to your Wallet.
-                  </p>
-                  <div>
-                    <button
-                      type="button"
-                      className="wallet-detail__cancel-keep"
-                      onClick={() => setConfirmCancellation(false)}
-                      disabled={cancelling}
-                    >
-                      Keep payment
-                    </button>
-                    <button
-                      type="button"
-                      className="wallet-detail__cancel-confirm"
-                      onClick={() => void cancelCardPayment()}
-                      disabled={cancelling}
-                    >
-                      {cancelling ? "Cancelling…" : "Yes, cancel payment"}
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-              {resumeError ? (
-                <p className="wallet-detail__resume-error" role="alert">
-                  {resumeError}
-                </p>
-              ) : null}
-              {cancelError ? (
-                <p className="wallet-detail__resume-error" role="alert">
-                  {cancelError}
-                </p>
-              ) : null}
-            </section>
+          <dl className="wallet-detail__grid">
+            <div>
+              <dt>Amount</dt>
+              <dd>
+                {movement.type === "DEPOSIT" ? "+" : "−"}
+                {formatWalletGbp(movement.amountMinor)}
+              </dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>
+                <StatusPill status={movement.status} />
+              </dd>
+            </div>
+            <div>
+              <dt>Reference</dt>
+              <dd>{movement.reference ?? `WLT-${movement.id.slice(0, 8).toUpperCase()}`}</dd>
+            </div>
+            <div>
+              <dt>Requested</dt>
+              <dd>{formatDate(movement.createdAt)}</dd>
+            </div>
+            <div>
+              <dt>Source / destination</dt>
+              <dd>{movement.sourceLabel ?? "GBP wallet"}</dd>
+            </div>
+            <div>
+              <dt>Currency</dt>
+              <dd>GBP</dd>
+            </div>
+          </dl>
+          {detail.isError ? (
+            <PanelError
+              message="Unable to refresh this movement. Displaying the last loaded details."
+              retry={() => void detail.refetch()}
+            />
           ) : null}
-          {movement.failure ? (
-            <section className="wallet-detail__outcome is-warning">
-              <p className="wallet-detail__section-label">What happened</p>
-              <strong>{movement.failure.title}</strong>
-              <p>{movement.failure.detail}</p>
-              <dl>
+          <div className="wallet-detail__sections">
+            <section>
+              <p className="wallet-detail__section-label">Funding and settlement</p>
+              <dl className="wallet-detail__facts">
                 <div>
-                  <dt>Money status</dt>
-                  <dd>{movement.failure.moneyDisposition}</dd>
+                  <dt>Method</dt>
+                  <dd>{movementRailLabel(movement.rail, movement.type)}</dd>
                 </div>
                 <div>
-                  <dt>Next step</dt>
-                  <dd>{movement.failure.nextStep}</dd>
+                  <dt>Availability</dt>
+                  <dd>{movement.availability?.label ?? "Availability details unavailable"}</dd>
+                </div>
+                {movement.availability?.availableOn ? (
+                  <div>
+                    <dt>Provider availability</dt>
+                    <dd>{formatDate(movement.availability.availableOn)}</dd>
+                  </div>
+                ) : null}
+                <div>
+                  <dt>Provider</dt>
+                  <dd>
+                    {movement.provider
+                      ? `${movement.provider.name} · ${movement.provider.status}`
+                      : "Provider details unavailable"}
+                  </dd>
                 </div>
               </dl>
             </section>
-          ) : null}
-          {movement.timeline?.length ? (
-            <section className="wallet-detail__lifecycle">
-              <p className="wallet-detail__section-label">Verified movement updates</p>
-              <ol>
-                {movement.timeline.map((event) => (
-                  <li key={`${event.occurredAt}-${event.status}`}>
-                    <span>
-                      <strong>{event.label}</strong>
-                      <small>{formatDate(event.occurredAt)}</small>
-                    </span>
-                    <StatusPill status={event.status} />
-                  </li>
-                ))}
-              </ol>
+            <section>
+              <p className="wallet-detail__section-label">Fees and payout</p>
+              <dl className="wallet-detail__facts">
+                <div>
+                  <dt>Slice fee</dt>
+                  <dd>
+                    {movement.fees?.sliceFeeMinor !== undefined ||
+                    movement.sliceFeeMinor !== undefined
+                      ? formatWalletGbp(movement.fees?.sliceFeeMinor ?? movement.sliceFeeMinor!)
+                      : "Not provided"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Provider fee</dt>
+                  <dd>
+                    {movement.fees?.providerFeeStatus === "KNOWN" && movement.fees.providerFeeMinor
+                      ? formatWalletGbp(movement.fees.providerFeeMinor)
+                      : "Pending provider evidence"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{movement.type === "WITHDRAWAL" ? "Net payout" : "Provider net"}</dt>
+                  <dd>
+                    {movement.fees?.netPayoutMinor !== undefined
+                      ? formatWalletGbp(movement.fees.netPayoutMinor)
+                      : "Not provided"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Provider reference</dt>
+                  <dd>{movement.provider?.reference ?? "Not provided"}</dd>
+                </div>
+              </dl>
             </section>
-          ) : null}
-        </div>
-        {detail.isError ? (
-          <p className="wallet-detail__note">
-            The latest provider detail could not be loaded. Your ledger history remains available.
-          </p>
-        ) : (
-          <p className="wallet-detail__note">
-            Provider updates are verified before Slice changes wallet balances.
-          </p>
-        )}
-      </section>
-    </div>
+            {canResumeCardPayment ? (
+              <section className="wallet-detail__resume">
+                <p className="wallet-detail__section-label">Secure card payment</p>
+                <strong>Finish your secure card payment</strong>
+                <p>
+                  This pending payment is still reserved with Stripe. Continue with the same secure
+                  payment form — no second deposit will be created.
+                </p>
+                <div className="wallet-detail__resume-actions">
+                  <button
+                    type="button"
+                    className="wallet-detail__resume-button"
+                    onClick={() => void resumeCardPayment()}
+                    disabled={cardFundingBusy}
+                  >
+                    <CreditCard aria-hidden="true" />
+                    {resuming ? "Opening secure payment…" : "Continue secure card payment"}
+                    <ArrowRight aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className="wallet-detail__cancel-button"
+                    onClick={() => {
+                      setCancelError(null);
+                      setConfirmCancellation(true);
+                    }}
+                    disabled={cardFundingBusy}
+                  >
+                    Cancel payment
+                  </button>
+                </div>
+                {confirmCancellation ? (
+                  <div className="wallet-detail__cancel-confirmation" role="alert">
+                    <strong>Cancel this payment?</strong>
+                    <p>
+                      Stripe will cancel this unconfirmed {formatWalletGbp(movement.amountMinor)}
+                      payment. No money will be added to your Wallet.
+                    </p>
+                    <div>
+                      <button
+                        type="button"
+                        className="wallet-detail__cancel-keep"
+                        onClick={() => setConfirmCancellation(false)}
+                        disabled={cancelling}
+                      >
+                        Keep payment
+                      </button>
+                      <button
+                        type="button"
+                        className="wallet-detail__cancel-confirm"
+                        onClick={() => void cancelCardPayment()}
+                        disabled={cancelling}
+                      >
+                        {cancelling ? "Cancelling…" : "Yes, cancel payment"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+                {resumeError ? (
+                  <p className="wallet-detail__resume-error" role="alert">
+                    {resumeError}
+                  </p>
+                ) : null}
+                {cancelError ? (
+                  <p className="wallet-detail__resume-error" role="alert">
+                    {cancelError}
+                  </p>
+                ) : null}
+              </section>
+            ) : null}
+            {movement.failure ? (
+              <section className="wallet-detail__outcome is-warning">
+                <p className="wallet-detail__section-label">What happened</p>
+                <strong>{movement.failure.title}</strong>
+                <p>{movement.failure.detail}</p>
+                <dl>
+                  <div>
+                    <dt>Money status</dt>
+                    <dd>{movement.failure.moneyDisposition}</dd>
+                  </div>
+                  <div>
+                    <dt>Next step</dt>
+                    <dd>{movement.failure.nextStep}</dd>
+                  </div>
+                </dl>
+              </section>
+            ) : null}
+            {movement.timeline?.length ? (
+              <section className="wallet-detail__lifecycle">
+                <p className="wallet-detail__section-label">Verified movement updates</p>
+                <ol>
+                  {movement.timeline.map((event) => (
+                    <li key={`${event.occurredAt}-${event.status}`}>
+                      <span>
+                        <strong>{event.label}</strong>
+                        <small>{formatDate(event.occurredAt)}</small>
+                      </span>
+                      <StatusPill status={event.status} />
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            ) : null}
+          </div>
+          {detail.isError ? (
+            <p className="wallet-detail__note">
+              The latest provider detail could not be loaded. Your ledger history remains available.
+            </p>
+          ) : (
+            <p className="wallet-detail__note">
+              Provider updates are verified before Slice changes wallet balances.
+            </p>
+          )}
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
 
@@ -2606,7 +2617,14 @@ function SettlementTimelinePanel({
   void portfolio;
   void compliance;
   void banks;
+  const services = useAppServices();
+  const selectedDetail = useQuery({
+    queryKey: ["providers", "movement", selectedMovement?.id],
+    queryFn: () => services.providers.movement(selectedMovement!.id),
+    enabled: Boolean(selectedMovement),
+  });
   const relevant =
+    selectedDetail.data ??
     selectedMovement ??
     movements.data?.items.find((item) =>
       ["PENDING_PROVIDER", "PROCESSING", "HELD", "MANUAL_REVIEW"].includes(item.status),
@@ -2619,27 +2637,35 @@ function SettlementTimelinePanel({
       icon={<CalendarClock />}
       className="wallet-panel--timeline"
     >
-      <div className="wallet-timeline" aria-label="Wallet settlement timeline">
-        {relevant ? (
-          <p className="wallet-timeline__context">
-            {movementRailLabel(relevant.rail, relevant.type)} ·{" "}
-            {relevant.reference ?? `WLT-${relevant.id.slice(0, 8).toUpperCase()}`}
-          </p>
-        ) : null}
-        {steps.map((step, index) => (
-          <div key={step.label} className={`wallet-timeline__step is-${step.state}`}>
-            <span>{index + 1}</span>
-            <strong>{step.label}</strong>
-            <small>
-              {step.state === "complete"
-                ? "Complete"
-                : step.state === "active"
-                  ? "In progress"
-                  : "Next"}
-            </small>
-          </div>
-        ))}
-      </div>
+      {(selectedMovement ? selectedDetail.isError : movements.isError) ? (
+        <PanelError
+          message="Unable to refresh the movement timeline."
+          retry={() => void (selectedMovement ? selectedDetail.refetch() : movements.refetch())}
+        />
+      ) : null}
+      {(selectedMovement ? selectedDetail.isError : movements.isError) ? null : (
+        <div className="wallet-timeline" aria-label="Wallet settlement timeline">
+          {relevant ? (
+            <p className="wallet-timeline__context">
+              {movementRailLabel(relevant.rail, relevant.type)} ·{" "}
+              {relevant.reference ?? `WLT-${relevant.id.slice(0, 8).toUpperCase()}`}
+            </p>
+          ) : null}
+          {steps.map((step, index) => (
+            <div key={step.label} className={`wallet-timeline__step is-${step.state}`}>
+              <span>{index + 1}</span>
+              <strong>{step.label}</strong>
+              <small>
+                {step.state === "complete"
+                  ? "Complete"
+                  : step.state === "active"
+                    ? "In progress"
+                    : "Next"}
+              </small>
+            </div>
+          ))}
+        </div>
+      )}
     </WalletPanel>
   );
 }
@@ -2937,7 +2963,7 @@ function formatMovementFee(policy: FeePolicy, action: WalletMovementType, amount
   if (bps === 0) return "none";
   const amountMinor = parseWalletGbp(amount);
   if (!amountMinor) return `${bps / 100}%`;
-  return `${formatWalletMoney(feeMinorForPolicy(amountMinor, bps))} (${bps / 100}%)`;
+  return `${formatWalletGbp(feeMinorForPolicy(amountMinor, bps))} (${bps / 100}%)`;
 }
 function withdrawalNetMinor(policy: FeePolicy, amount: string) {
   const amountMinor = parseWalletGbp(amount);

@@ -205,3 +205,14 @@ export interface WalletMovementPage {
   items: WalletMovementView[];
   nextCursor: string | null;
 }
+
+/** Filters are evaluated by the wallet API across the complete owned history. */
+export type WalletMovementQuery = {
+  cursor?: string;
+  limit?: number;
+  type?: WalletMovementType;
+  status?: WalletMovementStatus;
+  search?: string;
+  from?: string;
+  to?: string;
+};

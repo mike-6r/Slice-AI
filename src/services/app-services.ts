@@ -149,7 +149,7 @@ export class ProviderService {
   cardFundingOptions = () => this.repositories.providers.getCardFundingOptions();
   createConnectOnboarding = () => this.repositories.providers.createConnectOnboarding();
   refreshConnectOnboarding = () => this.repositories.providers.refreshConnectOnboarding();
-  movements = (input?: { cursor?: string; limit?: number }) =>
+  movements = (input?: import("@/domain").WalletMovementQuery) =>
     this.repositories.providers.listMovements(input);
   movement = (id: string) => this.repositories.providers.getMovement(id);
   withdrawalPreflight = (input?: { amountMinor?: string }) =>

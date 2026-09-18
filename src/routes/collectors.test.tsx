@@ -9,7 +9,7 @@ describe("collector search", () => {
       <CollectorSearch query="Charizard" onQueryChange={vi.fn()} />,
     );
 
-    expect(html).toContain('class="collectors-search"');
+    expect(html).toContain('class="cn-search-field"');
     expect(html).toContain('aria-label="Search public collectors"');
     expect(html).toContain('value="Charizard"');
   });

@@ -60,6 +60,8 @@ export const queryKeys = {
     withdrawalPreflight: (amountMinor = "0") =>
       ["providers", "withdrawal-preflight", amountMinor] as const,
     movements: (cursor?: string) => ["providers", "movements", cursor ?? null] as const,
+    movementHistory: (input: import("@/domain").WalletMovementQuery) =>
+      ["providers", "movements", "history", input] as const,
   },
   notifications: Object.assign((userId: string) => ["notifications", userId] as const, {
     unread: ["notifications", "unread"] as const,

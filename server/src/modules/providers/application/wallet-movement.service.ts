@@ -1,11 +1,12 @@
 import {
+  BadRequestException,
   ConflictException,
   Inject,
   Injectable,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, type MoneyMovementStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { PrismaService } from '../../../database/prisma.service';
@@ -41,6 +42,38 @@ import { StripeClientFactory } from './stripe-provider.client';
 
 type MovementType = 'DEPOSIT' | 'WITHDRAWAL';
 type MovementRail = 'BACS_DIRECT_DEBIT' | 'CARD' | 'CONNECT_STANDARD_PAYOUT';
+
+export interface WalletMovementFilters {
+  type?: MovementType;
+  status?: MoneyMovementStatus;
+  search?: string;
+  from?: string;
+  to?: string;
+}
+
+function escapeLike(value: string) {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
+
+/** Search only the displayed WLT- reference, never the rest of the ID. */
+function movementReferenceSearch(
+  search: string,
+): Prisma.MoneyMovementWhereInput[] {
+  const prefix = 'WLT-';
+  const term = search.toUpperCase();
+  const conditions: Prisma.MoneyMovementWhereInput[] = [];
+  for (let offset = 0; offset + term.length <= prefix.length + 8; offset++) {
+    const fixed = prefix.slice(offset, offset + term.length);
+    if (!term.startsWith(fixed)) continue;
+    // Prisma startsWith uses LIKE. These intentional single-character wildcards
+    // bound substring matches to the first eight ID characters; input is escaped.
+    const pattern =
+      '_'.repeat(Math.max(0, offset - prefix.length)) +
+      escapeLike(term.slice(fixed.length));
+    conditions.push({ id: { startsWith: pattern, mode: 'insensitive' } });
+  }
+  return conditions;
+}
 
 export const MIN_DEPOSIT_MINOR = 100n;
 export const MAX_DEPOSIT_MINOR = 2_500_000n;
@@ -1828,11 +1861,74 @@ export class WalletMovementService {
   }
 
   */
-  async list(userId: string, cursor?: string, limit = 20) {
+  async list(
+    userId: string,
+    cursor?: string,
+    limit = 20,
+    filters: WalletMovementFilters = {},
+  ) {
+    const conditions: Prisma.MoneyMovementWhereInput[] = [];
+    if (cursor !== undefined) {
+      // Keep existing ID cursors, resolving their immutable ordering fields only
+      // within this tenant. Filters must not invalidate a previously visible row.
+      const anchor = await this.db.moneyMovement.findFirst({
+        where: { id: cursor, userId },
+        select: { id: true, createdAt: true },
+      });
+      if (!anchor) {
+        throw new BadRequestException({
+          code: 'INVALID_CURSOR',
+          message: 'Cursor is invalid.',
+        });
+      }
+      conditions.push({
+        OR: [
+          { createdAt: { lt: anchor.createdAt } },
+          { createdAt: anchor.createdAt, id: { lt: anchor.id } },
+        ],
+      });
+    }
+    const search = filters.search?.trim();
+    if (search) {
+      const contains = {
+        contains: escapeLike(search),
+        mode: 'insensitive' as const,
+      };
+      conditions.push({
+        OR: [
+          ...movementReferenceSearch(search),
+          {
+            externalAccount: {
+              is: {
+                userId,
+                OR: [
+                  { institutionName: contains },
+                  { accountName: contains },
+                  { accountMask: contains },
+                ],
+              },
+            },
+          },
+        ],
+      });
+    }
     await this.reconcilePendingStripeDeposits('wallet-movements-list', userId);
     await this.reconcilePendingStripePayouts('wallet-movements-list', userId);
     const rows = await this.db.moneyMovement.findMany({
-      where: { userId, ...(cursor ? { id: { lt: cursor } } : {}) },
+      where: {
+        userId,
+        ...(filters.type ? { type: filters.type } : {}),
+        ...(filters.status ? { status: filters.status } : {}),
+        ...(filters.from || filters.to
+          ? {
+              createdAt: {
+                ...(filters.from ? { gte: new Date(filters.from) } : {}),
+                ...(filters.to ? { lte: new Date(filters.to) } : {}),
+              },
+            }
+          : {}),
+        ...(conditions.length ? { AND: conditions } : {}),
+      },
       include: {
         externalAccount: {
           select: {

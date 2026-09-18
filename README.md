@@ -37,6 +37,38 @@ backlog separately. See [verification guidance](docs/engineering/VERIFICATION.md
 
 ## Engineering references
 
+### Public collector discovery
+
+`/collectors` explains the public collector network and presents collection-led
+discovery using real public profile and asset projections. Its hero reuses the
+unfiltered first-page query; URL-backed search, specialties, availability and
+sorting have independent, abortable paginated queries. Filters reset the page,
+browser Back restores them, and out-of-range pages have an explicit recovery.
+The directory adapts from a single collection showcase to a multi-profile grid.
+Missing media, empty results, loading and retry states never invent profiles,
+counts or endorsements. Asset previews show per-Slice prices only from the
+corresponding source field, never from a total asset valuation.
+
+The shared AppShell, public profile/catalogue routes and guarded submission
+flow remain unchanged. Presentation lives in `src/components/collectors/`
+under the `collector-network` namespace, isolated from legacy profile styles.
+
+### Customer wallet
+
+`/wallet` uses the shared Slice frame with a balance overview, money controls,
+bank/payout setup, verification, a paginated movement ledger, settlement details,
+and insights. History uses server-side type, status, reference/bank search and
+inclusive UTC date filters; page sizes are 10, 25 or 50. Existing movement IDs
+remain valid cursors, resolved within the signed-in customer's records using
+the stable `(createdAt, id)` ordering. No history is truncated to the recent
+timeline preview. CSV exports are explicitly current-page, original GBP values
+with exact minor-unit conversion and spreadsheet-formula escaping.
+
+The wallet does not change ledger balances, payment eligibility, or provider
+authority. Mutations retain existing verification, preflight and confirmation
+flows. Unknown withdrawal availability is shown as unavailable, not zero.
+Route-scoped composition lives in `src/components/wallet/wallet.css`.
+
 - [Current system state](docs/CURRENT_SYSTEM_STATE.md)
 - [Environment configuration](docs/engineering/ENVIRONMENT_CONFIGURATION.md)
 - [Package version policy](docs/engineering/PACKAGE_VERSION_POLICY.md)

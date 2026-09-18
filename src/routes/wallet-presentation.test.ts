@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import type { WalletMovementView } from "@/domain";
+import { setCurrencyPresentation } from "@/currency/currency-store";
 import {
   formatWalletMoney,
+  formatWalletGbp,
   parseWalletGbp,
   settledMovementFlow,
   validateDepositAmount,
@@ -23,6 +25,22 @@ const settledDeposit: WalletMovementView = {
 };
 
 describe("Document 016 wallet presentation authority", () => {
+  it("keeps payment confirmations in original GBP regardless of display currency", () => {
+    setCurrencyPresentation("USD", {
+      baseCurrency: "GBP",
+      rates: { GBP: 1, USD: 2, EUR: 1, CAD: 1 },
+      asOf: "2026-09-18",
+      fetchedAt: "2026-09-18",
+      source: "test",
+      cached: false,
+    });
+    try {
+      expect(formatWalletMoney("5000")).toContain("100.00");
+      expect(formatWalletGbp("5000")).toBe("£50.00");
+    } finally {
+      setCurrencyPresentation("GBP", null);
+    }
+  });
   it("uses bigint GBP presentation and validates positive decimal input without floating point", () => {
     expect(formatWalletMoney("9007199254740993")).toBe("£90,071,992,547,409.93");
     expect(parseWalletGbp("125.50")).toBe("12550");

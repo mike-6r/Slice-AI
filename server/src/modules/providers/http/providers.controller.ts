@@ -12,6 +12,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { MoneyMovementStatus } from '@prisma/client';
 import { z } from 'zod';
 import {
   AccessTokenGuard,
@@ -45,12 +46,32 @@ const cardFunding = z
     savePaymentMethod: z.boolean().default(false),
   })
   .strict();
+// JavaScript Date stores milliseconds; reject finer bounds instead of silently
+// truncating them and returning movements outside the requested interval.
+const movementTimestamp = z
+  .string()
+  .datetime()
+  .refine((value) => !/\.\d{4,}/.test(value), {
+    message: 'Timestamps support at most millisecond precision.',
+  });
 const page = z
   .object({
-    cursor: z.string().min(1).optional(),
+    cursor: z.string().min(1).max(256).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(20),
+    type: z.enum(['DEPOSIT', 'WITHDRAWAL']).optional(),
+    status: z.nativeEnum(MoneyMovementStatus).optional(),
+    search: z.string().max(100).trim().optional(),
+    from: movementTimestamp.optional(),
+    to: movementTimestamp.optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (input) =>
+      !input.from ||
+      !input.to ||
+      Date.parse(input.from) <= Date.parse(input.to),
+    { message: 'from must not be after to.', path: ['to'] },
+  );
 const hold = z
   .object({
     userId: z.string().min(1),
@@ -199,8 +220,8 @@ export class ProvidersController {
   @Get('wallet/movements')
   @UseGuards(AccessTokenGuard)
   list(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
-    const input = this.parse(page, query);
-    return this.movements.list(req.actor!.userId, input.cursor, input.limit);
+    const { cursor, limit, ...filters } = this.parse(page, query);
+    return this.movements.list(req.actor!.userId, cursor, limit, filters);
   }
   @Get('wallet/movements/:movementId')
   @UseGuards(AccessTokenGuard)

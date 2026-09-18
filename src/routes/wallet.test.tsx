@@ -94,6 +94,7 @@ function renderWallet({
   client.setQueryData(queryKeys.providers.compliance, compliance);
   client.setQueryData(queryKeys.providers.bankConnections, banks);
   client.setQueryData(queryKeys.providers.movements(), movements);
+  client.setQueryData(queryKeys.providers.movementHistory({ limit: 10 }), movements);
   client.setQueryData(queryKeys.portfolio.transactions(), transactions);
   const repositories: AppRepositories = {
     ...mockRepositories,
@@ -136,6 +137,11 @@ describe("Document 016 wallet UI", () => {
     expect(html).toContain("Movement timeline");
     expect(html).toContain("Available to trade");
     expect(html).toContain("Total wallet balance");
+    expect(html).toContain("Rows per page");
+    expect(html).toContain("Search movement history");
+    expect(html).toContain("Export page");
+    expect(html).toContain("Know where your money stands.");
+    expect(html).not.toContain("wallet-deposit-amount-error");
     expect(html).not.toContain("bank-private");
     expect(html).not.toContain("movement-private");
     expect(html).not.toMatch(/accessToken|itemId|provider payload|journal|reservation/i);

@@ -699,6 +699,25 @@ describe("HTTP catalogue mapping", () => {
     );
   });
 
+  it("forwards wallet history filters and page size to the authoritative API", async () => {
+    const get = vi.fn().mockResolvedValue({ items: [], nextCursor: "next-cursor" });
+    const repositories = createHttpRepositories({ get, request: vi.fn() } as unknown as ApiClient);
+    const input = {
+      limit: 25,
+      cursor: "cursor",
+      type: "DEPOSIT" as const,
+      status: "SETTLED" as const,
+      search: "WLT-ABCD",
+      from: "2026-09-01T00:00:00.000Z",
+      to: "2026-09-18T23:59:59.999Z",
+    };
+    await expect(repositories.providers.listMovements(input)).resolves.toEqual({
+      items: [],
+      nextCursor: "next-cursor",
+    });
+    expect(get).toHaveBeenCalledWith("/wallet/movements", input);
+  });
+
   it("reopens a pending card deposit through its dedicated safe endpoint", async () => {
     const request = vi.fn().mockResolvedValue({
       movement: {

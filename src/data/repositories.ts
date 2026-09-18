@@ -62,6 +62,7 @@ import type {
   VaultAssetStatus,
   WalletBalance,
   WalletMovementPage,
+  WalletMovementQuery,
   WalletMovementView,
   StripePayoutDestinations,
   WalletTransaction,
@@ -3441,7 +3442,7 @@ export interface ProviderRepository {
   createConnectOnboarding(): Promise<ConnectPayoutSetup>;
   refreshConnectOnboarding(): Promise<ConnectPayoutSetup>;
   getWithdrawalPreflight(input?: { amountMinor?: string }): Promise<WithdrawalPreflight>;
-  listMovements(input?: { cursor?: string; limit?: number }): Promise<WalletMovementPage>;
+  listMovements(input?: WalletMovementQuery): Promise<WalletMovementPage>;
   getMovement(id: string): Promise<WalletMovementView>;
   createDeposit(amountMinor: string): Promise<WalletMovementView>;
   createCardDeposit(input: {

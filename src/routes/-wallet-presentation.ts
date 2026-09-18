@@ -18,6 +18,14 @@ export function parseWalletGbp(value: string) {
   return (BigInt(match[1]!) * 100n + BigInt((match[2] ?? "").padEnd(2, "0"))).toString();
 }
 
+/** Payment forms and provider receipts stay in their original settlement currency. */
+export function formatWalletGbp(value: string) {
+  return formatDisplayMoney(value, "GBP", "GBP", null, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 export const MIN_DEPOSIT_MINOR = 100n;
 export const MAX_DEPOSIT_MINOR = 2_500_000n;
 
