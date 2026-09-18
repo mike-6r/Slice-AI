@@ -66,3 +66,9 @@ their version checks where supported. Successful mutations await projection refr
 controls. Decisions require an explicit confirmation. Money entry uses exact
 decimal-to-integer conversion, while receipt and verification notes record staff
 observations rather than generated assertions. No schema migration is required.
+
+The guide uses a persistent, grouped checklist beside the current task. The
+asset resolver reports `intakeAvailable`: pre-approval and retired submissions
+do not call the intake-only endpoint. Approved submissions and existing intakes
+retain their normal errors and authorization checks. Image previews use the
+review response's signed evidence URLs, with a retry when a refreshed URL changes.

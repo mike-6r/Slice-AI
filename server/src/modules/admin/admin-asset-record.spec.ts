@@ -48,6 +48,7 @@ describe('admin authoritative asset record resolver', () => {
       submissionId: 'submission-1',
       title: 'Pikachu Ex',
       lifecycleStatus: 'VERIFIED',
+      intakeAvailable: true,
     });
     expect(authorize).toHaveBeenCalledWith(actor, 'admin.console.read');
     expect(db.assetSubmission.findFirst).toHaveBeenCalledWith(
@@ -79,6 +80,31 @@ describe('admin authoritative asset record resolver', () => {
       assetId: null,
       submissionId: 'submission-2',
       title: 'Pikachu With Grey Felt Hat',
+      intakeAvailable: false,
     });
+  });
+  it('keeps existing intake available across submission status changes', async () => {
+    const { service } = serviceFor({
+      id: 'submission-3',
+      status: 'CHANGES_REQUESTED',
+      asset: null,
+      declaredMetadata: {},
+      intake: { id: 'intake-3' },
+    });
+    await expect(
+      service.resolveAssetRecord(actor, 'submission-3'),
+    ).resolves.toMatchObject({ intakeAvailable: true });
+  });
+  it('does not expose retired fixture intake as an operational stage', async () => {
+    const { service } = serviceFor({
+      id: 'retired',
+      status: 'APPROVED',
+      asset: null,
+      declaredMetadata: { betaFixtureRetired: true },
+      intake: { id: 'retired-intake' },
+    });
+    await expect(
+      service.resolveAssetRecord(actor, 'retired'),
+    ).resolves.toMatchObject({ intakeAvailable: false });
   });
 });

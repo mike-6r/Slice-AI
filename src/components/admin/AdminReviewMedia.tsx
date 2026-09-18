@@ -11,9 +11,9 @@ type AdminReviewMediaProps = {
 };
 
 export function AdminReviewMedia({ src, alt, fallback, className, style }: AdminReviewMediaProps) {
-  const [failed, setFailed] = useState(false);
+  const [failedSource, setFailedSource] = useState<string | null>(null);
 
-  if (!src || failed) {
+  if (!src || failedSource === src) {
     return (
       <span
         className={
@@ -27,6 +27,12 @@ export function AdminReviewMedia({ src, alt, fallback, className, style }: Admin
   }
 
   return (
-    <img className={className} style={style} src={src} alt={alt} onError={() => setFailed(true)} />
+    <img
+      className={className}
+      style={style}
+      src={src}
+      alt={alt}
+      onError={() => setFailedSource(src)}
+    />
   );
 }

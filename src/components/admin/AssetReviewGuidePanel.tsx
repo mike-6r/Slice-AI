@@ -1,5 +1,80 @@
-import { ArrowLeft, ArrowRight, Check, CircleHelp, ListChecks, RefreshCw } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  CircleHelp,
+  ListChecks,
+  RefreshCw,
+  ShieldCheck,
+} from "lucide-react";
 import type { AssetReviewGuide, GuideStepId } from "./assetReviewGuide";
+
+type GuideSelection = {
+  guide: AssetReviewGuide;
+  selected: GuideStepId;
+  onSelect: (id: GuideStepId) => void;
+};
+
+export function AssetReviewSteps({ guide, selected, onSelect }: GuideSelection) {
+  return (
+    <aside className="asset-guide__sidebar" aria-label="Review progress">
+      <div className="asset-guide__sidebar-heading">
+        <ListChecks aria-hidden="true" /> <strong>Review checklist</strong>
+      </div>
+      <div className="asset-guide__progress">
+        <label htmlFor="asset-guide-progress">
+          {guide.completed} of {guide.steps.length} steps resolved
+        </label>
+        <progress id="asset-guide-progress" value={guide.completed} max={guide.steps.length} />
+        <span>Saved checks, including steps not required.</span>
+      </div>
+      <nav aria-label="Review steps">
+        <ol className="asset-guide__steps">
+          {guide.steps.map((item, position) => (
+            <li key={item.id}>
+              {position === 0 || position === 5 || position === 7 ? (
+                <p className="asset-guide__phase">
+                  {position === 0
+                    ? "Submission review"
+                    : position === 5
+                      ? "Intake & custody"
+                      : "Valuation & launch"}
+                </p>
+              ) : null}
+              <button
+                type="button"
+                aria-current={item.id === selected ? "step" : undefined}
+                data-complete={item.complete || item.notApplicable}
+                onClick={() => onSelect(item.id)}
+              >
+                <i aria-hidden="true">
+                  {item.complete || item.notApplicable ? <Check /> : position + 1}
+                </i>
+                <span>
+                  {item.title}
+                  <small>
+                    {item.notApplicable
+                      ? "Not required"
+                      : item.complete
+                        ? "Complete"
+                        : item.id === guide.recommended
+                          ? guide.pause
+                            ? "Needs another actor"
+                            : "Up next"
+                          : "To do"}
+                  </small>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ol>
+      </nav>
+      <p className="asset-guide__sidebar-note">
+        Select any step to inspect it. Progress updates when your changes are saved.
+      </p>
+    </aside>
+  );
+}
 
 export function AssetReviewGuidePanel({
   guide,
@@ -9,10 +84,7 @@ export function AssetReviewGuidePanel({
   busy,
   issue,
   onRefresh,
-}: {
-  guide: AssetReviewGuide;
-  selected: GuideStepId;
-  onSelect: (id: GuideStepId) => void;
+}: GuideSelection & {
   onShowRecord: () => void;
   busy: boolean;
   issue: string | null;
@@ -27,69 +99,29 @@ export function AssetReviewGuidePanel({
       <header className="asset-guide__header">
         <div>
           <p className="asset-guide__eyebrow">
-            <ListChecks aria-hidden="true" /> Guided asset review
+            Step {index + 1} of {guide.steps.length} ·{" "}
+            {index < 5
+              ? "Submission review"
+              : index < 7
+                ? "Intake & custody"
+                : "Valuation & launch"}
           </p>
-          <h2>One step at a time.</h2>
-          <p>
-            Follow the instructions, save your work, then continue. Everything stays on this asset.
-          </p>
+          <h2 id="asset-guide-task-title" tabIndex={-1}>
+            {step.title}
+          </h2>
         </div>
         <div className="asset-guide__header-actions">
-          <button type="button" onClick={onRefresh} disabled={busy}>
-            <RefreshCw aria-hidden="true" /> Refresh status
+          <button type="button" onClick={onRefresh} disabled={busy} aria-label="Refresh record">
+            <RefreshCw aria-hidden="true" /> {busy ? "Refreshing…" : "Refresh"}
           </button>
           <button type="button" onClick={onShowRecord}>
-            View full record
+            Full record <ArrowRight aria-hidden="true" />
           </button>
         </div>
       </header>
-      <div className="asset-guide__progress">
-        <label htmlFor="asset-guide-progress">
-          {guide.completed} of {guide.steps.length} steps complete or not applicable
-        </label>
-        <span>Progress comes from saved records</span>
-        <progress id="asset-guide-progress" value={guide.completed} max={guide.steps.length} />
-      </div>
-      <details className="asset-guide__step-list">
-        <summary>
-          All {guide.steps.length} steps <span>Jump to saved work or preview what comes next</span>
-        </summary>
-        <nav aria-label="Review steps">
-          <ol className="asset-guide__steps">
-            {guide.steps.map((item, position) => (
-              <li key={item.id}>
-                <button
-                  type="button"
-                  aria-current={item.id === selected ? "step" : undefined}
-                  data-complete={item.complete || item.notApplicable}
-                  onClick={() => onSelect(item.id)}
-                >
-                  <i aria-hidden="true">
-                    {item.complete || item.notApplicable ? <Check /> : position + 1}
-                  </i>
-                  <span>
-                    {item.title}
-                    <small>
-                      {item.notApplicable
-                        ? "Not applicable"
-                        : item.complete
-                          ? "Saved"
-                          : item.id === guide.recommended
-                            ? guide.pause
-                              ? "Waiting"
-                              : "Next task"
-                            : "To do"}
-                    </small>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ol>
-        </nav>
-      </details>
       {issue ? (
         <div className="asset-guide__notice is-error" role="alert">
-          <strong>Could not confirm the latest record</strong>
+          <strong>Could not refresh this record</strong>
           <p>{issue}</p>
           <button type="button" disabled={busy} onClick={onRefresh}>
             <RefreshCw aria-hidden="true" /> Refresh record
@@ -98,29 +130,33 @@ export function AssetReviewGuidePanel({
       ) : null}
       {guide.pause ? (
         <div className="asset-guide__notice" role="status">
-          {guide.pause}
+          <ShieldCheck aria-hidden="true" />
+          <div>
+            <strong>
+              {guide.pause.startsWith("Another")
+                ? "Another reviewer is needed"
+                : "Waiting for the next action"}
+            </strong>
+            <p>{guide.pause}</p>
+          </div>
+        </div>
+      ) : null}
+      {preview ? (
+        <div className="asset-guide__preview">
+          <span>Preview · Complete earlier checks before this stage.</span>
+          <button type="button" onClick={() => onSelect(guide.recommended)}>
+            Return to current step <ArrowLeft aria-hidden="true" />
+          </button>
         </div>
       ) : null}
       {guide.finished ? (
-        <div className="asset-guide__notice" role="status">
-          All guided stages are recorded. Continue monitoring this asset in the full record.
-        </div>
+        <p className="asset-guide__notice" role="status">
+          All stages are recorded. You can monitor this asset in the full record.
+        </p>
       ) : null}
       <div className="asset-guide__task" key={step.id}>
         <div>
-          <p className="asset-guide__eyebrow">
-            Step {index + 1} of {guide.steps.length}
-            {preview
-              ? " · Preview"
-              : step.complete
-                ? " · Saved"
-                : step.notApplicable
-                  ? " · Not applicable"
-                  : ""}
-          </p>
-          <h3 id="asset-guide-task-title" tabIndex={-1}>
-            {step.title}
-          </h3>
+          <h3>What to do</h3>
           <ol>
             {step.instructions.map((instruction) => (
               <li key={instruction}>{instruction}</li>
@@ -129,17 +165,21 @@ export function AssetReviewGuidePanel({
         </div>
         <aside>
           <strong>
-            <CircleHelp aria-hidden="true" /> Why this matters
+            <CircleHelp aria-hidden="true" /> Why this step matters
           </strong>
           <p>{step.why}</p>
-          <strong>Saved status</strong>
-          <p>{step.detail}</p>
-          {preview ? (
-            <p>
-              Look ahead here, then return to <b>{guide.steps[recommendedIndex].title}</b>. Viewing
-              a step does not complete it.
-            </p>
-          ) : null}
+          {!guide.pause && (
+            <>
+              <strong>
+                {step.complete
+                  ? "Completed"
+                  : step.notApplicable
+                    ? "Not required"
+                    : "Current status"}
+              </strong>
+              <p>{step.detail}</p>
+            </>
+          )}
         </aside>
       </div>
     </section>
@@ -152,13 +192,7 @@ export function GuideNavigation({
   onSelect,
   busy,
   unavailable = false,
-}: {
-  guide: AssetReviewGuide;
-  selected: GuideStepId;
-  onSelect: (id: GuideStepId) => void;
-  busy: boolean;
-  unavailable?: boolean;
-}) {
+}: GuideSelection & { busy: boolean; unavailable?: boolean }) {
   const index = guide.steps.findIndex((step) => step.id === selected);
   const step = guide.steps[index];
   const next = guide.steps[index + 1];
@@ -174,12 +208,14 @@ export function GuideNavigation({
       </button>
       <p aria-live="polite">
         {unavailable
-          ? "Refresh the record to continue. The latest saved state could not be confirmed."
+          ? "Refresh the record to continue."
           : busy
             ? "Checking the latest saved state…"
-            : canContinue
-              ? "Saved checks confirmed. You can continue."
-              : "Use this step’s controls. Continue unlocks when the saved checks pass."}
+            : guide.pause
+              ? "You can inspect every step using the checklist."
+              : canContinue
+                ? "Checks saved. Ready for the next step."
+                : "Complete the checks above to continue."}
       </p>
       {selected !== guide.recommended && !guide.finished ? (
         <button

@@ -2419,6 +2419,7 @@ export type AdminAssetRecordResolution = {
   submissionId: string;
   title: string;
   lifecycleStatus: string;
+  intakeAvailable: boolean;
 };
 
 export type AdminCatalogueCategory = {

@@ -11322,6 +11322,7 @@ export class AdminService {
         id: true,
         status: true,
         declaredMetadata: true,
+        intake: { select: { id: true } },
         asset: {
           select: {
             id: true,
@@ -11355,6 +11356,11 @@ export class AdminService {
           ? metadata.name
           : 'Untitled collectible'),
       lifecycleStatus: submission.asset?.status ?? submission.status,
+      // The intake projection excludes pre-approval and retired submissions.
+      // The shared record must not request that projection until it exists.
+      intakeAvailable:
+        metadata?.betaFixtureRetired !== true &&
+        (submission.status === 'APPROVED' || !!submission.intake),
     };
   }
 

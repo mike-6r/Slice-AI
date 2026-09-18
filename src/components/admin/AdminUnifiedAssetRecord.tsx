@@ -33,7 +33,8 @@ import type {
 import type { SubmissionReviewDetail } from "@/domain/submission";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { AdminReviewMedia } from "./AdminReviewMedia";
-import { AssetReviewGuidePanel, GuideNavigation } from "./AssetReviewGuidePanel";
+import { AssetReviewGuidePanel, AssetReviewSteps, GuideNavigation } from "./AssetReviewGuidePanel";
+import { shouldLoadAssetIntake } from "./assetRecordQueries";
 import { AssetReviewForms, ReviewFindings } from "./AssetReviewForms";
 import {
   buildAssetReviewGuide,
@@ -147,7 +148,7 @@ function AssetRecord({ reference, focus, onFocus }: AssetRecordProps) {
   const intake = useQuery({
     queryKey: ["admin", "asset-record", "intake", resolvedSubmissionId],
     queryFn: () => services.repositories.admin.getIntakeDetail(resolvedSubmissionId!),
-    enabled: Boolean(resolvedSubmissionId),
+    enabled: shouldLoadAssetIntake(resolution.data, reviewQuery.data?.status),
     retry: false,
   });
   const operations = useQuery({
@@ -277,7 +278,8 @@ function AssetRecord({ reference, focus, onFocus }: AssetRecordProps) {
     }
     previousStep.current = stepId;
   }, [stepId, guided]);
-  const recordError = reviewQuery.error ?? assetQuery.error ?? intake.error ?? operations.error;
+  const recordError =
+    resolution.error ?? reviewQuery.error ?? assetQuery.error ?? intake.error ?? operations.error;
   const busy =
     writes > 0 ||
     [resolution, reviewQuery, assetQuery, intake, operations].some((query) => query.isFetching);
@@ -322,23 +324,26 @@ function AssetRecord({ reference, focus, onFocus }: AssetRecordProps) {
       <header className="asset-record__hero">
         <div className="asset-record__media">
           <AdminReviewMedia
-            src={mediaSource(front)}
+            key={mediaSource(front) ?? review?.collectible?.thumbnailUrl}
+            src={mediaSource(front) ?? review?.collectible?.thumbnailUrl}
             alt={title}
-            fallback={<ImageIcon aria-hidden="true" />}
+            fallback={<span>No preview</span>}
           />
         </div>
         <div className="asset-record__identity">
-          <p>Assets · authoritative lifecycle record</p>
+          <p>Assets / {asset ? "Asset record" : "Submission review"}</p>
           <h1>{title}</h1>
           <span>{identityLine(asset, review)}</span>
           <div className="asset-record__badges">
-            <Status value={asset ? "Canonical asset" : "Pre-canonical submission"} tone="mint" />
-            <Status value={review?.status ?? asset?.status ?? "Unknown"} />
+            <Status value={asset ? "Asset" : "Submission"} tone="mint" />
+            <Status value={sentence(review?.status ?? asset?.status ?? "Unknown")} />
             {asset?.dossier.workType ? <Status value={asset.dossier.workType} /> : null}
           </div>
           <dl className="asset-record__hero-facts">
-            <Fact label="Asset ID" value={asset?.publicId ?? "Created after approval"} />
-            <Fact label="Submission" value={resolvedSubmissionId ?? "Not linked"} />
+            {!guided && (
+              <Fact label="Asset ID" value={asset?.publicId ?? "Created after approval"} />
+            )}
+            {!guided && <Fact label="Submission" value={resolvedSubmissionId ?? "Not linked"} />}
             <Fact
               label="Collector"
               value={
@@ -350,33 +355,42 @@ function AssetRecord({ reference, focus, onFocus }: AssetRecordProps) {
             <Fact label="Updated" value={date(asset?.updatedAt ?? review?.submittedAt)} />
           </dl>
         </div>
-        <aside className="asset-record__next">
-          <small>Next required action</small>
-          <strong>
-            {guided
-              ? guide.steps.find((item) => item.id === guide.recommended)?.title
-              : nextAction.label}
-          </strong>
-          <span>
-            {guided
-              ? (guide.pause ?? guide.steps.find((item) => item.id === guide.recommended)?.detail)
-              : nextAction.detail}
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              setGuided(true);
-              chooseStep(guide.recommended);
-            }}
-          >
-            Continue guided review <ArrowRight aria-hidden="true" />
-          </button>
-        </aside>
+        {!guided && (
+          <aside className="asset-record__next">
+            <small>Next required action</small>
+            <strong>
+              {guided
+                ? guide.steps.find((item) => item.id === guide.recommended)?.title
+                : nextAction.label}
+            </strong>
+            <span>
+              {guided
+                ? (guide.pause ?? guide.steps.find((item) => item.id === guide.recommended)?.detail)
+                : nextAction.detail}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setGuided(true);
+                chooseStep(guide.recommended);
+              }}
+            >
+              Continue guided review <ArrowRight aria-hidden="true" />
+            </button>
+          </aside>
+        )}
       </header>
 
       <nav className="asset-record__nav" aria-label="Asset record sections">
         <button type="button" className={guided ? "is-active" : ""} onClick={() => setGuided(true)}>
           Step-by-step guide
+        </button>
+        <button
+          type="button"
+          className={!guided ? "is-active" : ""}
+          onClick={() => setGuided(false)}
+        >
+          Full asset record
         </button>
         {!guided &&
           assetRecordSections.map((section) => (
@@ -392,6 +406,7 @@ function AssetRecord({ reference, focus, onFocus }: AssetRecordProps) {
       </nav>
 
       <div className={`asset-record__layout${guided ? " is-guided" : ""}`}>
+        {guided && <AssetReviewSteps guide={guide} selected={stepId} onSelect={chooseStep} />}
         <div className="asset-record__content">
           {!guided && recordError ? (
             <div className="asset-guide__notice is-error" role="alert">
@@ -444,29 +459,47 @@ function AssetRecord({ reference, focus, onFocus }: AssetRecordProps) {
             <RecordSection
               id="submission"
               eyebrow="Submission + collector"
-              title="Submission details"
+              title={guided ? "Item & collector" : "Submission details"}
               icon={<Users />}
             >
               <DefinitionGrid
-                values={[
-                  [
-                    "Submission state",
-                    review?.status ?? asset?.dossier.provenance?.submissionStatus,
-                  ],
-                  [
-                    "Submitted",
-                    date(review?.submittedAt ?? asset?.dossier.provenance?.submittedAt),
-                  ],
-                  [
-                    "Collector",
-                    review?.collectorSummary?.displayName ?? asset?.collector?.displayName,
-                  ],
-                  ["Username", review?.collectorSummary?.username ?? asset?.collector?.username],
-                  ["Membership", review?.collectorSummary?.membership],
-                  ["Source", review?.submissionDetails?.source ?? "Collector submission"],
-                  ["Submission ID", resolvedSubmissionId],
-                  ["Canonical asset ID", asset?.publicId],
-                ]}
+                values={
+                  guided
+                    ? [
+                        [
+                          "Collector",
+                          review?.collectorSummary?.displayName ?? asset?.collector?.displayName,
+                        ],
+                        ["Submitted", date(review?.submittedAt)],
+                        [
+                          "Review owner",
+                          review?.reviewAssignment?.reviewer?.displayName ?? "Unassigned",
+                        ],
+                        ["Submission status", sentence(review?.status)],
+                      ]
+                    : [
+                        [
+                          "Submission state",
+                          review?.status ?? asset?.dossier.provenance?.submissionStatus,
+                        ],
+                        [
+                          "Submitted",
+                          date(review?.submittedAt ?? asset?.dossier.provenance?.submittedAt),
+                        ],
+                        [
+                          "Collector",
+                          review?.collectorSummary?.displayName ?? asset?.collector?.displayName,
+                        ],
+                        [
+                          "Username",
+                          review?.collectorSummary?.username ?? asset?.collector?.username,
+                        ],
+                        ["Membership", review?.collectorSummary?.membership],
+                        ["Source", review?.submissionDetails?.source ?? "Collector submission"],
+                        ["Submission ID", resolvedSubmissionId],
+                        ["Canonical asset ID", asset?.publicId],
+                      ]
+                }
               />
             </RecordSection>
 
@@ -505,15 +538,21 @@ function AssetRecord({ reference, focus, onFocus }: AssetRecordProps) {
                 {(review?.evidenceSummary?.items ?? review?.media ?? asset?.evidence ?? []).map(
                   (item, index) => {
                     const mediaId = "id" in item ? String(item.id) : `asset-${index}`;
-                    const source = mediaSource(item);
-                    const state = "reviewState" in item ? item.reviewState : item.status;
+                    const reviewedMedia = review?.evidenceSummary?.items.find(
+                      (media) => media.id === mediaId,
+                    );
+                    const source = mediaSource(item) ?? mediaSource(reviewedMedia);
+                    const state =
+                      reviewedMedia?.reviewState ??
+                      ("reviewState" in item ? item.reviewState : item.status);
                     return (
                       <article key={mediaId}>
                         <div className="asset-record__evidence-image">
                           <AdminReviewMedia
+                            key={source}
                             src={source}
                             alt={String(item.slot ?? "Evidence")}
-                            fallback={<ImageIcon />}
+                            fallback={<span>Preview unavailable</span>}
                           />
                         </div>
                         <div>
@@ -808,7 +847,7 @@ function AssetRecord({ reference, focus, onFocus }: AssetRecordProps) {
             <RecordSection
               id="actions"
               eyebrow="Valid actions"
-              title="What you can do now"
+              title={guided ? "Review controls" : "What you can do now"}
               icon={<Sparkles />}
             >
               <ActionCenter
@@ -946,6 +985,23 @@ function ActionCenter({
         : confirmation === "REJECT_SUBMISSION"
           ? "Reject submission"
           : "Publish asset";
+  if (
+    step === "reviewer" &&
+    (review?.allowedActions?.selfReviewForbidden || review?.reviewWorkspace?.selfReviewBlocked)
+  ) {
+    return (
+      <div className="asset-guide__read-only">
+        <ShieldCheck aria-hidden="true" />
+        <div>
+          <strong>Inspection access</strong>
+          <p>
+            You submitted this item. Review the details and evidence using the checklist; another
+            reviewer will claim it and record the decision.
+          </p>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={`asset-record__action-center${step ? " is-guided" : ""}`}>
       {!step || step === "reviewer" || step === "decision" ? (

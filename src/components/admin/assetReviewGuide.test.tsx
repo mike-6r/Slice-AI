@@ -7,7 +7,7 @@ import type {
 } from "@/data/repositories";
 import type { SubmissionReviewDetail } from "@/domain/submission";
 import { buildAssetReviewGuide, canReviewCommand, poundsToMinor } from "./assetReviewGuide";
-import { AssetReviewGuidePanel, GuideNavigation } from "./AssetReviewGuidePanel";
+import { AssetReviewGuidePanel, AssetReviewSteps, GuideNavigation } from "./AssetReviewGuidePanel";
 
 function review(overrides: Partial<SubmissionReviewDetail> = {}) {
   return {
@@ -209,7 +209,11 @@ describe("guide presentation and exact currency entry", () => {
         onRefresh={() => undefined}
       />,
     );
-    expect(html).toContain('aria-current="step"');
+    const checklist = renderToStaticMarkup(
+      <AssetReviewSteps guide={guide} selected="evidence" onSelect={() => undefined} />,
+    );
+    expect(checklist).toContain('aria-current="step"');
+    expect(checklist).toContain("Review checklist");
     expect(html).toContain("Open each required image at full size");
     expect(html).toContain('role="alert"');
     expect(html).toContain("Refresh record");

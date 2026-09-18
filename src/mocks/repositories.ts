@@ -91,6 +91,7 @@ export const mockRepositories: AppRepositories = {
         submissionId: reference,
         title: "Mock asset",
         lifecycleStatus: "UNKNOWN",
+        intakeAvailable: false,
       };
     },
     async listCatalogueCategories() {

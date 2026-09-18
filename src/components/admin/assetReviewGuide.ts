@@ -92,8 +92,10 @@ export function buildAssetReviewGuide({
       why: "Give this review a clear owner before a decision is made.",
       instructions: [
         "Check the collector and the item below.",
-        "Claim the review if it is unassigned. If another reviewer owns it, coordinate with them.",
-        "You cannot review your own submission. Another authorized reviewer must take over.",
+        selfReview
+          ? "Ask another authorized reviewer to claim this submission."
+          : "Claim the review if it is unassigned. If another reviewer owns it, coordinate with them.",
+        "Use the checklist to inspect each check before making a decision.",
       ],
       complete:
         !!review &&
@@ -210,7 +212,7 @@ export function buildAssetReviewGuide({
       why: "A staff valuation is separate from a collector estimate or an external asking price.",
       instructions: [
         "Review available references and the item's verified condition.",
-        "Enter the supported value in pounds. The form converts it to pence for storage.",
+        "Enter the supported value in pounds and pence.",
         "Save the valuation and check the saved amount before moving on.",
       ],
       complete: !!asset?.valuation.current,
