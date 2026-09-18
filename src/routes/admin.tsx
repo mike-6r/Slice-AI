@@ -427,6 +427,45 @@ function AdminConsole() {
     ? reviewStatus
     : undefined;
   const [mobileOpen, setMobileOpen] = useState(false);
+  const adminMenuRef = useRef<HTMLElement>(null);
+  const adminMenuButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const menu = adminMenuRef.current;
+    const menuButton = adminMenuButtonRef.current;
+    menu?.querySelector<HTMLButtonElement>("button")?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setMobileOpen(false);
+      }
+      if (event.key === "Tab" && menu) {
+        const controls = Array.from(
+          menu.querySelectorAll<HTMLElement>("a[href], button:not(:disabled)"),
+        ).filter((element) => element.getClientRects().length > 0);
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+    const desktop = window.matchMedia("(min-width: 961px)");
+    const onDesktop = () => {
+      if (desktop.matches) setMobileOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    desktop.addEventListener("change", onDesktop);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      desktop.removeEventListener("change", onDesktop);
+      menuButton?.focus();
+    };
+  }, [mobileOpen]);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [accountSearchInput, setAccountSearchInput] = useState(accountQ ?? "");
@@ -883,14 +922,25 @@ function AdminConsole() {
 
   return (
     <div
-      className={`admin-console-shell${isAssetLaunch ? " admin-console-shell--asset-operations" : ""}`}
+      className={`slice-admin admin-console-shell${isAssetLaunch ? " admin-console-shell--asset-operations" : ""}`}
+      data-admin-theme="slice"
     >
-      <aside className={`admin-console-sidebar ${mobileOpen ? "is-open" : ""}`}>
+      <a className="admin-skip-link" href="#admin-workspace">
+        Skip to workspace
+      </a>
+      <aside
+        ref={adminMenuRef}
+        className={`admin-console-sidebar ${mobileOpen ? "is-open" : ""}`}
+        role={mobileOpen ? "dialog" : undefined}
+        aria-modal={mobileOpen || undefined}
+        aria-label={mobileOpen ? "Admin navigation" : undefined}
+      >
         <div className="admin-console-brand">
           <Wordmark />
           <button
             type="button"
             className="admin-console-close"
+            aria-label="Close admin menu"
             onClick={() => setMobileOpen(false)}
           >
             <X aria-hidden="true" />
@@ -900,7 +950,7 @@ function AdminConsole() {
         <nav className="admin-console-nav" aria-label="Admin Console">
           <div className="admin-console-nav-group">
             <span className="admin-console-nav-label">Workspace</span>
-            {navItems.map(({ id, label, icon: Icon }) => (
+            {navItems.map(({ id, label, icon: Icon, views }, index) => (
               <button
                 type="button"
                 key={id}
@@ -909,7 +959,18 @@ function AdminConsole() {
                 onClick={() => select(id)}
               >
                 <Icon aria-hidden="true" />
-                <span>{label}</span>
+                <span className="admin-nav-copy">
+                  <strong>{label}</strong>
+                  <small>
+                    {views
+                      .map((item) => item.label)
+                      .slice(0, 2)
+                      .join(" · ")}
+                  </small>
+                </span>
+                <span className="admin-nav-index" aria-hidden="true">
+                  0{index + 1}
+                </span>
               </button>
             ))}
           </div>
@@ -933,23 +994,29 @@ function AdminConsole() {
         <button
           type="button"
           className="admin-console-scrim"
+          aria-label="Close admin menu"
           onClick={() => setMobileOpen(false)}
         />
       ) : null}
       <main
+        inert={mobileOpen || undefined}
+        id="admin-workspace"
+        tabIndex={-1}
         className={`admin-console-main${isCustomerDirectory ? " admin-console-main--accounts" : ""}${isAssetLaunch ? " admin-console-main--asset-operations" : ""}${isAssetIntake && selectedIntake ? " admin-console-main--physical-intake-detail" : ""}`}
       >
         <header className="admin-console-topbar">
           <button
             type="button"
             className="admin-console-menu"
+            ref={adminMenuButtonRef}
             onClick={() => setMobileOpen(true)}
             aria-label="Open admin menu"
+            aria-expanded={mobileOpen}
           >
             <Menu aria-hidden="true" />
           </button>
           <div>
-            <p>Admin Console</p>
+            <p>Workspace / {destinationMeta.label}</p>
             <h1>{destinationMeta.label}</h1>
             <span className="admin-console-purpose">{destinationMeta.purpose}</span>
           </div>

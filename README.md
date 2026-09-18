@@ -72,3 +72,17 @@ asset resolver reports `intakeAvailable`: pre-approval and retired submissions
 do not call the intake-only endpoint. Approved submissions and existing intakes
 retain their normal errors and authorization checks. Image previews use the
 review response's signed evidence URLs, with a retry when a refreshed URL changes.
+
+## Admin presentation system
+
+The five admin destinations and their record workspaces share the scoped
+`src/styles/admin-design-system.css` layer. Slice's dark navy surfaces, mint
+actions, readable tables, responsive navigation, forms and status treatments
+are consistent across Home, Customers, Assets, Money and Platform. The scope
+does not restyle the investor or collector applications.
+
+Money's Trading, Reconciliation and Adjustments views put their records first;
+Wallets & Movements retains the financial overview. Platform views have focused
+headings, and only timestamp columns are formatted as dates. Record dialogs
+keep keyboard focus inside the workspace and restore it on close. Existing
+server permissions, self-review protections and mutation commands are unchanged.

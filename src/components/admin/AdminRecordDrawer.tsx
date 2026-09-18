@@ -22,12 +22,49 @@ export function AdminRecordDrawer({
   wide?: boolean;
 }) {
   const headingId = useId();
+  const descriptionId = useId();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      // A nested confirmation owns its own keyboard interaction.
+      const dialogs = document.querySelectorAll('[role="dialog"], [role="alertdialog"]');
+      if (dialogs[dialogs.length - 1] !== dialog) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+      }
+      if (event.key === "Tab") {
+        const controls = Array.from(
+          dialog.querySelectorAll<HTMLElement>(
+            'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex="0"]',
+          ),
+        ).filter((element) => element.getClientRects().length > 0 && !element.closest("[inert]"));
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (
+          event.shiftKey &&
+          (document.activeElement === first || !dialog.contains(document.activeElement))
+        ) {
+          event.preventDefault();
+          last?.focus();
+        } else if (
+          !event.shiftKey &&
+          (document.activeElement === last || !dialog.contains(document.activeElement))
+        ) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     closeButtonRef.current?.focus();
@@ -35,26 +72,33 @@ export function AdminRecordDrawer({
       window.removeEventListener("keydown", handleKeyDown);
       previouslyFocused?.focus?.();
     };
-  }, [onClose]);
+  }, []);
 
   return (
-    <div className="admin-record-drawer-layer" role="presentation">
+    <div
+      className="slice-admin admin-record-drawer-layer"
+      data-admin-theme="slice"
+      role="presentation"
+    >
       <aside
+        ref={dialogRef}
         className={`admin-record-drawer${wide ? " admin-record-drawer--wide" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={headingId}
+        aria-describedby={subtitle ? descriptionId : undefined}
       >
         <header className="admin-record-drawer__header">
           <div>
-            <p>Admin workspace · authoritative record</p>
+            <p>Slice console / Record workspace</p>
             <h2 id={headingId}>{title}</h2>
-            {subtitle ? <span>{subtitle}</span> : null}
+            {subtitle ? <span id={descriptionId}>{subtitle}</span> : null}
           </div>
           <button
             ref={closeButtonRef}
             type="button"
             className="admin-record-drawer__close"
+            aria-label="Close workspace"
             onClick={onClose}
           >
             <X aria-hidden="true" /> <span>Close workspace</span>

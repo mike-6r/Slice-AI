@@ -14,6 +14,7 @@ import appCss from "../styles.css?url";
 import investorUxCss from "../investor-ux.css?url";
 import collectorsDirectoryCss from "../styles/collectors-directory.css?url";
 import collectorStorefrontCss from "../styles/collector-storefront.css?url";
+import adminDesignCss from "../styles/admin-design-system.css?url";
 import { QaHarnessBoundary } from "@/auth/QaHarnessBoundary";
 import { SessionBoundary } from "@/auth/SessionBoundary";
 import { AppShell } from "@/components/layout/AppShell";
@@ -86,24 +87,21 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
             </div>
           </div>
           <div className="slice-recovery__actions">
-          <button
-            type="button"
-            onClick={() => {
-              router.invalidate();
-              reset();
-            }}
-            className="slice-recovery__retry"
-          >
-            <RefreshCw aria-hidden="true" />
-            Retry this view
-          </button>
-          <a
-            href="/"
-            className="slice-recovery__home"
-          >
-            Return to Slice
-            <ArrowUpRight aria-hidden="true" />
-          </a>
+            <button
+              type="button"
+              onClick={() => {
+                router.invalidate();
+                reset();
+              }}
+              className="slice-recovery__retry"
+            >
+              <RefreshCw aria-hidden="true" />
+              Retry this view
+            </button>
+            <a href="/" className="slice-recovery__home">
+              Return to Slice
+              <ArrowUpRight aria-hidden="true" />
+            </a>
           </div>
           <p className="slice-recovery__footnote">
             If this repeats, return to Slice and try the action again from a fresh page.
@@ -139,6 +137,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "stylesheet", href: investorUxCss },
       { rel: "stylesheet", href: collectorsDirectoryCss },
       { rel: "stylesheet", href: collectorStorefrontCss },
+      { rel: "stylesheet", href: adminDesignCss },
       { rel: "icon", href: "/favicon.png", type: "image/png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },

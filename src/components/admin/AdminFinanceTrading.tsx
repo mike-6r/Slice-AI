@@ -186,6 +186,19 @@ export function AdminFinanceTrading({
   const activeTab: FinanceTab = tabs.some((entry) => entry.id === rawTab)
     ? (rawTab as FinanceTab)
     : "wallets";
+  const showOverview = !simplified || activeTab === "wallets" || activeTab === "movements";
+  const viewTitle = showOverview
+    ? "Wallets & movements"
+    : activeTab === "orders" || activeTab === "executions"
+      ? "Trading"
+      : titleCase(activeTab);
+  const viewDescription = showOverview
+    ? "Customer balances, provider liquidity and Slice revenue — clearly separated."
+    : activeTab === "reconciliation"
+      ? "Compare settlement records, investigate mismatches and inspect the supporting evidence."
+      : activeTab === "adjustments"
+        ? "Review protected ledger corrections and their approval history."
+        : "Inspect orders and executions, with direct access to each financial record.";
   const [search, setSearch] = useState(query);
   useEffect(() => setSearch(query), [query]);
   useEffect(() => {
@@ -372,10 +385,10 @@ export function AdminFinanceTrading({
       <header className="admin-finance-header admin-list-workspace__heading">
         <div>
           <p className="admin-finance-breadcrumb">
-            {simplified ? "Money" : "Finance & Trading"} <span>›</span> Finance Dashboard
+            Money <span>›</span> {showOverview ? "Financial overview" : viewTitle}
           </p>
-          <h2>{simplified ? "Money" : "Finance & Trading"}</h2>
-          <p>One control surface for customer funds, provider liquidity, and company revenue.</p>
+          <h2>{simplified ? viewTitle : "Finance & Trading"}</h2>
+          <p>{viewDescription}</p>
         </div>
         <div
           className={`admin-finance-posture tone-${operationalLiquidityTone(liquidityOperationalStatus)}`}
@@ -390,195 +403,203 @@ export function AdminFinanceTrading({
         </div>
       </header>
 
-      <GuidancePanel
-        compact
-        className={`admin-finance-action-center tone-${operationalLiquidityTone(liquidityOperationalStatus)}`}
-        currentState="Financial operations"
-        nextAction={financeGuidance}
-      />
+      {showOverview ? (
+        <>
+          <GuidancePanel
+            compact
+            className={`admin-finance-action-center tone-${operationalLiquidityTone(liquidityOperationalStatus)}`}
+            currentState="Financial operations"
+            nextAction={financeGuidance}
+          />
 
-      <section className="admin-finance-domain-grid" aria-label="Financial control domains">
-        <article className="admin-finance-domain-card is-customer">
-          <header className="admin-finance-domain-heading">
-            <div>
-              <span>Ledger authority</span>
-              <h3>Customer funds</h3>
-              <p>Internal liabilities held for collectors. This is never provider liquidity.</p>
-            </div>
-            <b>GBP</b>
-          </header>
-          <div className="admin-finance-domain-primary">
-            <span>Total customer cash</span>
-            <strong>{money(dashboard.kpis.totalCustomerCashMinor)}</strong>
-            <small>Every active collector wallet, in one protected ledger.</small>
-          </div>
-          <div className="admin-finance-domain-metrics">
-            <Metric
-              label="Available"
-              value={money(dashboard.kpis.availableCustomerCashMinor)}
-              tone="cyan"
-            />
-            <Metric label="Reserved" value={money(dashboard.kpis.reservedFundsMinor)} tone="blue" />
-            <Metric
-              label="Withdrawal holds"
-              value={money(financialSeparation?.customerLiabilities.withdrawalReservationMinor)}
-              tone="gold"
-            />
-          </div>
-          <footer className="admin-finance-domain-footer">
-            <span>
-              Withdrawal eligible{" "}
-              {money(financialSeparation?.customerLiabilities.withdrawalEligibleMinor)}
-            </span>
-            <span>
-              Collector proceeds{" "}
-              {money(financialSeparation?.customerLiabilities.collectorProceedsMinor)}
-            </span>
-            <p>
-              Pending deposits {money(dashboard.kpis.pendingDepositsMinor)} · pending withdrawals{" "}
-              {money(dashboard.kpis.pendingWithdrawalsMinor)}
-            </p>
-          </footer>
-        </article>
+          <section className="admin-finance-domain-grid" aria-label="Financial control domains">
+            <article className="admin-finance-domain-card is-customer">
+              <header className="admin-finance-domain-heading">
+                <div>
+                  <span>Ledger authority</span>
+                  <h3>Customer funds</h3>
+                  <p>Internal liabilities held for collectors. This is never provider liquidity.</p>
+                </div>
+                <b>GBP</b>
+              </header>
+              <div className="admin-finance-domain-primary">
+                <span>Total customer cash</span>
+                <strong>{money(dashboard.kpis.totalCustomerCashMinor)}</strong>
+                <small>Every active collector wallet, in one protected ledger.</small>
+              </div>
+              <div className="admin-finance-domain-metrics">
+                <Metric
+                  label="Available"
+                  value={money(dashboard.kpis.availableCustomerCashMinor)}
+                  tone="cyan"
+                />
+                <Metric
+                  label="Reserved"
+                  value={money(dashboard.kpis.reservedFundsMinor)}
+                  tone="blue"
+                />
+                <Metric
+                  label="Withdrawal holds"
+                  value={money(financialSeparation?.customerLiabilities.withdrawalReservationMinor)}
+                  tone="gold"
+                />
+              </div>
+              <footer className="admin-finance-domain-footer">
+                <span>
+                  Withdrawal eligible{" "}
+                  {money(financialSeparation?.customerLiabilities.withdrawalEligibleMinor)}
+                </span>
+                <span>
+                  Collector proceeds{" "}
+                  {money(financialSeparation?.customerLiabilities.collectorProceedsMinor)}
+                </span>
+                <p>
+                  Pending deposits {money(dashboard.kpis.pendingDepositsMinor)} · pending
+                  withdrawals {money(dashboard.kpis.pendingWithdrawalsMinor)}
+                </p>
+              </footer>
+            </article>
 
-        <article className="admin-finance-domain-card is-provider">
-          <header className="admin-finance-domain-heading">
-            <div>
-              <span>Provider evidence</span>
-              <h3>Stripe payout capacity</h3>
-              <p>Live provider proof for the withdrawal rail, kept separate from wallets.</p>
-            </div>
-            <b>{liquidityOperationalStatus ?? "UNKNOWN"}</b>
-          </header>
-          <div className="admin-finance-domain-primary">
-            <span>Available GBP at Stripe</span>
-            <strong>
-              {providerMoney(
-                separatedStripe?.providerAvailableMinor ??
-                  dashboard.payoutLiquidity?.providerAvailableMinor,
-                separatedStripe?.payoutLiquidityStatus ??
-                  dashboard.payoutLiquidity?.providerLiquidityStatus,
-              )}
-            </strong>
-            <small>
-              {liquidityState(
-                separatedStripe?.payoutLiquidityStatus ??
-                  dashboard.payoutLiquidity?.providerLiquidityStatus,
-              )}{" "}
-              Payments Balance.
-            </small>
-          </div>
-          <div className="admin-finance-domain-metrics">
-            <Metric
-              label="After reservations"
-              value={providerMoney(
-                separatedStripe?.availableAfterReservationsMinor ??
-                  dashboard.payoutLiquidity?.availableAfterReservationsMinor,
-                separatedStripe?.payoutLiquidityStatus ??
-                  dashboard.payoutLiquidity?.providerLiquidityStatus,
-              )}
-              tone="cyan"
-            />
-            <Metric
-              label="Payout obligations"
-              value={money(separatedStripe?.pendingPayoutObligationMinor)}
-              tone="gold"
-            />
-            <Metric
-              label="Coverage"
-              value={providerCoverage(
-                separatedStripe?.payoutLiquidityCoverageBps ??
-                  dashboard.payoutLiquidity?.payoutLiquidityCoverageBps,
-                separatedStripe?.payoutLiquidityStatus ??
-                  dashboard.payoutLiquidity?.providerLiquidityStatus,
-              )}
-              tone={operationalLiquidityTone(liquidityOperationalStatus)}
-            />
-            <Metric
-              label="Projected shortfall"
-              value={money(separatedStripe?.liquidityShortfallMinor)}
-              tone={operationalLiquidityTone(liquidityOperationalStatus)}
-            />
-          </div>
-          <footer className="admin-finance-domain-footer">
-            <span>
-              Pending at Stripe{" "}
-              {providerMoney(
-                separatedStripe?.providerPendingMinor ??
-                  dashboard.payoutLiquidity?.providerPendingMinor,
-                separatedStripe?.payoutLiquidityStatus ??
-                  dashboard.payoutLiquidity?.providerLiquidityStatus,
-              )}
-            </span>
-            <p>
-              {separatedStripe?.payoutLiquidityStatus === "UNAVAILABLE"
-                ? "Stripe could not be read. Preflight stays fail-closed until provider evidence returns."
-                : liquidityOperationalStatus === "DEFICIT"
-                  ? `${money(separatedStripe?.liquidityShortfallMinor)} below the protected liability and reserve projection.`
-                  : "Only Stripe Platform Payments Balance can release a customer withdrawal."}
-            </p>
-          </footer>
-        </article>
+            <article className="admin-finance-domain-card is-provider">
+              <header className="admin-finance-domain-heading">
+                <div>
+                  <span>Provider evidence</span>
+                  <h3>Stripe payout capacity</h3>
+                  <p>Live provider proof for the withdrawal rail, kept separate from wallets.</p>
+                </div>
+                <b>{liquidityOperationalStatus ?? "UNKNOWN"}</b>
+              </header>
+              <div className="admin-finance-domain-primary">
+                <span>Available GBP at Stripe</span>
+                <strong>
+                  {providerMoney(
+                    separatedStripe?.providerAvailableMinor ??
+                      dashboard.payoutLiquidity?.providerAvailableMinor,
+                    separatedStripe?.payoutLiquidityStatus ??
+                      dashboard.payoutLiquidity?.providerLiquidityStatus,
+                  )}
+                </strong>
+                <small>
+                  {liquidityState(
+                    separatedStripe?.payoutLiquidityStatus ??
+                      dashboard.payoutLiquidity?.providerLiquidityStatus,
+                  )}{" "}
+                  Payments Balance.
+                </small>
+              </div>
+              <div className="admin-finance-domain-metrics">
+                <Metric
+                  label="After reservations"
+                  value={providerMoney(
+                    separatedStripe?.availableAfterReservationsMinor ??
+                      dashboard.payoutLiquidity?.availableAfterReservationsMinor,
+                    separatedStripe?.payoutLiquidityStatus ??
+                      dashboard.payoutLiquidity?.providerLiquidityStatus,
+                  )}
+                  tone="cyan"
+                />
+                <Metric
+                  label="Payout obligations"
+                  value={money(separatedStripe?.pendingPayoutObligationMinor)}
+                  tone="gold"
+                />
+                <Metric
+                  label="Coverage"
+                  value={providerCoverage(
+                    separatedStripe?.payoutLiquidityCoverageBps ??
+                      dashboard.payoutLiquidity?.payoutLiquidityCoverageBps,
+                    separatedStripe?.payoutLiquidityStatus ??
+                      dashboard.payoutLiquidity?.providerLiquidityStatus,
+                  )}
+                  tone={operationalLiquidityTone(liquidityOperationalStatus)}
+                />
+                <Metric
+                  label="Projected shortfall"
+                  value={money(separatedStripe?.liquidityShortfallMinor)}
+                  tone={operationalLiquidityTone(liquidityOperationalStatus)}
+                />
+              </div>
+              <footer className="admin-finance-domain-footer">
+                <span>
+                  Pending at Stripe{" "}
+                  {providerMoney(
+                    separatedStripe?.providerPendingMinor ??
+                      dashboard.payoutLiquidity?.providerPendingMinor,
+                    separatedStripe?.payoutLiquidityStatus ??
+                      dashboard.payoutLiquidity?.providerLiquidityStatus,
+                  )}
+                </span>
+                <p>
+                  {separatedStripe?.payoutLiquidityStatus === "UNAVAILABLE"
+                    ? "Stripe could not be read. Preflight stays fail-closed until provider evidence returns."
+                    : liquidityOperationalStatus === "DEFICIT"
+                      ? `${money(separatedStripe?.liquidityShortfallMinor)} below the protected liability and reserve projection.`
+                      : "Only Stripe Platform Payments Balance can release a customer withdrawal."}
+                </p>
+              </footer>
+            </article>
 
-        <article className="admin-finance-domain-card is-company">
-          <header className="admin-finance-domain-heading">
-            <div>
-              <span>Company ledger</span>
-              <h3>Slice revenue</h3>
-              <p>Recognised fees, provider costs, and controlled settlement readiness.</p>
-            </div>
-            <b>{separatedRevenue?.safeToSweepStatus ?? "BLOCKED"}</b>
-          </header>
-          <div className="admin-finance-domain-primary">
-            <span>Recognised net revenue</span>
-            <strong>
-              {money(
-                separatedRevenue?.recognisedNetRevenueMinor ??
-                  dashboard.platformRevenue?.estimatedNetContributionMinor,
-              )}
-            </strong>
-            <small>Company revenue only — never customer cash or Stripe liquidity.</small>
-          </div>
-          <div className="admin-finance-domain-metrics">
-            <Metric
-              label="Safe to sweep"
-              value={money(separatedRevenue?.safeToSweepMinor)}
-              tone={separatedRevenue?.safeToSweepStatus === "READY" ? "green" : "red"}
-            />
-            <Metric
-              label="Operating reserve"
-              value={
-                separatedRevenue?.operationalReserveConfigured
-                  ? money(separatedRevenue.operationalReserveMinor)
-                  : "Not configured"
-              }
-              tone="gold"
-            />
-            <Metric
-              label="Provider evidence"
-              value={
-                separatedRevenue?.pendingProviderCostCount
-                  ? `${separatedRevenue.pendingProviderCostCount} pending`
-                  : "Complete"
-              }
-              tone={separatedRevenue?.pendingProviderCostCount ? "gold" : "green"}
-            />
-          </div>
-          <footer
-            className={`admin-finance-domain-footer${separatedRevenue?.safeToSweepStatus === "BLOCKED" ? " is-warning" : ""}`}
-          >
-            <span>Already swept {money(separatedRevenue?.alreadySweptMinor)}</span>
-            <span>External settlement not configured</span>
-            <p>
-              {separatedRevenue?.safeToSweepStatus === "READY"
-                ? "A dual-control sweep request may be recorded; approval does not send a Stripe payout."
-                : separatedRevenue?.blockedReasons.length
-                  ? `Sweep blocked: ${separatedRevenue.blockedReasons.map(titleCase).join(", ")}.`
-                  : "Sweep readiness remains blocked until the server proves a safe amount."}
-            </p>
-          </footer>
-        </article>
-      </section>
+            <article className="admin-finance-domain-card is-company">
+              <header className="admin-finance-domain-heading">
+                <div>
+                  <span>Company ledger</span>
+                  <h3>Slice revenue</h3>
+                  <p>Recognised fees, provider costs, and controlled settlement readiness.</p>
+                </div>
+                <b>{separatedRevenue?.safeToSweepStatus ?? "BLOCKED"}</b>
+              </header>
+              <div className="admin-finance-domain-primary">
+                <span>Recognised net revenue</span>
+                <strong>
+                  {money(
+                    separatedRevenue?.recognisedNetRevenueMinor ??
+                      dashboard.platformRevenue?.estimatedNetContributionMinor,
+                  )}
+                </strong>
+                <small>Company revenue only — never customer cash or Stripe liquidity.</small>
+              </div>
+              <div className="admin-finance-domain-metrics">
+                <Metric
+                  label="Safe to sweep"
+                  value={money(separatedRevenue?.safeToSweepMinor)}
+                  tone={separatedRevenue?.safeToSweepStatus === "READY" ? "green" : "red"}
+                />
+                <Metric
+                  label="Operating reserve"
+                  value={
+                    separatedRevenue?.operationalReserveConfigured
+                      ? money(separatedRevenue.operationalReserveMinor)
+                      : "Not configured"
+                  }
+                  tone="gold"
+                />
+                <Metric
+                  label="Provider evidence"
+                  value={
+                    separatedRevenue?.pendingProviderCostCount
+                      ? `${separatedRevenue.pendingProviderCostCount} pending`
+                      : "Complete"
+                  }
+                  tone={separatedRevenue?.pendingProviderCostCount ? "gold" : "green"}
+                />
+              </div>
+              <footer
+                className={`admin-finance-domain-footer${separatedRevenue?.safeToSweepStatus === "BLOCKED" ? " is-warning" : ""}`}
+              >
+                <span>Already swept {money(separatedRevenue?.alreadySweptMinor)}</span>
+                <span>External settlement not configured</span>
+                <p>
+                  {separatedRevenue?.safeToSweepStatus === "READY"
+                    ? "A dual-control sweep request may be recorded; approval does not send a Stripe payout."
+                    : separatedRevenue?.blockedReasons.length
+                      ? `Sweep blocked: ${separatedRevenue.blockedReasons.map(titleCase).join(", ")}.`
+                      : "Sweep readiness remains blocked until the server proves a safe amount."}
+                </p>
+              </footer>
+            </article>
+          </section>
+        </>
+      ) : null}
 
       <section className="admin-finance-ledger-card">
         <header className="admin-finance-ledger-heading">
@@ -598,6 +619,7 @@ export function AdminFinanceTrading({
             {visibleTabs.map((entry) => (
               <button
                 className={entry.id === activeTab ? "active" : ""}
+                aria-current={entry.id === activeTab ? "page" : undefined}
                 key={entry.id}
                 onClick={() => selectTab(entry.id)}
                 type="button"
@@ -611,6 +633,7 @@ export function AdminFinanceTrading({
           <label className="admin-finance-search">
             <Search size={15} />
             <input
+              aria-label="Search finance records"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder={
@@ -896,6 +919,7 @@ function FinancePagination({
       <div>
         <button
           disabled={info.page <= 1}
+          aria-label="Previous page"
           onClick={() => update({ page: String(info.page - 1) })}
           type="button"
         >
@@ -904,6 +928,7 @@ function FinancePagination({
         <strong>{info.page}</strong>
         <button
           disabled={info.page >= info.totalPages}
+          aria-label="Next page"
           onClick={() => update({ page: String(info.page + 1) })}
           type="button"
         >

@@ -73,6 +73,7 @@ const text = (value: unknown) =>
   value === null || value === undefined || value === "" ? "—" : String(value);
 const label = (value: unknown) =>
   text(value)
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .toLowerCase()
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -180,7 +181,7 @@ function RecordTable({
                 <td key={key} title={text(item[key])}>
                   {key === "status" || key === "result" ? (
                     <Status value={item[key]} />
-                  ) : key.toLowerCase().includes("at") || key === "createdAt" ? (
+                  ) : key.endsWith("At") ? (
                     date(item[key])
                   ) : (
                     text(item[key])
@@ -222,6 +223,22 @@ export function AdminPlatformOperations({
   const activeTab: PlatformTab = tabs.some((item) => item.id === rawTab)
     ? (rawTab as PlatformTab)
     : "health";
+  const viewTitle =
+    activeTab === "health"
+      ? "Platform health"
+      : activeTab === "jobs" || activeTab === "webhooks"
+        ? "Delivery"
+        : activeTab === "integrations"
+          ? "Integrations"
+          : "Audit & settings";
+  const viewDescription =
+    activeTab === "health"
+      ? "Monitor service health, queue resources and the alerts that need attention."
+      : activeTab === "jobs" || activeTab === "webhooks"
+        ? "Inspect delivery attempts, webhook events and safe error details."
+        : activeTab === "integrations"
+          ? "Check connected providers, configuration status and service availability."
+          : "Inspect the audit trail and manage permission-controlled platform settings.";
   const [search, setSearch] = useState(query);
   useEffect(() => setSearch(query), [query]);
   useEffect(() => {
@@ -252,10 +269,10 @@ export function AdminPlatformOperations({
       <header className="admin-platform-header admin-list-workspace__heading">
         <div>
           <p className="admin-platform-breadcrumb">
-            Admin Console <span>›</span> Platform Dashboard
+            Platform <span>›</span> {viewTitle}
           </p>
-          <h2>{simplified ? "Platform" : "Platform Operations"}</h2>
-          <p>System health, delivery, integrations, and authoritative platform controls.</p>
+          <h2>{viewTitle}</h2>
+          <p>{viewDescription}</p>
         </div>
         <div className="admin-platform-header-actions">
           <button type="button" onClick={retry}>
@@ -309,6 +326,7 @@ export function AdminPlatformOperations({
               key={item.id}
               type="button"
               className={activeTab === item.id ? "active" : ""}
+              aria-current={activeTab === item.id ? "page" : undefined}
               onClick={() => selectTab(item.id)}
             >
               {item.label}
@@ -537,6 +555,7 @@ function Records({
         <label className="admin-platform-search">
           <Search aria-hidden="true" />
           <input
+            aria-label={`Search ${tab}`}
             value={query}
             onChange={(event) => setSearch(event.target.value)}
             placeholder={`Search ${tab}…`}
@@ -544,6 +563,7 @@ function Records({
         </label>
         {statuses[tab].length ? (
           <select
+            aria-label="Platform record status"
             value={status}
             onChange={(event) => update({ status: event.target.value || undefined, page: "1" })}
           >
@@ -579,6 +599,7 @@ function Records({
           <button
             type="button"
             disabled={pageInfo.page <= 1}
+            aria-label="Previous page"
             onClick={() => update({ page: String(pageInfo.page - 1) })}
           >
             <ChevronLeft aria-hidden="true" />
@@ -587,6 +608,7 @@ function Records({
           <button
             type="button"
             disabled={pageInfo.page >= pageInfo.totalPages}
+            aria-label="Next page"
             onClick={() => update({ page: String(pageInfo.page + 1) })}
           >
             <ChevronRight aria-hidden="true" />
@@ -626,7 +648,7 @@ function PlatformRecordDrawer({
             .map(([key, value]) => (
               <div key={key}>
                 <dt>{label(key)}</dt>
-                <dd>{platformRecordValue(value)}</dd>
+                <dd>{key.endsWith("At") ? date(value) : platformRecordValue(value)}</dd>
               </div>
             ))}
         </dl>
@@ -644,6 +666,7 @@ function PlatformRecordDrawer({
 }
 
 function platformRecordValue(value: unknown) {
+  if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
     return String(value).replaceAll("_", " ");
   return "Recorded";
