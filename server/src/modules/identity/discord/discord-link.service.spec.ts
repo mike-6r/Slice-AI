@@ -10,6 +10,8 @@ import { DiscordLinkService } from './discord-link.service';
 
 const config: AppConfig = {
   environment: 'test',
+  deploymentChannel: 'staging',
+  publicBasePath: '/',
   host: '127.0.0.1',
   port: 3001,
   corsOrigins: ['http://127.0.0.1:5173'],
@@ -25,7 +27,9 @@ const config: AppConfig = {
   recentAuthWindowSeconds: 300,
   refreshTokenTtlSeconds: 3600,
   refreshCookieName: 'slice_refresh',
+  refreshCookiePath: '/api/v1/auth',
   cookieSecure: false,
+  redisKeyPrefix: 'slice:test:',
   appPublicUrl: 'http://127.0.0.1:5173',
   emailDeliveryMode: 'local_test',
   emailEnabled: true,

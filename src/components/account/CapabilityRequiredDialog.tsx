@@ -1,4 +1,5 @@
 import type { AccountCapability } from "@/domain";
+import { appPath } from "@/config/environment";
 
 const copy: Record<NonNullable<AccountCapability["reason"]>, { title: string; detail: string }> = {
   EMAIL_VERIFICATION_REQUIRED: {
@@ -187,7 +188,7 @@ export function CapabilityRequiredDialog({
         <div className="mt-6 flex flex-wrap gap-3">
           {action && href ? (
             <a
-              href={href}
+              href={appPath(href)}
               className="primary-action px-4 py-2 text-sm font-semibold text-background"
             >
               {action}

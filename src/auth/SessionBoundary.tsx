@@ -11,6 +11,7 @@ import {
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { ApiClient, API_ORIGIN } from "@/api/http-client";
+import { appPath, routerPath } from "@/config/environment";
 import { runQaSessionHooks } from "@/auth/qa-session-hooks";
 import { SLICE_LOGO_ASSET } from "@/components/layout/navigation-model";
 import { clearPrivateQueries } from "./private-cache";
@@ -82,15 +83,15 @@ export function SessionBoundary({ children }: { children: ReactNode }) {
 
   const signInAgain = () => {
     session.clear();
-    const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    const currentPath = `${routerPath(window.location.pathname)}${window.location.search}${window.location.hash}`;
     const returnTo = currentPath.startsWith("/") ? currentPath : "/";
-    window.location.assign(`/login?returnTo=${encodeURIComponent(returnTo)}`);
+    window.location.assign(appPath(`/login?returnTo=${encodeURIComponent(returnTo)}`));
   };
 
   const protectedRoute =
     isClient &&
     /^\/(admin|account|dashboard|portfolio|orders|wallet|list|onboarding|collector-workspace|operations|submissions|watchlist)(\/|$)/.test(
-      window.location.pathname,
+      routerPath(window.location.pathname),
     );
   const needsRestoreScreen =
     protectedRoute &&

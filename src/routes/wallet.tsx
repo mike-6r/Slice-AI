@@ -35,6 +35,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { ApiError } from "@/api/http-client";
+import { appUrl } from "@/config/environment";
 import { useSession } from "@/auth/use-session";
 import type {
   BankConnection,
@@ -1758,7 +1759,7 @@ function CardFundingDialog({
       const result = await stripe.confirmPayment({
         elements,
         confirmParams: {
-          return_url: new URL("/wallet?cardFunding=return", window.location.origin).toString(),
+          return_url: appUrl(window.location.origin, "/wallet?cardFunding=return"),
         },
         redirect: "if_required",
       });

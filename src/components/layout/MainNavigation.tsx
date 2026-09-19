@@ -24,7 +24,7 @@ import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 import { canAccessAdmin, canAccessCollectorWorkspace } from "@/auth/workspace-access";
 import { primaryNavigationFor, SLICE_LOGO_ASSET } from "./navigation-model";
-import { isBetaEnvironment } from "@/config/environment";
+import { isBetaEnvironment, isPreviewEnvironment } from "@/config/environment";
 import { formatWalletMoney } from "@/routes/-wallet-presentation";
 import type { PortfolioSummary } from "@/domain";
 
@@ -144,6 +144,11 @@ export function MainNavigation() {
         {isBetaEnvironment ? (
           <span className="rounded-full border border-accent/40 bg-accent/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-accent">
             Beta
+          </span>
+        ) : null}
+        {isPreviewEnvironment ? (
+          <span className="rounded-full border border-amber-400/50 bg-amber-400/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-300">
+            Preview
           </span>
         ) : null}
 

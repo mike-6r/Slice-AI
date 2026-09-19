@@ -461,7 +461,7 @@ export class AuthController {
       httpOnly: true as const,
       secure: this.config.cookieSecure,
       sameSite: 'lax' as const,
-      path: '/api/v1/auth',
+      path: this.config.refreshCookiePath ?? '/api/v1/auth',
       domain: this.config.cookieDomain,
       maxAge: this.config.refreshTokenTtlSeconds * 1000,
     };

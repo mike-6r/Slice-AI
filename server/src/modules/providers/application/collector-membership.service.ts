@@ -8,6 +8,7 @@ import { Prisma, CollectorPlanCode, CollectorSubscriptionStatus } from '@prisma/
 import type Stripe from 'stripe';
 import { randomUUID } from 'node:crypto';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
+import { publicApplicationUrl } from '../../../config/public-url';
 import { PrismaService } from '../../../database/prisma.service';
 import { collectorUsageFor, numberEntitlement } from '../../collector-workspace/collector-entitlements';
 import { createIdentityTransaction } from '../../identity/persistence/prisma-identity.repositories';
@@ -238,8 +239,8 @@ export class CollectorMembershipService {
         mode: 'subscription',
         customer: customer.id,
         line_items: [{ price: priceId, quantity: 1 }],
-        success_url: `${this.config.appPublicUrl}/collector-workspace?section=subscription&checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${this.config.appPublicUrl}/collector-workspace?section=subscription&checkout=cancelled`,
+        success_url: publicApplicationUrl(this.config.appPublicUrl, '/collector-workspace?section=subscription&checkout=success&session_id={CHECKOUT_SESSION_ID}'),
+        cancel_url: publicApplicationUrl(this.config.appPublicUrl, '/collector-workspace?section=subscription&checkout=cancelled'),
         client_reference_id: membership.id,
         metadata: this.metadata(userId, membership.id, plan.code),
         subscription_data: { metadata: this.metadata(userId, membership.id, plan.code) },
@@ -259,7 +260,7 @@ export class CollectorMembershipService {
     const current = await this.current(userId);
     if (!current?.providerCustomerId || !current.providerSubscriptionId) throw new ConflictException({ code: 'MEMBERSHIP_PORTAL_UNAVAILABLE', message: 'Billing management becomes available after your subscription is confirmed.' });
     try {
-      const portal = await this.stripeFactory.get().billingPortal.sessions.create({ customer: current.providerCustomerId, return_url: `${this.config.appPublicUrl}/collector-workspace?section=subscription` }, { idempotencyKey: `slice-membership-portal:${this.stripeFactory.environment()}:${current.id}:${idempotencyKey}` });
+      const portal = await this.stripeFactory.get().billingPortal.sessions.create({ customer: current.providerCustomerId, return_url: publicApplicationUrl(this.config.appPublicUrl, '/collector-workspace?section=subscription') }, { idempotencyKey: `slice-membership-portal:${this.stripeFactory.environment()}:${current.id}:${idempotencyKey}` });
       if (!portal.url) throw new Error('PORTAL_URL_MISSING');
       await this.audit('MEMBERSHIP_BILLING_PORTAL_OPENED', userId, current.id, { result: 'SUCCESS' });
       return { action: 'PORTAL', status: 'REDIRECT', portalUrl: portal.url };

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { ApiError } from "@/api/http-client";
+import { appPath } from "@/config/environment";
 import { useSession } from "@/auth/use-session";
 import { CapabilityRequiredDialog } from "@/components/account/CapabilityRequiredDialog";
 import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
@@ -296,7 +297,7 @@ export function TradingOrderForm({
   const openReview = async () => {
     if (!isAuthenticated) {
       window.location.assign(
-        `/login?returnTo=${encodeURIComponent(`/${side === "BUY" ? "buy" : "sell"}/${assetSlug}`)}`,
+        appPath(`/login?returnTo=${encodeURIComponent(`/${side === "BUY" ? "buy" : "sell"}/${assetSlug}`)}`),
       );
       return;
     }

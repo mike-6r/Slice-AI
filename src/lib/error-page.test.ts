@@ -12,4 +12,8 @@ describe("renderErrorPage", () => {
     expect(html).toContain('href="/"');
     expect(html).not.toContain("onclick=");
   });
+
+  it("keeps recovery navigation inside a preview mount", () => {
+    expect(renderErrorPage("/preview")).toContain('href="/preview/"');
+  });
 });

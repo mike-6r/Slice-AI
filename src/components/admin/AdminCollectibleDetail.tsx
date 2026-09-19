@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
+import { appPath } from "@/config/environment";
 import type { AdminCollectibleDetail as Detail } from "@/data/repositories";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import "@/styles/admin-collectible-detail.css";
@@ -122,12 +123,12 @@ function CollectibleOperationalGuidance({
   );
   const following = operations.economicWorkflow[currentIndex + 1];
   const intakeHref = item.dossier.provenance
-    ? `/admin?section=intake&intake=${encodeURIComponent(item.dossier.provenance.submissionId)}`
+    ? appPath(`/admin?section=intake&intake=${encodeURIComponent(item.dossier.provenance.submissionId)}`)
     : null;
   const targetHref =
     action.target === "INTAKE" && intakeHref
       ? intakeHref
-      : `/admin?section=assetOperations&asset=${encodeURIComponent(item.id)}`;
+      : appPath(`/admin?section=assetOperations&asset=${encodeURIComponent(item.id)}`);
   return (
     <GuidancePanel
       className="collectible-dossier__guidance"
@@ -220,23 +221,23 @@ function DossierHeader({ item }: { item: Detail }) {
       <div className="dossier-quick-links" aria-label="Quick links">
         {provenance ? (
           <DossierLink
-            href={`/admin?section=moderation&q=${encodeURIComponent(provenance.submissionId)}`}
+            href={appPath(`/admin?section=moderation&q=${encodeURIComponent(provenance.submissionId)}`)}
           >
             View Submission
           </DossierLink>
         ) : null}
         {provenance && item.intake ? (
           <DossierLink
-            href={`/admin?section=intake&intake=${encodeURIComponent(provenance.submissionId)}`}
+            href={appPath(`/admin?section=intake&intake=${encodeURIComponent(provenance.submissionId)}`)}
           >
             Open Physical Intake
           </DossierLink>
         ) : null}
-        <DossierLink href={`/admin?section=assetOperations&asset=${encodeURIComponent(item.id)}`}>
+        <DossierLink href={appPath(`/admin?section=assetOperations&asset=${encodeURIComponent(item.id)}`)}>
           Open Asset Operations
         </DossierLink>
         {item.collector ? (
-          <DossierLink href={`/admin?section=users&user=${encodeURIComponent(item.collector.id)}`}>
+          <DossierLink href={appPath(`/admin?section=users&user=${encodeURIComponent(item.collector.id)}`)}>
             View Collector
           </DossierLink>
         ) : null}
@@ -366,7 +367,7 @@ function Overview({ item }: { item: Detail }) {
             />
             {item.intake && provenance ? (
               <DossierLink
-                href={`/admin?section=intake&intake=${encodeURIComponent(provenance.submissionId)}`}
+                href={appPath(`/admin?section=intake&intake=${encodeURIComponent(provenance.submissionId)}`)}
               >
                 Open Physical Intake
               </DossierLink>
@@ -396,7 +397,7 @@ function Overview({ item }: { item: Detail }) {
             ],
             ["Publication", sentence(item.market.publication)],
           ]}
-          href={`/admin?section=assetOperations&asset=${encodeURIComponent(item.id)}&tab=market`}
+          href={appPath(`/admin?section=assetOperations&asset=${encodeURIComponent(item.id)}&tab=market`)}
         />
         <SummaryCard
           title="Ownership Summary"
@@ -407,7 +408,7 @@ function Overview({ item }: { item: Detail }) {
             ["Issued units", item.ownership.issuedUnits],
             ["Holders", item.ownership.ownerCount],
           ]}
-          href={`/admin?section=assetOperations&asset=${encodeURIComponent(item.id)}&tab=ownership`}
+          href={appPath(`/admin?section=assetOperations&asset=${encodeURIComponent(item.id)}&tab=ownership`)}
         />
         <SummaryCard
           title="Valuation Summary"
@@ -427,30 +428,30 @@ function Overview({ item }: { item: Detail }) {
                 "None",
             ],
           ]}
-          href={`/admin?section=assetOperations&asset=${encodeURIComponent(item.id)}&tab=valuation`}
+          href={appPath(`/admin?section=assetOperations&asset=${encodeURIComponent(item.id)}&tab=valuation`)}
         />
         <Restrictions item={item} />
         <DossierCard title="Quick Links" icon={<ArrowUpRight aria-hidden="true" />}>
           {provenance ? (
             <DossierLink
-              href={`/admin?section=moderation&q=${encodeURIComponent(provenance.submissionId)}`}
+              href={appPath(`/admin?section=moderation&q=${encodeURIComponent(provenance.submissionId)}`)}
             >
               View Submission
             </DossierLink>
           ) : null}
           {item.intake && provenance ? (
             <DossierLink
-              href={`/admin?section=intake&intake=${encodeURIComponent(provenance.submissionId)}`}
+              href={appPath(`/admin?section=intake&intake=${encodeURIComponent(provenance.submissionId)}`)}
             >
               Open Physical Intake
             </DossierLink>
           ) : null}
-          <DossierLink href={`/admin?section=assetOperations&asset=${encodeURIComponent(item.id)}`}>
+          <DossierLink href={appPath(`/admin?section=assetOperations&asset=${encodeURIComponent(item.id)}`)}>
             Open Asset Operations
           </DossierLink>
           {item.collector ? (
             <DossierLink
-              href={`/admin?section=users&user=${encodeURIComponent(item.collector.id)}`}
+              href={appPath(`/admin?section=users&user=${encodeURIComponent(item.collector.id)}`)}
             >
               View Collector Profile
             </DossierLink>
@@ -529,7 +530,7 @@ function Valuation({ item }: { item: Detail }) {
           />
         ) : null}
         <DossierLink
-          href={`/admin?section=assetOperations&asset=${encodeURIComponent(item.id)}&tab=valuation`}
+          href={appPath(`/admin?section=assetOperations&asset=${encodeURIComponent(item.id)}&tab=valuation`)}
         >
           Open Asset Operations
         </DossierLink>
@@ -577,7 +578,7 @@ function Ownership({ item }: { item: Detail }) {
             text="No ownership structure has been created for this canonical asset."
           />
           <DossierLink
-            href={`/admin?section=assetOperations&asset=${encodeURIComponent(item.id)}&tab=ownership`}
+            href={appPath(`/admin?section=assetOperations&asset=${encodeURIComponent(item.id)}&tab=ownership`)}
           >
             Open Asset Operations
           </DossierLink>
@@ -690,7 +691,7 @@ function Market({ item }: { item: Detail }) {
         <ReferenceRows item={item} />
       </DossierCard>
       <DossierLink
-        href={`/admin?section=assetOperations&asset=${encodeURIComponent(item.id)}&tab=market`}
+        href={appPath(`/admin?section=assetOperations&asset=${encodeURIComponent(item.id)}&tab=market`)}
       >
         Open Asset Operations
       </DossierLink>

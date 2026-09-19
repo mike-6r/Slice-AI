@@ -1,5 +1,6 @@
 import { Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
+import { publicApplicationUrl } from '../../../config/public-url';
 import { PrismaService } from '../../../database/prisma.service';
 import type { IdentityVerificationProvider, IdentityVerificationState, NormalizedComplianceStatus, VerifiedIdentityDetails } from '../domain/provider.types';
 import { providerCode, providerUnavailable } from './external-provider-boundaries';
@@ -29,7 +30,7 @@ export class StripeIdentityVerificationService implements IdentityVerificationPr
         client_reference_id: input.userId,
         provided_details: { email: user.email },
         options: { document: { require_live_capture: true, require_matching_selfie: true } },
-        return_url: `${this.config.appPublicUrl.replace(/\/$/, '')}/account?verification=complete`,
+        return_url: publicApplicationUrl(this.config.appPublicUrl, '/account?verification=complete'),
         metadata: { slice_user_id: input.userId, slice_environment: this.stripeFactory.environment() },
       }, { idempotencyKey: input.idempotencyKey ?? `slice-identity-session:${this.stripeFactory.environment()}:${input.userId}:${input.requestId}` });
     } catch (error) {

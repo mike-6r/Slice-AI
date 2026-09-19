@@ -23,7 +23,7 @@ import { session } from "@/auth/session";
 import { useSession } from "@/auth/use-session";
 import { canAccessCollectorWorkspace } from "@/auth/workspace-access";
 import { InternationalPhoneInput } from "@/components/account/InternationalPhoneInput";
-import { isBetaEnvironment } from "@/config/environment";
+import { appPath, isBetaEnvironment } from "@/config/environment";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 
@@ -286,7 +286,7 @@ function OnboardingPage() {
       <section className="onboarding-card premium-surface" aria-labelledby="onboarding-title">
         <div className="onboarding-brand">
           <span className="onboarding-brand__mark">
-            <img src="/favicon.png" alt="" />
+            <img src={appPath("/favicon.png")} alt="" />
           </span>
           <strong>Slice</strong>
           <span>Secure setup</span>
@@ -534,7 +534,7 @@ function CollectorBetaOnboarding({
     >
       <div className="onboarding-brand collector-beta-card__brand">
         <span className="onboarding-brand__mark">
-          <img src="/favicon.png" alt="" />
+          <img src={appPath("/favicon.png")} alt="" />
         </span>
         <strong>Slice</strong>
         <span>Collector access</span>

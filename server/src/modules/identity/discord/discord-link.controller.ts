@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
+import { publicApplicationUrl } from '../../../config/public-url';
 import { Inject } from '@nestjs/common';
 import {
   AccessTokenGuard,
@@ -152,17 +153,11 @@ export class DiscordLinkController {
       if (!state || !code) throw new Error('missing OAuth callback parameters');
       await this.links.complete(state, code);
       response.redirect(
-        new URL(
-          '/account?discord=connected',
-          this.config.corsOrigins[0],
-        ).toString(),
+        publicApplicationUrl(this.config.appPublicUrl, '/account?discord=connected'),
       );
     } catch {
       response.redirect(
-        new URL(
-          '/account?discord=failed',
-          this.config.corsOrigins[0],
-        ).toString(),
+        publicApplicationUrl(this.config.appPublicUrl, '/account?discord=failed'),
       );
     }
   }

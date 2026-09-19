@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiClient, resolveApiOrigin } from "./http-client";
+import { apiUrl, ApiClient, resolveApiOrigin } from "./http-client";
 import { session } from "@/auth/session";
 
 describe("ApiClient", () => {
@@ -27,6 +27,22 @@ describe("ApiClient", () => {
     );
   });
 
+  it("keeps preview API calls under the preview mount", () => {
+    expect(
+      resolveApiOrigin(
+        "https://staging.slice.test/preview",
+        "https://staging.slice.test",
+        "/preview",
+      ),
+    ).toBe("https://staging.slice.test/preview");
+    expect(apiUrl("https://staging.slice.test/preview", "/auth/refresh").toString()).toBe(
+      "https://staging.slice.test/preview/api/v1/auth/refresh",
+    );
+    expect(resolveApiOrigin(undefined, "https://staging.slice.test", "/preview")).toBe(
+      "https://staging.slice.test/preview",
+    );
+  });
+
   afterEach(() => {
     session.clear();
     vi.unstubAllGlobals();
@@ -41,6 +57,17 @@ describe("ApiClient", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       expect.objectContaining({ pathname: "/api/v1/market/assets", search: "?query=a+%26+b" }),
       expect.objectContaining({ credentials: "include" }),
+    );
+  });
+
+  it("does not let a preview client escape its API base path", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await new ApiClient("https://api.slice.test/preview").get("/market/assets");
+    expect(fetchMock.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ pathname: "/preview/api/v1/market/assets" }),
     );
   });
 

@@ -19,6 +19,7 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useSession } from "@/auth/use-session";
 import { ApiError } from "@/api/http-client";
+import { appPath } from "@/config/environment";
 import { PriceChart } from "@/components/Chart";
 import {
   toMarketplaceAsset,
@@ -769,7 +770,7 @@ function AssetPage() {
   const condition = asset.conditionLabel ?? asset.grade ?? "Raw / Ungraded";
   const handleWatch = () => {
     if (!isAuthenticated) {
-      window.location.assign(`/login?returnTo=${encodeURIComponent(`/asset/${id}`)}`);
+      window.location.assign(appPath(`/login?returnTo=${encodeURIComponent(`/asset/${id}`)}`));
       return;
     }
     toggleWatchlist.mutate(asset.id);
@@ -937,7 +938,7 @@ function AssetPage() {
                 message={reservationMessage}
                 onReserve={() => {
                   if (!isAuthenticated) {
-                    window.location.assign(`/login?returnTo=${encodeURIComponent(`/asset/${id}`)}`);
+                    window.location.assign(appPath(`/login?returnTo=${encodeURIComponent(`/asset/${id}`)}`));
                     return;
                   }
                   setReservationMessage(null);

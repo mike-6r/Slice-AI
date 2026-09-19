@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
+import { appPath } from "@/config/environment";
 import type { AssetOperationsBoardItem, AssetOperationsBoardResponse } from "@/data/repositories";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import {
@@ -576,13 +577,13 @@ function RowActions({ item, onOpen }: { item: AssetOperationsBoardItem; onOpen: 
       {item.collector ? (
         <a
           role="menuitem"
-          href={`/admin?section=users&user=${encodeURIComponent(item.collector.id)}`}
+          href={appPath(`/admin?section=users&user=${encodeURIComponent(item.collector.id)}`)}
         >
           View collector
         </a>
       ) : null}
       {item.market.state === "MARKET_LIVE" ? (
-        <a role="menuitem" href={`/asset/${encodeURIComponent(item.slug)}`}>
+        <a role="menuitem" href={appPath(`/asset/${encodeURIComponent(item.slug)}`)}>
           Open public listing
         </a>
       ) : null}
@@ -727,12 +728,12 @@ function QueuePreview({
             Open asset record <ArrowRight aria-hidden="true" />
           </button>
           {item.collector ? (
-            <a href={`/admin?section=users&user=${encodeURIComponent(item.collector.id)}`}>
+            <a href={appPath(`/admin?section=users&user=${encodeURIComponent(item.collector.id)}`)}>
               View Collector <ExternalLink aria-hidden="true" />
             </a>
           ) : null}
           {item.market.state === "MARKET_LIVE" ? (
-            <a href={`/asset/${encodeURIComponent(item.slug)}`}>
+            <a href={appPath(`/asset/${encodeURIComponent(item.slug)}`)}>
               Open Public Listing <ExternalLink aria-hidden="true" />
             </a>
           ) : null}
@@ -771,7 +772,7 @@ function BlockerPreview({
   return (
     <section className="asset-operations-preview-section asset-operations-preview-blocker">
       <span>Blockers</span>
-      <a href="/admin?section=assetOperations&operationsAttention=REQUIRES_ATTENTION">
+      <a href={appPath("/admin?section=assetOperations&operationsAttention=REQUIRES_ATTENTION")}>
         <i aria-hidden="true" />
         <div>
           <strong>{blockerLabel(primary)}</strong>

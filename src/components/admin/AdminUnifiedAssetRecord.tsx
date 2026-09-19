@@ -31,6 +31,7 @@ import type {
   AssetOperationDetailProjection,
 } from "@/data/repositories";
 import type { SubmissionReviewDetail } from "@/domain/submission";
+import { appPath } from "@/config/environment";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { AdminReviewMedia } from "./AdminReviewMedia";
 import { AssetReviewGuidePanel, AssetReviewSteps, GuideNavigation } from "./AssetReviewGuidePanel";
@@ -825,7 +826,7 @@ function AssetRecord({ reference, focus, onFocus }: AssetRecordProps) {
               <DefinitionGrid values={moneyFacts(asset)} />
               <a
                 className="asset-record__money-link"
-                href={`/admin?section=money&view=wallets-movements&q=${encodeURIComponent(asset?.publicId ?? resolvedSubmissionId ?? reference)}`}
+                href={appPath(`/admin?section=money&view=wallets-movements&q=${encodeURIComponent(asset?.publicId ?? resolvedSubmissionId ?? reference)}`)}
               >
                 Open matching Money records <ArrowRight />
               </a>

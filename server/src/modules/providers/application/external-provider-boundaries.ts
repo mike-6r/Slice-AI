@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import type Stripe from 'stripe';
 import { randomUUID } from 'node:crypto';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
+import { publicApplicationUrl } from '../../../config/public-url';
 import { PrismaService } from '../../../database/prisma.service';
 import type { Actor } from '../../identity/auth/auth.service';
 import { AccountCapabilityService } from '../../identity/access/account-capability.service';
@@ -95,8 +96,8 @@ export class BankConnectionService {
         mode: 'setup',
         payment_method_types: ['bacs_debit'],
         customer: customer.externalCustomerId,
-        success_url: `${this.config.appPublicUrl}/wallet/bank/setup/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${this.config.appPublicUrl}/wallet`,
+        success_url: publicApplicationUrl(this.config.appPublicUrl, '/wallet/bank/setup/success?session_id={CHECKOUT_SESSION_ID}'),
+        cancel_url: publicApplicationUrl(this.config.appPublicUrl, '/wallet'),
           metadata: {
             slice_bacs_setup_session_id: setupSession.id,
             slice_user_id: actor.userId,

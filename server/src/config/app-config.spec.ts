@@ -41,6 +41,49 @@ describe('loadAppConfig', () => {
     expect(beta).toMatchObject({ appEnvironment: 'beta', isBeta: true });
   });
 
+  it('requires an explicitly isolated configuration for preview', () => {
+    const preview = {
+      NODE_ENV: 'test' as const,
+      APP_ENV: 'beta' as const,
+      SLICE_DEPLOYMENT_CHANNEL: 'preview' as const,
+      SLICE_PUBLIC_BASE_PATH: '/preview' as const,
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/slice_preview',
+      REDIS_URL: 'redis://localhost:6379/1',
+      CORS_ORIGINS: 'https://staging.slice.test',
+      APP_PUBLIC_URL: 'https://staging.slice.test/preview',
+      REFRESH_COOKIE_NAME: 'slice_preview_refresh',
+      REFRESH_COOKIE_PATH: '/preview/api/v1/auth',
+      REDIS_KEY_PREFIX: 'slice:preview:',
+      JWT_ISSUER: 'slice-preview-api',
+      JWT_AUDIENCE: 'slice-preview-web',
+      PROVIDER_MODE: 'local' as const,
+      STRIPE_LIVE_ENABLED: 'false' as const,
+      STRIPE_IDENTITY_ENABLED: 'false' as const,
+      XIMILAR_ENABLED: 'false' as const,
+      XIMILAR_CARD_GRADING_ENABLED: 'false' as const,
+      PRICECHARTING_ENABLED: 'false' as const,
+      OUTBOX_WORKER_ENABLED: 'false' as const,
+      MARKET_REFRESH_WORKER_ENABLED: 'false' as const,
+      OPERATIONAL_TRADING_ENABLED: 'false' as const,
+      OPERATIONAL_DEPOSITS_ENABLED: 'false' as const,
+      OPERATIONAL_WITHDRAWALS_ENABLED: 'false' as const,
+      OPERATIONAL_REALTIME_ENABLED: 'false' as const,
+      OPERATIONAL_LISTING_ENABLED: 'false' as const,
+    };
+    expect(loadAppConfig(preview)).toMatchObject({
+      deploymentChannel: 'preview',
+      publicBasePath: '/preview',
+      redisKeyPrefix: 'slice:preview:',
+      refreshCookiePath: '/preview/api/v1/auth',
+    });
+    expect(() =>
+      loadAppConfig({ ...preview, DATABASE_URL: 'postgresql://user:pass@localhost:5432/slice' }),
+    ).toThrow('dedicated *_preview database');
+    expect(() =>
+      loadAppConfig({ ...preview, OPERATIONAL_DEPOSITS_ENABLED: 'true' }),
+    ).toThrow('financial operations to be disabled');
+  });
+
   it('rejects invalid ports', () => {
     expect(() =>
       loadAppConfig({ ...unitTestEnvironment, PORT: '0' }),

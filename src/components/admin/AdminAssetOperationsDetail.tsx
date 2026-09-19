@@ -18,6 +18,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { ApiError } from "@/api/http-client";
+import { appPath } from "@/config/environment";
 import type {
   AdminCollectibleDetail as Detail,
   AssetOperationDetailProjection,
@@ -448,28 +449,28 @@ export function AdminAssetOperationsDetail({
           </div>
         </div>
         <div className="admin-asset-workspace__links">
-          <a href={`/admin?section=collectibles&asset=${encodeURIComponent(assetId)}`}>
+          <a href={appPath(`/admin?section=collectibles&asset=${encodeURIComponent(assetId)}`)}>
             Open collectible <ExternalLink aria-hidden="true" />
           </a>
           {item.submissions[0] ? (
             <a
-              href={`/admin?section=moderation&submission=${encodeURIComponent(item.submissions[0].id)}`}
+              href={appPath(`/admin?section=moderation&submission=${encodeURIComponent(item.submissions[0].id)}`)}
             >
               Source submission <ExternalLink aria-hidden="true" />
             </a>
           ) : null}
           {item.intake ? (
-            <a href={`/admin?section=intake&intake=${encodeURIComponent(item.intake.id)}`}>
+            <a href={appPath(`/admin?section=intake&intake=${encodeURIComponent(item.intake.id)}`)}>
               Physical intake <ExternalLink aria-hidden="true" />
             </a>
           ) : null}
           {item.collector ? (
-            <a href={`/admin?section=users&user=${encodeURIComponent(item.collector.id)}`}>
+            <a href={appPath(`/admin?section=users&user=${encodeURIComponent(item.collector.id)}`)}>
               Collector account <ExternalLink aria-hidden="true" />
             </a>
           ) : null}
           {item.market.publication === "PUBLISHED" ? (
-            <a href={`/asset/${item.slug}`} target="_blank" rel="noreferrer">
+            <a href={appPath(`/asset/${item.slug}`)} target="_blank" rel="noreferrer">
               Public record <ExternalLink aria-hidden="true" />
             </a>
           ) : null}
@@ -1066,7 +1067,7 @@ function OperationsRail({
                     onClick: () => {
                       if (action.target === "INTAKE" && item.intake) {
                         window.location.assign(
-                          `/admin?section=intake&intake=${encodeURIComponent(item.intake.id)}`,
+                          appPath(`/admin?section=intake&intake=${encodeURIComponent(item.intake.id)}`),
                         );
                         return;
                       }
@@ -1134,7 +1135,7 @@ function OperationsRail({
         <Field label="Intake location" value={location} />
         {item.intake ? (
           <div className="admin-operations-rail__commands">
-            <a href={`/admin?section=intake&intake=${encodeURIComponent(item.intake.id)}`}>
+            <a href={appPath(`/admin?section=intake&intake=${encodeURIComponent(item.intake.id)}`)}>
               Open Physical Intake <ExternalLink aria-hidden="true" />
             </a>
           </div>
@@ -1157,23 +1158,23 @@ function OperationsRail({
       ) : null}
       <Rail title="Quick links">
         <div className="admin-operations-rail__commands">
-          <a href={`/admin?section=collectibles&asset=${encodeURIComponent(item.id)}`}>
+          <a href={appPath(`/admin?section=collectibles&asset=${encodeURIComponent(item.id)}`)}>
             Open collectible <ExternalLink aria-hidden="true" />
           </a>
           {item.submissions[0] ? (
             <a
-              href={`/admin?section=moderation&submission=${encodeURIComponent(item.submissions[0].id)}`}
+              href={appPath(`/admin?section=moderation&submission=${encodeURIComponent(item.submissions[0].id)}`)}
             >
               View submission <ExternalLink aria-hidden="true" />
             </a>
           ) : null}
           {item.collector ? (
-            <a href={`/admin?section=users&user=${encodeURIComponent(item.collector.id)}`}>
+            <a href={appPath(`/admin?section=users&user=${encodeURIComponent(item.collector.id)}`)}>
               View collector <ExternalLink aria-hidden="true" />
             </a>
           ) : null}
           {item.market.publication === "PUBLISHED" ? (
-            <a href={`/asset/${item.slug}`} target="_blank" rel="noreferrer">
+            <a href={appPath(`/asset/${item.slug}`)} target="_blank" rel="noreferrer">
               Open public record <ExternalLink aria-hidden="true" />
             </a>
           ) : null}

@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, ServiceUnavailableException } from '@nestjs
 import { createHash } from 'node:crypto';
 import { Resend } from 'resend';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
+import { publicApplicationUrl } from '../../../config/public-url';
 import { PrismaService } from '../../../database/prisma.service';
 import {
   passwordResetEmail,
@@ -148,7 +149,7 @@ export class TransactionalEmailService {
   }
 
   async sendVerification(input: { userId: string; to: string; token: string }) {
-    const url = new URL('/verify-email', this.config.appPublicUrl);
+    const url = new URL(publicApplicationUrl(this.config.appPublicUrl, '/verify-email'));
     url.searchParams.set('token', input.token);
     const template = verificationEmail({
       url: url.toString(),
@@ -164,7 +165,7 @@ export class TransactionalEmailService {
   }
 
   async sendPasswordReset(input: { userId: string; to: string; token: string }) {
-    const url = new URL('/reset-password', this.config.appPublicUrl);
+    const url = new URL(publicApplicationUrl(this.config.appPublicUrl, '/reset-password'));
     url.searchParams.set('token', input.token);
     const template = passwordResetEmail({
       url: url.toString(),

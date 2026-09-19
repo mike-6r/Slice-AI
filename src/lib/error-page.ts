@@ -1,4 +1,5 @@
-export function renderErrorPage(): string {
+export function renderErrorPage(basePath = "/"): string {
+  const homeHref = basePath === "/preview" ? "/preview/" : "/";
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -42,7 +43,7 @@ export function renderErrorPage(): string {
         <p>This view could not load. Retry safely, or return to Slice and continue from a fresh page.</p>
       <div class="actions">
           <a href="">Retry this view</a>
-          <a href="/">Return to Slice</a>
+          <a href="${homeHref}">Return to Slice</a>
         </div>
         <p class="note">Your account state is not changed by this recovery screen.</p>
       </div>

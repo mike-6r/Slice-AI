@@ -1,3 +1,5 @@
+import { appPath } from "@/config/environment";
+
 export const PUBLIC_NAV = [
   { label: "Home", to: "/" },
   { label: "Markets", to: "/marketplace" },
@@ -13,4 +15,4 @@ export const primaryNavigationFor = (isAuthenticated: boolean) =>
   isAuthenticated ? [...PUBLIC_NAV, ...PRIVATE_NAV] : PUBLIC_NAV;
 
 /** Replace this one local asset reference when the approved Slice mark is supplied. */
-export const SLICE_LOGO_ASSET = "/favicon.png";
+export const SLICE_LOGO_ASSET = appPath("/favicon.png");

@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import Stripe = require('stripe');
 import { randomUUID } from 'node:crypto';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
+import { publicApplicationUrl } from '../../../config/public-url';
 import { PrismaService } from '../../../database/prisma.service';
 import type { Actor } from '../../identity/auth/auth.service';
 import { ProviderCryptoService } from './provider-crypto.service';
@@ -1213,14 +1214,14 @@ export class StripeConnectPayoutService {
     userId: string,
     requestId: string,
   ) {
-    const refreshUrl = new URL(
+    const refreshUrl = publicApplicationUrl(
+      this.config.appPublicUrl,
       '/wallet?connect=refresh',
+    );
+    const returnUrl = publicApplicationUrl(
       this.config.appPublicUrl,
-    ).toString();
-    const returnUrl = new URL(
       '/wallet?connect=return',
-      this.config.appPublicUrl,
-    ).toString();
+    );
     const idempotencyKey = `slice-connect-onboarding:${environment}:${userId}:${requestId}`;
     if (mode === 'v2') {
       const collectionOptions = {

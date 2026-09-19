@@ -2,6 +2,7 @@ import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { Resend } from 'resend';
 import { Inject } from '@nestjs/common';
 import { type AppConfig } from '../../../config/app-config';
+import { publicApplicationUrl } from '../../../config/public-url';
 import type { EmailVerificationDelivery } from './email-verification.service';
 import { TransactionalEmailService } from '../email-delivery/transactional-email.service';
 
@@ -42,7 +43,7 @@ export class ResendEmailDelivery implements EmailVerificationDelivery {
     void input.userId;
     if (!config.resendApiKey || !config.resendFromEmail) throw unavailable();
     const recipient = config.resendTestRecipientOverride ?? input.email;
-    const url = new URL('/verify-email', config.appPublicUrl);
+    const url = new URL(publicApplicationUrl(config.appPublicUrl, '/verify-email'));
     url.searchParams.set('token', input.token);
     const from = config.resendFromName
       ? `${config.resendFromName} <${config.resendFromEmail}>`

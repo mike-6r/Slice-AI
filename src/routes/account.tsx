@@ -27,6 +27,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
+import { appPath } from "@/config/environment";
 import { InternationalPhoneInput } from "@/components/account/InternationalPhoneInput";
 import type {
   AccountCapability,
@@ -157,7 +158,7 @@ export function AccountPageForTest() {
     mutationFn: services.repositories.users.consumeDiscordBotLink,
     onSuccess: () => {
       refresh();
-      globalThis.history.replaceState({}, "", "/account");
+      globalThis.history.replaceState({}, "", appPath("/account"));
     },
   });
   const [consumedChallenge, setConsumedChallenge] = useState<string | null>(null);
@@ -504,21 +505,21 @@ function nextAccountSetupAction(capabilities: AccountCapability[]) {
     .find((item) => item && !item.allowed);
   const action = blocked?.nextAction ?? fallbackNextAction(blocked?.reason ?? null);
   const actions: Record<AccountCapabilityNextAction, { href: string; label: string }> = {
-    VERIFY_EMAIL: { href: "/account#security", label: "Continue security setup" },
-    VERIFY_PHONE: { href: "/account#security", label: "Continue security setup" },
-    ENABLE_TWO_FACTOR: { href: "/account#security", label: "Continue security setup" },
-    VERIFY_IDENTITY: { href: "/account#identity", label: "Continue identity verification" },
-    VIEW_IDENTITY_STATUS: { href: "/account#identity", label: "View verification status" },
-    CONNECT_BANK: { href: "/wallet", label: "Connect a bank account" },
-    VIEW_WALLET: { href: "/wallet", label: "View wallet status" },
-    SET_UP_PAYOUTS: { href: "/wallet", label: "Set up withdrawals" },
-    VIEW_PAYOUT_STATUS: { href: "/wallet", label: "View payout status" },
-    OPEN_WALLET: { href: "/wallet", label: "Open wallet" },
-    VIEW_ACCOUNT_STATUS: { href: "/account#overview", label: "View account status" },
+    VERIFY_EMAIL: { href: appPath("/account#security"), label: "Continue security setup" },
+    VERIFY_PHONE: { href: appPath("/account#security"), label: "Continue security setup" },
+    ENABLE_TWO_FACTOR: { href: appPath("/account#security"), label: "Continue security setup" },
+    VERIFY_IDENTITY: { href: appPath("/account#identity"), label: "Continue identity verification" },
+    VIEW_IDENTITY_STATUS: { href: appPath("/account#identity"), label: "View verification status" },
+    CONNECT_BANK: { href: appPath("/wallet"), label: "Connect a bank account" },
+    VIEW_WALLET: { href: appPath("/wallet"), label: "View wallet status" },
+    SET_UP_PAYOUTS: { href: appPath("/wallet"), label: "Set up withdrawals" },
+    VIEW_PAYOUT_STATUS: { href: appPath("/wallet"), label: "View payout status" },
+    OPEN_WALLET: { href: appPath("/wallet"), label: "Open wallet" },
+    VIEW_ACCOUNT_STATUS: { href: appPath("/account#overview"), label: "View account status" },
   };
   return action
     ? actions[action]
-    : { href: "/account#access" as const, label: "Review account setup" };
+    : { href: appPath("/account#access"), label: "Review account setup" };
 }
 
 function fallbackNextAction(
@@ -1819,12 +1820,12 @@ function SessionsPanel({
         <p className="account-empty">No active sessions found.</p>
       )}
       {!showAll && ordered.length > 3 ? (
-        <a href="/account?sessions=all#sessions" className="account-text-button">
+        <a href={appPath("/account?sessions=all#sessions")} className="account-text-button">
           View all sessions →
         </a>
       ) : null}
       {showAll ? (
-        <a href="/account#overview" className="account-text-button">
+        <a href={appPath("/account#overview")} className="account-text-button">
           Back to account overview
         </a>
       ) : null}
@@ -2150,12 +2151,12 @@ function ActivityPanel({
         <p className="account-empty">No recent account activity.</p>
       )}
       {!showAll && (query.data?.nextCursor || items.length > 5) ? (
-        <a href="/account?activity=all#activity" className="account-text-button account-view-all">
+        <a href={appPath("/account?activity=all#activity")} className="account-text-button account-view-all">
           View all activity →
         </a>
       ) : null}
       {showAll ? (
-        <a href="/account#overview" className="account-text-button account-view-all">
+        <a href={appPath("/account#overview")} className="account-text-button account-view-all">
           Back to account overview
         </a>
       ) : null}

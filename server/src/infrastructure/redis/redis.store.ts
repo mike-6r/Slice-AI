@@ -79,7 +79,7 @@ export class RedisCacheStore implements CacheStore {
   private readonly keyPrefix: string;
 
   constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {
-    this.keyPrefix = `slice:${config.environment}:`;
+    this.keyPrefix = config.redisKeyPrefix ?? `slice:${config.environment}:`;
     if (config.redisUrl) {
       this.client = this.createClient();
     }

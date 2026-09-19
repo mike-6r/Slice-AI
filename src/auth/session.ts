@@ -1,5 +1,6 @@
 type Listener = () => void;
 import { recordQaRefresh } from "@/auth/qa-harness";
+import { apiUrl } from "@/api/api-url";
 let accessToken: string | null = null;
 let refreshPromise: Promise<string | null> | null = null;
 let refreshRetryAt = 0;
@@ -159,7 +160,7 @@ export const session = {
     const controller = new AbortController();
     const timeout = globalThis.setTimeout(() => controller.abort(), 8000);
     refreshPromise = withRefreshLease(() =>
-      fetch(new URL("/api/v1/auth/refresh", origin), {
+      fetch(apiUrl(origin, "/auth/refresh"), {
         method: "POST",
         credentials: "include",
         headers: { Accept: "application/json" },

@@ -1,0 +1,22 @@
+[Unit]
+Description=Slice isolated preview SSR web
+After=network-online.target slice-preview-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=slice
+Group=slice
+WorkingDirectory=/opt/slice-preview/app
+EnvironmentFile=/etc/slice/slice-preview.env
+ExecStart=/usr/bin/npm run start:ssr
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/opt/slice-preview
+
+[Install]
+WantedBy=multi-user.target

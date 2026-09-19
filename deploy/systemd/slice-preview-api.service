@@ -1,0 +1,22 @@
+[Unit]
+Description=Slice isolated preview API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=slice
+Group=slice
+WorkingDirectory=/opt/slice-preview/app/server
+EnvironmentFile=/etc/slice/slice-preview.env
+ExecStart=/usr/bin/node --env-file=/etc/slice/slice-preview.env dist/main
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/opt/slice-preview /var/lib/slice-preview
+
+[Install]
+WantedBy=multi-user.target

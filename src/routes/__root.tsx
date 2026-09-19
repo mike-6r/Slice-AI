@@ -21,6 +21,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Toaster } from "@/components/ui/sonner";
 import { AppServicesProvider } from "@/providers/AppServicesProvider";
 import { CurrencyProvider } from "@/currency/CurrencyProvider";
+import { appPath } from "@/config/environment";
 
 function NotFoundComponent() {
   return (
@@ -98,7 +99,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
               <RefreshCw aria-hidden="true" />
               Retry this view
             </button>
-            <a href="/" className="slice-recovery__home">
+            <a href={appPath("/")} className="slice-recovery__home">
               Return to Slice
               <ArrowUpRight aria-hidden="true" />
             </a>
@@ -138,7 +139,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "stylesheet", href: collectorsDirectoryCss },
       { rel: "stylesheet", href: collectorStorefrontCss },
       { rel: "stylesheet", href: adminDesignCss },
-      { rel: "icon", href: "/favicon.png", type: "image/png" },
+      { rel: "icon", href: appPath("/favicon.png"), type: "image/png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {

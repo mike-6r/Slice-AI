@@ -7,6 +7,10 @@ const configSchema = z.object({
   // Deployment intent is explicit so a beta instance cannot be inferred from
   // a hostname or accidentally inherit the public-production policy.
   APP_ENV: z.enum(['development', 'test', 'beta', 'production']).optional(),
+  // A preview instance has an intentionally different data/session boundary.
+  // It is opt-in; staging remains the root-path default.
+  SLICE_DEPLOYMENT_CHANNEL: z.enum(['staging', 'preview']).default('staging'),
+  SLICE_PUBLIC_BASE_PATH: z.enum(['/', '/preview']).default('/'),
   // Provisioning-only inputs; never returned to application consumers.
   BETA_ADMIN_EMAIL: z.string().email().optional(),
   BETA_ADMIN_USERNAME: z
@@ -63,8 +67,13 @@ const configSchema = z.object({
     .string()
     .regex(/^[A-Za-z0-9_-]{1,64}$/)
     .default('slice_refresh'),
+  REFRESH_COOKIE_PATH: z
+    .string()
+    .regex(/^\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]*$/)
+    .default('/api/v1/auth'),
   COOKIE_SECURE: z.enum(['true', 'false']).optional(),
   COOKIE_DOMAIN: z.string().min(1).optional(),
+  REDIS_KEY_PREFIX: z.string().regex(/^[a-z][a-z0-9:_-]{2,63}:$/).optional(),
   PROVIDER_MODE: z
     .enum(['local', 'stripe_sandbox', 'stripe_live'])
     .default('local'),
@@ -441,6 +450,8 @@ export type AppConfig = {
   environment: 'development' | 'test' | 'production';
   appEnvironment?: 'development' | 'test' | 'beta' | 'production';
   isBeta?: boolean;
+  deploymentChannel: 'staging' | 'preview';
+  publicBasePath: '/' | '/preview';
   host: string;
   port: number;
   corsOrigins: string[];
@@ -460,8 +471,10 @@ export type AppConfig = {
   recentAuthWindowSeconds: number;
   refreshTokenTtlSeconds: number;
   refreshCookieName: string;
+  refreshCookiePath: string;
   cookieSecure: boolean;
   cookieDomain?: string;
+  redisKeyPrefix: string;
   providerMode: 'local' | 'stripe_sandbox' | 'stripe_live';
   stripeIdentityEnabled?: boolean;
   /** @deprecated Test fixtures may still provide this historical flag. */
@@ -619,6 +632,7 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
         ? 'test'
         : 'development');
   const isBeta = appEnvironment === 'beta';
+  const isPreview = parsed.SLICE_DEPLOYMENT_CHANNEL === 'preview';
   const origins = [
     ...new Set(
       parsed.CORS_ORIGINS.split(',')
@@ -669,6 +683,47 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
   }
   if (parsed.REDIS_URL) {
     assertRedisUrl(parsed.REDIS_URL);
+  }
+  if (isPreview) {
+    assertPreviewDatabaseUrl(databaseUrl);
+    assertPreviewRedisUrl(parsed.REDIS_URL);
+    if (parsed.SLICE_PUBLIC_BASE_PATH !== '/preview') {
+      throw new Error('Preview requires SLICE_PUBLIC_BASE_PATH=/preview.');
+    }
+    if (parsed.REFRESH_COOKIE_NAME !== 'slice_preview_refresh') {
+      throw new Error('Preview requires REFRESH_COOKIE_NAME=slice_preview_refresh.');
+    }
+    if (parsed.REFRESH_COOKIE_PATH !== '/preview/api/v1/auth') {
+      throw new Error('Preview requires REFRESH_COOKIE_PATH=/preview/api/v1/auth.');
+    }
+    if (parsed.COOKIE_DOMAIN) {
+      throw new Error('Preview must use a host-only refresh cookie.');
+    }
+    if (parsed.REDIS_KEY_PREFIX !== 'slice:preview:') {
+      throw new Error('Preview requires REDIS_KEY_PREFIX=slice:preview:.');
+    }
+    if (parsed.JWT_ISSUER !== 'slice-preview-api' || parsed.JWT_AUDIENCE !== 'slice-preview-web') {
+      throw new Error('Preview requires its dedicated JWT issuer and audience.');
+    }
+    if (
+      parsed.PROVIDER_MODE !== 'local' ||
+      parsed.STRIPE_LIVE_ENABLED !== 'false' ||
+      parsed.STRIPE_IDENTITY_ENABLED !== 'false' ||
+      parsed.XIMILAR_ENABLED !== 'false' ||
+      parsed.XIMILAR_CARD_GRADING_ENABLED !== 'false' ||
+      parsed.PRICECHARTING_ENABLED !== 'false' ||
+      parsed.OUTBOX_WORKER_ENABLED !== 'false' ||
+      parsed.MARKET_REFRESH_WORKER_ENABLED !== 'false' ||
+      parsed.OPERATIONAL_TRADING_ENABLED !== 'false' ||
+      parsed.OPERATIONAL_DEPOSITS_ENABLED !== 'false' ||
+      parsed.OPERATIONAL_WITHDRAWALS_ENABLED !== 'false' ||
+      parsed.OPERATIONAL_REALTIME_ENABLED !== 'false' ||
+      parsed.OPERATIONAL_LISTING_ENABLED !== 'false'
+    ) {
+      throw new Error('Preview requires all provider, worker, market-data, and financial operations to be disabled.');
+    }
+  } else if (parsed.SLICE_PUBLIC_BASE_PATH !== '/') {
+    throw new Error('Staging requires SLICE_PUBLIC_BASE_PATH=/.');
   }
   if (parsed.NODE_ENV !== 'test' && !parsed.JWT_ACCESS_SECRET) {
     throw new Error('JWT_ACCESS_SECRET is required outside NODE_ENV=test.');
@@ -752,6 +807,15 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     new URL(appPublicUrl).protocol !== 'https:'
   )
     throw new Error('APP_PUBLIC_URL must use HTTPS in beta/production.');
+  if (isPreview) {
+    const publicUrl = new URL(appPublicUrl);
+    if (publicUrl.pathname.replace(/\/$/, '') !== '/preview') {
+      throw new Error('Preview requires APP_PUBLIC_URL to be mounted at /preview.');
+    }
+    if (!origins.includes(publicUrl.origin)) {
+      throw new Error('Preview CORS_ORIGINS must include the preview public origin.');
+    }
+  }
   if (
     parsed.NODE_ENV === 'production' &&
     emailDeliveryMode === 'resend' &&
@@ -888,6 +952,8 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     environment: parsed.NODE_ENV,
     appEnvironment,
     isBeta,
+    deploymentChannel: parsed.SLICE_DEPLOYMENT_CHANNEL,
+    publicBasePath: parsed.SLICE_PUBLIC_BASE_PATH,
     host: parsed.HOST,
     port: parsed.PORT,
     corsOrigins: origins,
@@ -909,10 +975,13 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     recentAuthWindowSeconds: parsed.RECENT_AUTH_WINDOW_SECONDS,
     refreshTokenTtlSeconds: parsed.REFRESH_TOKEN_TTL_SECONDS,
     refreshCookieName: parsed.REFRESH_COOKIE_NAME,
+    refreshCookiePath: parsed.REFRESH_COOKIE_PATH,
     cookieSecure: parsed.COOKIE_SECURE
       ? parsed.COOKIE_SECURE === 'true'
       : parsed.NODE_ENV === 'production' || isBeta,
     cookieDomain: parsed.COOKIE_DOMAIN,
+    redisKeyPrefix:
+      parsed.REDIS_KEY_PREFIX ?? `slice:${parsed.NODE_ENV}:`,
     providerMode: parsed.PROVIDER_MODE,
     stripeIdentityEnabled,
     stripeLiveEnabled,
@@ -1100,6 +1169,22 @@ function assertRedisUrl(value: string) {
   const protocol = new URL(value).protocol;
   if (protocol !== 'redis:' && protocol !== 'rediss:') {
     throw new Error('REDIS_URL must use a Redis URL.');
+  }
+}
+
+function assertPreviewDatabaseUrl(value: string | undefined) {
+  if (!value) throw new Error('Preview requires a dedicated PostgreSQL database.');
+  const database = new URL(value).pathname.replace(/^\//, '');
+  if (!/^[a-z0-9_]+_preview$/i.test(database)) {
+    throw new Error('Preview DATABASE_URL must target a dedicated *_preview database.');
+  }
+}
+
+function assertPreviewRedisUrl(value: string | undefined) {
+  if (!value) throw new Error('Preview requires isolated Redis state.');
+  const database = new URL(value).pathname;
+  if (!/^\/[1-9]\d*$/.test(database)) {
+    throw new Error('Preview REDIS_URL must select a non-default Redis database.');
   }
 }
 

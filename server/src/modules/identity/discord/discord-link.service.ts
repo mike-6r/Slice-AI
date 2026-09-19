@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
+import { publicApplicationUrl } from '../../../config/public-url';
 import { PrismaService } from '../../../database/prisma.service';
 import type { Actor } from '../auth/auth.service';
 import { Inject, Optional } from '@nestjs/common';
@@ -77,7 +78,7 @@ export class DiscordLinkService {
         },
       });
     });
-    const handoff = new URL('/account', this.config.appPublicUrl);
+    const handoff = new URL(publicApplicationUrl(this.config.appPublicUrl, '/account'));
     handoff.searchParams.set('discordLink', rawToken);
     return { challengeUrl: handoff.toString(), expiresAt: expiresAt.toISOString() };
   }

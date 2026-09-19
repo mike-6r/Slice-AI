@@ -7,6 +7,8 @@ export type ApiErrorPayload = {
   requestId?: string;
 };
 import { takeQaMutationFailure } from "@/auth/qa-harness";
+import { publicBasePath } from "@/config/environment";
+import { apiUrl, trimTrailingSlash } from "./api-url";
 
 export class ApiError extends Error {
   constructor(
@@ -32,11 +34,12 @@ type QueryValue = string | number | boolean | undefined | null;
  * variable or passes a shell placeholder literally.
  */
 export const resolveApiOrigin = (
-  configuredOrigin: string | undefined,
+  configuredBaseUrl: string | undefined,
   browserOrigin: string | undefined,
+  basePath: "/" | "/preview" = publicBasePath,
   fallback = "http://127.0.0.1:3001",
 ) => {
-  const isUsableOrigin = (value: string | undefined) => {
+  const isUsableBaseUrl = (value: string | undefined) => {
     if (!value) return false;
     try {
       const parsed = new URL(value);
@@ -50,13 +53,15 @@ export const resolveApiOrigin = (
       return (
         (parsed.protocol === "http:" || parsed.protocol === "https:") &&
         Boolean(parsed.hostname) &&
-        hasValidHostname
+        hasValidHostname &&
+        !parsed.search &&
+        !parsed.hash
       );
     } catch {
       return false;
     }
   };
-  const trimmed = configuredOrigin?.trim();
+  const trimmed = configuredBaseUrl?.trim();
   const isUnexpandedPlaceholder = Boolean(trimmed && /^\$[A-Z_][A-Z0-9_]*$/.test(trimmed));
   const isLoopbackOrigin = (() => {
     if (!trimmed) return false;
@@ -68,16 +73,25 @@ export const resolveApiOrigin = (
     }
   })();
   const usableConfiguredOrigin =
-    !isUnexpandedPlaceholder && !isLoopbackOrigin && isUsableOrigin(trimmed) ? trimmed : undefined;
+    !isUnexpandedPlaceholder && !isLoopbackOrigin && isUsableBaseUrl(trimmed)
+      ? trimTrailingSlash(trimmed!)
+      : undefined;
+  const browserBaseUrl =
+    browserOrigin && isUsableBaseUrl(browserOrigin)
+      ? new URL(basePath === "/" ? "/" : "/preview/", browserOrigin).toString()
+      : undefined;
   return (
     usableConfiguredOrigin ||
-    (isUsableOrigin(browserOrigin) ? browserOrigin : undefined) ||
+    (browserBaseUrl && isUsableBaseUrl(browserBaseUrl) ? trimTrailingSlash(browserBaseUrl) : undefined) ||
     fallback
   );
 };
 
 const browserApiOrigin = typeof window !== "undefined" ? window.location.origin : undefined;
 export const API_ORIGIN = resolveApiOrigin(import.meta.env.VITE_API_BASE_URL, browserApiOrigin);
+
+/** Routes API calls through the channel's API mount without escaping /preview. */
+export { apiUrl } from "./api-url";
 
 const mergeHeaders = (
   defaults: Record<string, string>,
@@ -136,7 +150,7 @@ export class ApiClient {
         qaMutationFailure.status,
       );
     }
-    const url = new URL(`/api/v1${path}`, this.origin);
+    const url = apiUrl(this.origin, path);
     for (const [key, value] of Object.entries(options.query ?? {})) {
       if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
     }
@@ -213,7 +227,7 @@ export class ApiClient {
   ) {
     let response: Response;
     try {
-      response = await fetch(new URL(`/api/v1${path}`, this.origin), {
+      response = await fetch(apiUrl(this.origin, path), {
         cache: "no-store",
         headers: {
           Accept: "text/event-stream",
@@ -267,4 +281,5 @@ export class ApiClient {
     }
   }
 }
+
 import { session } from "@/auth/session";

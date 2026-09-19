@@ -1,6 +1,7 @@
 import { ArrowRight, ChevronDown, Search, ShieldCheck, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { appPath } from "@/config/environment";
 import type { AdminMembershipDirectoryResponse, AdminMembershipRow } from "@/data/repositories";
 import "@/styles/admin-memberships.css";
 
@@ -628,7 +629,7 @@ function MembershipDrawer({ row, close }: { row: AdminMembershipRow; close: () =
         <button
           type="button"
           onClick={() =>
-            window.location.assign(`/admin?section=users&user=${row.collector.id}&tab=membership`)
+            window.location.assign(appPath(`/admin?section=users&user=${row.collector.id}&tab=membership`))
           }
         >
           Open account
