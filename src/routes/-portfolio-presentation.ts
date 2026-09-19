@@ -16,6 +16,14 @@ export function portfolioValueLabel(summary: PortfolioSummary) {
   return summary.valuationStatus === "PARTIAL" ? "Partial" : "Unavailable";
 }
 
+/** A partial set of marks is not a complete account valuation. Respect explicit nulls. */
+export function portfolioAccountValue(summary: PortfolioSummary): string | null {
+  if (summary.valuationStatus !== "FULL") return null;
+  return summary.totalAccountValueMinor !== undefined
+    ? summary.totalAccountValueMinor
+    : summary.estimatedPortfolioValueMinor;
+}
+
 export function valuationDescription(status: PortfolioValuationStatus) {
   if (status === "FULL") return "All holdings have authoritative marks.";
   if (status === "PARTIAL") return "Only some holdings have authoritative marks.";
@@ -48,7 +56,12 @@ export type PortfolioHoldingValuation = {
 export function derivePortfolioValuationSnapshot(
   summary: PortfolioSummary,
 ): PortfolioValuationSnapshot | null {
-  if (summary.holdings.length === 0 || summary.estimatedHoldingsValueMinor === null) return null;
+  if (
+    summary.valuationStatus !== "FULL" ||
+    summary.holdings.length === 0 ||
+    summary.estimatedHoldingsValueMinor === null
+  )
+    return null;
   if (summary.investedCostMinor !== undefined && summary.unrealisedPnlMinor !== undefined) {
     if (summary.investedCostMinor === null || summary.unrealisedPnlMinor === null) return null;
     return {

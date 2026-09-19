@@ -6,6 +6,17 @@ identity, submissions, canonical assets, intake/custody, valuation, ownership,
 finance, publication, and trading. The browser and Discord bot consume
 authorised projections; neither replaces those domain authorities.
 
+## Portfolio overview
+
+The Portfolio Atlas overview keeps current account totals separate from dated performance
+snapshots. Owned collectible marks, wallet cash and conditional pre-sale commitments are
+explained individually; commitments are not added to the total a second time. Partial marks
+and explicit unavailable totals remain unavailable. Collection previews can be browsed
+without leaving the overview, with real catalogue media as a fallback and explicit missing-image
+states. The account breakdown and portfolio guide use accessible native disclosures, and
+their scoped styles live in `src/components/portfolio/portfolio-companion.css`. All values and
+permitted actions continue to come from the existing portfolio, order and wallet services.
+
 ## Repository layout
 
 This repository deliberately has three independent Node package roots, each

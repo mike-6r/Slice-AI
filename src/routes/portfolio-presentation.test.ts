@@ -7,6 +7,8 @@ import {
   deriveHoldingAllocation,
   derivePortfolioValuationSnapshot,
   portfolioValueLabel,
+  portfolioAccountValue,
+  formatSignedPortfolioMoney,
   valuationDescription,
 } from "./-portfolio-presentation";
 
@@ -49,6 +51,24 @@ const summary: PortfolioSummary = {
 };
 
 describe("portfolio presentation authority", () => {
+  it("keeps the sign on small gains and losses without relying on colour", () => {
+    expect(formatSignedPortfolioMoney("-6")).toBe("-£0.06");
+    expect(formatSignedPortfolioMoney("6")).toBe("+£0.06");
+    expect(formatSignedPortfolioMoney("0")).toBe("£0.00");
+  });
+  it("preserves explicit unavailable totals and never promotes a partial valuation", () => {
+    expect(portfolioAccountValue(summary)).toBe("18000");
+    expect(portfolioAccountValue({ ...summary, totalAccountValueMinor: "20000" })).toBe("20000");
+    expect(portfolioAccountValue({ ...summary, totalAccountValueMinor: "0" })).toBe("0");
+    expect(portfolioAccountValue({ ...summary, totalAccountValueMinor: null })).toBeNull();
+    expect(
+      portfolioAccountValue({
+        ...summary,
+        valuationStatus: "PARTIAL",
+        totalAccountValueMinor: "20000",
+      }),
+    ).toBeNull();
+  });
   it("renders a total only for a complete authoritative valuation", () => {
     expect(portfolioValueLabel(summary)).toBe("£180.00");
     expect(portfolioValueLabel({ ...summary, valuationStatus: "PARTIAL" })).toBe("Partial");

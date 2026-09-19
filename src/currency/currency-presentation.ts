@@ -122,7 +122,8 @@ function formatExactMinorCurrency(
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   });
-  const parts = formatter.formatToParts(minor < 0n ? -whole : whole);
+  // BigInt has no negative zero. Preserve the sign for losses below one major unit.
+  const parts = formatter.formatToParts(minor < 0n ? (whole === 0n ? -0 : -whole) : whole);
   if (fractionDigits === 0) return parts.map((part) => part.value).join("");
   const fraction = String((roundedMinor % 100n) / roundingUnit).padStart(fractionDigits, "0");
   const lastNumber = Math.max(

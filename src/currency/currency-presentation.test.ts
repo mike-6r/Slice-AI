@@ -15,6 +15,12 @@ const rates = {
 };
 
 describe("currency presentation", () => {
+  it("preserves negative fractional amounts in every display currency", () => {
+    expect(formatDisplayMoney("-6", "GBP", "GBP", rates)).toBe("-£0.06");
+    expect(formatDisplayMoney("-6", "GBP", "USD", rates)).toBe("-$0.08");
+    expect(formatDisplayMoney("-6", "GBP", "EUR", rates)).toBe("-€0.07");
+    expect(formatDisplayMoney("-100", "GBP", "GBP", rates)).toBe("-£1.00");
+  });
   it("converts display-only GBP figures using the current rate snapshot", () => {
     expect(formatDisplayMoney("10000", "GBP", "USD", rates)).toContain("$125.00");
     expect(formatDisplayMoney("10000", "GBP", "EUR", rates)).toContain("€116.00");

@@ -11,6 +11,7 @@ import type {
   ISODateTime,
   PortfolioLot,
   PortfolioSummary,
+  PortfolioPerformance,
   PortfolioTransactionPage,
 } from "@/domain";
 
@@ -61,6 +62,7 @@ function renderPortfolio(
   options: {
     portfolioSummary?: PortfolioSummary;
     reservations?: PreSaleReservationView[];
+    performance?: PortfolioPerformance;
   } = {},
 ) {
   const portfolioSummary = options.portfolioSummary ?? summary;
@@ -68,6 +70,8 @@ function renderPortfolio(
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
   client.setQueryData(queryKeys.portfolio.summary, portfolioSummary);
   client.setQueryData(["portfolio", "pre-sale-reservations"], reservations);
+  if (options.performance)
+    client.setQueryData(["portfolio", "performance", "ALL"], options.performance);
   const lots: PortfolioLot[] = [
     {
       assetSlug: "safe-asset",
@@ -141,15 +145,15 @@ describe("approved portfolio workspace", () => {
     expect(html).toContain("Collector capital");
     expect(html).toContain("Your collection,");
     expect(html).toContain("Total account value");
-    expect(html).toContain("Capital deployed");
-    expect(html).toContain("Ready to invest");
+    expect(html).toContain("Owned collectibles");
+    expect(html).toContain("Available cash");
     expect(html).toContain("Reserved cash");
     expect(html).toContain("Held-cash detail temporarily unavailable");
     expect(html).toContain("Unrealised return");
     expect(html).toContain("Safe asset");
     expect(html).toContain("1 active position");
     expect(html).toContain("Collection mix");
-    expect(html).toContain("Live ledger");
+    expect(html).toContain("Account ledger");
     expect(html).toContain("Deposit");
     expect(html).toContain("Account value over time");
     expect(html).toContain("History appears after the next authoritative account snapshot.");
@@ -162,6 +166,55 @@ describe("approved portfolio workspace", () => {
     expect(html).not.toContain("Demo Funding");
     expect(html).not.toContain("account-safe-id");
     expect(html).not.toContain("24h change");
+    expect(html).toContain("Understand your account value");
+    expect(html).toContain("Manage your cash");
+    expect(html).toContain("What do my Slices represent?");
+    expect(html).toContain('aria-label="Next position" disabled');
+    expect(html).toContain("Collectible image unavailable");
+  });
+
+  it("separates historical snapshot values from the current account total", () => {
+    const html = renderPortfolio({
+      portfolioSummary: { ...summary, totalAccountValueMinor: "15000" },
+      performance: {
+        range: "ALL",
+        points: [
+          {
+            timestamp: at,
+            valueMinor: "10000",
+            currency: "GBP",
+            freshness: "STALE",
+            holdingsValueMinor: "2000",
+            cashValueMinor: "8000",
+          },
+        ],
+        periodChangeMinor: "-500",
+        periodChangeBps: -500,
+        netCashFlowMinor: "2500",
+        direction: "NEGATIVE",
+        freshness: "STALE",
+      },
+    });
+    expect(html).toContain("£150.00");
+    expect(html).toContain("Latest recorded snapshot");
+    expect(html).toContain("£100.00");
+    expect(html).toContain("-£5.00 adjusted change");
+    expect(html).toContain("Net funding in period");
+    expect(html).toContain("+£25.00");
+    expect(html).toContain("Cash at snapshot");
+    expect(html).toContain("£80.00");
+  });
+
+  it("does not label a partial account valuation as a complete total", () => {
+    const html = renderPortfolio({
+      portfolioSummary: {
+        ...summary,
+        valuationStatus: "PARTIAL",
+        estimatedPortfolioValueMinor: "999999",
+      },
+    });
+    expect(html).not.toContain("£9,999.99");
+    expect(html).toContain("Some collectible values are missing");
   });
 
   it("integrates an active Pre-Sale reservation into positions without a false empty state", () => {
@@ -194,9 +247,12 @@ describe("approved portfolio workspace", () => {
     expect(html).toContain("£18.50");
     expect(html).toContain("0.10%");
     expect(html).toContain("Reservation remains conditional until finalisation");
-    expect(html).toContain("Reserved");
+    expect(html).toContain("Reserved · conditional");
+    expect(html).toContain("Potential ownership");
+    expect(html).toContain("Amount committed");
+    expect(html).toContain("0 settled holdings");
     expect(html).toContain("Pre-Sale reservation · 1 Slice");
-    expect(html).toContain("Awaiting intake");
+    expect(html).toContain("Awaiting Intake");
     expect(html).not.toContain("Your collection starts with one Slice.");
     expect(html).not.toContain("Conditional Positions");
   });
