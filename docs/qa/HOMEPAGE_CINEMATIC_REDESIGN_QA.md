@@ -2,6 +2,15 @@
 
 Date: 2026-09-19. Scope: homepage presentation, local teaching interactions and route CSS.
 
+## Interaction correction — 2026-09-20
+
+- The ownership slider now covers 1–1,000 Slices rather than stopping at 100. At 100, one row still correctly represents 10%; at 1,000 all 100 tiles fill and the example shows £10,000 / 100%.
+- Added quantity presets through the full supply and clearer grid/slider labels. A shared pure selection model drives the grid and portfolio example.
+- Replaced decorative portfolio labels with the existing accessible tabs primitive. Positions, Activity and Insights all respond to the selection; Activity explains the example's calculations, and Insights shows selected/remaining supply. Neither represents actual transactions or market performance.
+- Browser checks: full-grid End key, 500-Slice linked update, click-to-switch tabs, ArrowRight and Home tab navigation; desktop 1440×900, tablet 768×1024 and phone 360×800 layouts inspected.
+- Frontend tests: 56 files / 340 tests pass, including full supply, partial tiles, range bounds and matching totals.
+- Frontend typecheck, targeted lint and production client/SSR build pass. No backend or schema change is needed for these interaction fixes.
+
 ## Implemented
 
 - Preserved the Charizard opening and the collectible → ownership → lifecycle → portfolio → catalogue story.

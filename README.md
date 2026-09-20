@@ -10,7 +10,9 @@ authorised projections; neither replaces those domain authorities.
 
 The homepage keeps the collectible-to-portfolio journey in a route-scoped cinematic
 experience. Its ownership calculator and portfolio illustration share local example
-state; neither creates orders nor reads private holdings. Public catalogue cards use
+state across the full 1–1,000 Slice supply, with proportional tile fills and
+keyboard-accessible Positions, Activity and Insights tabs. These are explicitly
+illustrative views; none creates orders or reads private holdings. Public catalogue cards use
 the existing market service with separate loading, failure and empty states. Copy
 lives in `src/data/homepage-story.ts`, while styles and motion live beside
 `CinematicHomepageStory.tsx`. Intersection observers start finite, time-based entrance
