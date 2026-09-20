@@ -123,6 +123,34 @@ describe('offline identity rules', () => {
     }
   });
 
+  it('allows audited system cash releases without allowing unexpected or sensitive data', () => {
+    const metadata = {
+      amountMinor: '12500',
+      reason: 'Physical intake deadline expired.',
+    };
+    expect(sanitizeAuditMetadata('FINANCE_CASH_RELEASED', metadata)).toEqual(
+      metadata,
+    );
+    expect(
+      sanitizeAuditMetadata('FINANCE_CASH_RELEASED', {
+        reservationId: 'reservation-1',
+        amountMinor: '12500',
+      }),
+    ).toEqual({ reservationId: 'reservation-1', amountMinor: '12500' });
+    expect(() =>
+      sanitizeAuditMetadata('FINANCE_CASH_RELEASED', {
+        ...metadata,
+        unexpected: 'not permitted',
+      }),
+    ).toThrow('AUDIT_METADATA_NOT_PERMITTED');
+    expect(() =>
+      sanitizeAuditMetadata('FINANCE_CASH_RELEASED', {
+        ...metadata,
+        reason: 'postgres://private-connection',
+      }),
+    ).toThrow('AUDIT_METADATA_NOT_PERMITTED');
+  });
+
   it('allows Slice certification duplicate-check audit metadata', () => {
     expect(() =>
       sanitizeAuditMetadata('CERT_SLICE_DUPLICATE_CHECKED', {

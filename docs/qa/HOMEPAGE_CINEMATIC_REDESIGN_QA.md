@@ -36,6 +36,12 @@ Date: 2026-09-19. Scope: homepage presentation, local teaching interactions and 
 
 Repository-wide lint currently fails with 456 errors and 25 warnings in existing files and ignored local artifacts (including prior preview files and tmp fixtures). Homepage files pass the targeted lint command. Existing large-bundle build warnings remain.
 
-## Deployment blocker
+## Initial deployment blocker and recovery
 
-The saved staging key authenticates to the `slice` account, but the account cannot run a shell. The same key is rejected for root. No working privileged operator access was established. The public homepage returned HTTP 200; API `/health` and `/ready` returned HTTP 503 before this release. No VPS changes were made. Deployment requires the established operator username/key or restoration of that access; use the existing immutable-release runbook after checking host readiness.
+The first attempt used the non-login `slice` service account and could not deploy. The operator subsequently confirmed `ubuntu`; the existing temporary key works for that operator. No access permissions or credentials were changed.
+
+The pre-existing API 503 was traced to an unhandled pre-sale worker rejection: `releaseCashReservationInTransaction` emitted `FINANCE_CASH_RELEASED` with a lifecycle `reason`, missing from that action's metadata allowlist. With explicit owner approval, the reason was added and the worker now contains failed background runs, logs only a safe code/phase, avoids overlapping runs, and retries at the existing interval. The audit sanitizer and domain transaction errors remain enforced. Test and preview deployments do not start this mutating worker.
+
+Regression coverage exercises the actual cash-release method and audit adapter with stubbed persistence (no real funds), accepted/rejected audit metadata, duplicate-release protection, propagated storage failures, worker retries, concurrent ticks, shutdown and disabled environments. Backend typecheck, targeted lint/build and focused regressions passed before release preparation. No financial records were manually repaired, no provider flags were changed, and no new schema migration is required.
+
+Full backend unit run: 106 suites / 611 tests passed, with four existing failures in two suites. The same failures were reproduced on the unmodified `26d3a6e` checkout on the VPS: three public-collector test fixtures omit `tradingExecutions`, and one session test's fixed expiry date is in the past. These unrelated fixtures were not changed. Repository-wide backend lint reports 21 existing errors; all recovery-patch files pass targeted lint.

@@ -107,6 +107,13 @@ Route-scoped composition lives in `src/components/wallet/wallet.css`.
 Staging deployment is a manual immutable-release procedure. GitHub Actions is
 verify-only and never deploys, contacts live providers, or uses staging data.
 
+The pre-sale background worker contains failed runs at its scheduling boundary,
+logs a safe error code and phase, and retries on the next poll without overlapping
+work. Domain errors still reject their transaction; the worker does not suppress
+audit writes or bypass release checks. Cash-release audits permit the lifecycle
+reason alongside the existing fields. Test and isolated preview instances do not
+start this worker.
+
 ## Guided asset review
 
 The shared admin asset record opens in a step-by-step guide. Review ownership,

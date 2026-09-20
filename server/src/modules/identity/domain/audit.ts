@@ -321,7 +321,7 @@ const metadataKeys: Record<string, readonly string[]> = {
   PRE_SALE_CANCELLED: ['reason'],
   FINANCE_JOURNAL_POSTED: ['transactionId', 'type'],
   FINANCE_CASH_RESERVED: ['reservationId', 'amountMinor'],
-  FINANCE_CASH_RELEASED: ['reservationId', 'amountMinor'],
+  FINANCE_CASH_RELEASED: ['reservationId', 'amountMinor', 'reason'],
   FINANCE_CASH_CONSUMED: ['reservationId', 'amountMinor'],
   FINANCE_LOT_ACQUIRED: ['lotId', 'assetId', 'units'],
   FINANCE_LOT_DISPOSED: ['assetId', 'units', 'costBasisMinor'],
