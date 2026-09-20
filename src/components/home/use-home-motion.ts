@@ -1,38 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 const clamp = (value: number) => Math.min(1, Math.max(0, value));
+export const JOURNEY_STAGE_MS = 4800;
 
-/** One passive, frame-bounded listener for the whole story; no scroll hijacking. */
+/** Intersection starts a complete animation. Scroll position only tracks navigation. */
 export function useHomeMotion() {
   const ref = useRef<HTMLDivElement>(null);
   const [activeChapter, setActiveChapter] = useState("v2-hero-scene");
-  const [journeyStep, setJourneyStep] = useState(0);
   const [reducedMotion, setReducedMotion] = useState(false);
-  const [scrollJourneyEnabled, setScrollJourneyEnabled] = useState(false);
   useEffect(() => {
     const root = ref.current;
     if (!root) return;
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const wide = window.matchMedia("(min-width: 1100px) and (min-height: 800px)");
     const scenes = Array.from(root.querySelectorAll<HTMLElement>("[data-home-scene]"));
-    const journeyContent = root.querySelector<HTMLElement>(".sh-journey__sticky");
+    const reveals = Array.from(root.querySelectorAll<HTMLElement>("[data-home-reveal]"));
     let frame = 0;
     let active = "";
-    let step = -1;
-    let largestJourneyHeight = 0;
-    const update = () => {
+    const updateNavigation = () => {
       frame = 0;
       const viewport = window.innerHeight;
-      // Keep a high-water mark until resize so stage copy cannot repeatedly
-      // enable/disable pinning when the viewport is close to the fit threshold.
-      largestJourneyHeight = Math.max(largestJourneyHeight, journeyContent?.offsetHeight ?? 0);
-      // Pin only when the complete panel fits below both navigation bars.
-      const canPin =
-        !motion.matches &&
-        wide.matches &&
-        !!journeyContent &&
-        largestJourneyHeight + 194 <= viewport;
-      root.dataset.scrollJourney = canPin ? "on" : "off";
-      setScrollJourneyEnabled((current) => (current === canPin ? current : canPin));
       const bounds = root.getBoundingClientRect();
       root.style.setProperty(
         "--story-progress",
@@ -40,29 +25,7 @@ export function useHomeMotion() {
       );
       let current = scenes[0]?.id ?? "v2-hero-scene";
       for (const scene of scenes) {
-        const rect = scene.getBoundingClientRect();
-        if (rect.top < viewport * 0.42) current = scene.id;
-        if (rect.top < viewport * 0.94) scene.classList.add("is-revealed");
-        if (rect.bottom >= 0 && rect.top <= viewport) {
-          scene.style.setProperty(
-            "--scene-progress",
-            String(motion.matches ? 0 : clamp((viewport - rect.top) / (viewport + rect.height))),
-          );
-        }
-        if (scene.id === "v2-lifecycle-scene") {
-          const nextStep = canPin
-            ? Math.min(
-                5,
-                Math.floor(clamp((180 - rect.top) / Math.max(1, rect.height - viewport + 180)) * 6),
-              )
-            : !motion.matches && wide.matches
-              ? Math.max(0, step)
-              : 0;
-          if (nextStep !== step) {
-            step = nextStep;
-            setJourneyStep(step);
-          }
-        }
+        if (scene.getBoundingClientRect().top < viewport * 0.42) current = scene.id;
       }
       if (current !== active) {
         active = current;
@@ -70,35 +33,111 @@ export function useHomeMotion() {
       }
     };
     const schedule = () => {
-      if (!frame) frame = window.requestAnimationFrame(update);
+      if (!frame) frame = window.requestAnimationFrame(updateNavigation);
     };
+    const observer =
+      "IntersectionObserver" in window
+        ? new IntersectionObserver(
+            (entries) => {
+              for (const entry of entries) {
+                if (!entry.isIntersecting) continue;
+                entry.target.classList.add("is-revealed");
+                observer?.unobserve(entry.target);
+              }
+            },
+            { threshold: 0.08, rootMargin: "0px 0px -48px 0px" },
+          )
+        : null;
     const syncMotion = () => {
       root.dataset.motion = motion.matches ? "off" : "on";
       setReducedMotion(motion.matches);
+      if (motion.matches || !observer)
+        reveals.forEach((element) => element.classList.add("is-revealed"));
       schedule();
     };
-    const resized = () => {
-      largestJourneyHeight = 0;
-      schedule();
-    };
+    reveals.forEach((element) => observer?.observe(element));
     syncMotion();
     window.addEventListener("scroll", schedule, { passive: true });
-    window.addEventListener("resize", resized, { passive: true });
+    window.addEventListener("resize", schedule, { passive: true });
     motion.addEventListener("change", syncMotion);
-    wide.addEventListener("change", schedule);
     const resize = new ResizeObserver(schedule);
     resize.observe(root);
-    if (journeyContent) resize.observe(journeyContent);
     return () => {
       window.removeEventListener("scroll", schedule);
-      window.removeEventListener("resize", resized);
+      window.removeEventListener("resize", schedule);
       motion.removeEventListener("change", syncMotion);
-      wide.removeEventListener("change", schedule);
+      observer?.disconnect();
       resize.disconnect();
       window.cancelAnimationFrame(frame);
     };
   }, []);
-  return { ref, activeChapter, journeyStep, reducedMotion, scrollJourneyEnabled };
+  return { ref, activeChapter, reducedMotion };
+}
+
+/** A finite, visible-only tour. Manual interaction pauses it; reduced motion disables autoplay. */
+export function useJourneyPlayback(stageCount: number, reducedMotion: boolean) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [index, setIndex] = useState(0);
+  const [inView, setInView] = useState(false);
+  const [documentVisible, setDocumentVisible] = useState(true);
+  const [paused, setPaused] = useState(false);
+  const [manualStage, setManualStage] = useState<number | null>(null);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const observer =
+      "IntersectionObserver" in window
+        ? new IntersectionObserver(
+            ([entry]) => {
+              setInView(!!entry?.isIntersecting && entry.intersectionRatio >= 0.15);
+            },
+            { threshold: [0, 0.15], rootMargin: "-140px 0px -32px 0px" },
+          )
+        : null;
+    observer?.observe(element);
+    if (!observer) setInView(true);
+    const sync = () => setDocumentVisible(document.visibilityState === "visible");
+    sync();
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      observer?.disconnect();
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, []);
+  const complete = index === stageCount - 1;
+  const running = inView && documentVisible && !paused && !reducedMotion && !complete;
+  useEffect(() => {
+    if (!running) return;
+    const timer = window.setTimeout(
+      () => setIndex((current) => Math.min(current + 1, stageCount - 1)),
+      JOURNEY_STAGE_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [index, running, stageCount]);
+  const select = (stage: number) => {
+    const next = Math.min(stageCount - 1, Math.max(0, stage));
+    setPaused(true);
+    setIndex(next);
+    setManualStage(next);
+  };
+  const toggle = () => {
+    setManualStage(null);
+    if (complete) {
+      setIndex(0);
+      setPaused(false);
+    } else setPaused((current) => !current);
+  };
+  return {
+    ref,
+    index,
+    paused,
+    complete,
+    running,
+    manualStage,
+    select,
+    toggle,
+    pause: () => setPaused(true),
+  };
 }
 
 export function useCardTilt() {

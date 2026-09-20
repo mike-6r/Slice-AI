@@ -10,6 +10,9 @@ import {
   CircleDollarSign,
   Fingerprint,
   Layers3,
+  Pause,
+  Play,
+  RotateCcw,
   ScanLine,
   Sparkles,
   TrendingUp,
@@ -23,7 +26,12 @@ import { HOME_CHAPTERS, HOME_JOURNEY, HOME_QUESTIONS } from "@/data/homepage-sto
 import { MarketAssetCard } from "@/components/marketplace/MarketAssetCard";
 import { toMarketplaceAsset } from "@/components/marketplace/market-api-presentation";
 import { useTrendingAssets } from "@/queries/hooks";
-import { useCardTilt, useHomeMotion } from "./use-home-motion";
+import {
+  JOURNEY_STAGE_MS,
+  useCardTilt,
+  useHomeMotion,
+  useJourneyPlayback,
+} from "./use-home-motion";
 
 const example = HOMEPAGE_OWNERSHIP_EXAMPLE;
 const gbp = (minor: number) =>
@@ -91,22 +99,18 @@ function Hero({ authenticated }: { authenticated: boolean }) {
         <i />
       </div>
       <div className="sh-wrap sh-hero__grid">
-        <div className="sh-hero__copy">
-          <ChapterLabel number="01">The next chapter of collecting</ChapterLabel>
+        <div className="sh-hero__copy" data-home-reveal>
+          <ChapterLabel number="01">For the collector in you</ChapterLabel>
           <h1 id="home-title" tabIndex={-1}>
             One real
             <br />
             collectible.
             <br />
-            <span>
-              A new way
-              <br />
-              to own it.
-            </span>
+            <span>Your Slice.</span>
           </h1>
           <p className="sh-lead">
-            The cards you love. An amount that fits you. Own a Slice of a physical collectible and
-            follow your position as your collection grows.
+            The card you’ve always wanted. An amount that fits you. Discover a new way to own a part
+            of something extraordinary.
           </p>
           <div className="sh-actions">
             <Link to="/marketplace" className="sh-button sh-button--primary">
@@ -131,7 +135,7 @@ function Hero({ authenticated }: { authenticated: boolean }) {
             </span>
           </div>
         </div>
-        <div ref={tilt} className="sh-hero__exhibit">
+        <div ref={tilt} className="sh-hero__exhibit" data-home-reveal>
           <div className="sh-exhibit__title">
             <span>The collector’s icon</span>
             <span>001 / CHARIZARD</span>
@@ -139,8 +143,14 @@ function Hero({ authenticated }: { authenticated: boolean }) {
           <div className="sh-exhibit__outline" aria-hidden="true">
             SLICE
           </div>
-          <div className="sh-exhibit__orbit sh-exhibit__orbit--one" aria-hidden="true" />
-          <div className="sh-exhibit__orbit sh-exhibit__orbit--two" aria-hidden="true" />
+          <div className="sh-exhibit__sheets" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </div>
+          <span className="sh-exhibit__edition" aria-hidden="true">
+            THE ORIGINAL. / A NEW POSSIBILITY.
+          </span>
           <div className="sh-exhibit__plinth" aria-hidden="true" />
           <div className="sh-exhibit__card">
             <Card priority />
@@ -197,7 +207,7 @@ function Ownership({ count, onChange }: { count: number; onChange: (value: numbe
       aria-labelledby="ownership-title"
     >
       <div className="sh-wrap">
-        <header className="sh-section-heading">
+        <header className="sh-section-heading" data-home-reveal>
           <div>
             <ChapterLabel number="02">A smaller entry. The same collectible.</ChapterLabel>
             <h2 id="ownership-title">
@@ -211,7 +221,7 @@ function Ownership({ count, onChange }: { count: number; onChange: (value: numbe
             exactly how the numbers connect.
           </p>
         </header>
-        <div className="sh-ownership__grid">
+        <div className="sh-ownership__grid" data-home-reveal>
           <div className="sh-ownership__visual">
             <div className="sh-panel-label">
               <span>01 / The collectible</span>
@@ -346,9 +356,9 @@ function Ownership({ count, onChange }: { count: number; onChange: (value: numbe
   );
 }
 
-function Journey({ scrollStep, scrollEnabled }: { scrollStep: number; scrollEnabled: boolean }) {
-  const [selectedStep, setSelectedStep] = useState<number | null>(null);
-  const index = selectedStep ?? scrollStep;
+function Journey({ reducedMotion }: { reducedMotion: boolean }) {
+  const playback = useJourneyPlayback(HOME_JOURNEY.length, reducedMotion);
+  const { index } = playback;
   const stage = HOME_JOURNEY[index];
   const Icon = journeyIcons[index];
   return (
@@ -358,8 +368,8 @@ function Journey({ scrollStep, scrollEnabled }: { scrollStep: number; scrollEnab
       data-home-scene
       aria-labelledby="journey-title"
     >
-      <div className="sh-wrap sh-journey__sticky">
-        <header className="sh-section-heading">
+      <div className="sh-wrap sh-journey__inner">
+        <header className="sh-section-heading" data-home-reveal>
           <div>
             <ChapterLabel number="03">Follow the whole journey</ChapterLabel>
             <h2 id="journey-title">
@@ -373,6 +383,44 @@ function Journey({ scrollStep, scrollEnabled }: { scrollStep: number; scrollEnab
             reservation to settled ownership.
           </p>
         </header>
+        <div className="sh-tour-controls">
+          {!reducedMotion && (
+            <button
+              type="button"
+              onClick={playback.toggle}
+              aria-label={
+                playback.complete
+                  ? "Replay the journey"
+                  : playback.paused
+                    ? "Play the journey"
+                    : "Pause the journey"
+              }
+            >
+              {playback.complete ? (
+                <RotateCcw aria-hidden="true" />
+              ) : playback.paused ? (
+                <Play aria-hidden="true" />
+              ) : (
+                <Pause aria-hidden="true" />
+              )}
+              {playback.complete ? "Replay" : playback.paused ? "Play" : "Pause"}
+            </button>
+          )}
+          <span>
+            {reducedMotion
+              ? "Choose any stage to explore."
+              : playback.complete
+                ? "The whole journey. One collectible."
+                : playback.paused
+                  ? "Explore at your own pace."
+                  : "The story plays itself. Keep scrolling anytime."}
+          </span>
+          <span className="sh-tour-progress" aria-hidden="true">
+            {playback.running && (
+              <i key={index} style={{ animationDuration: `${JOURNEY_STAGE_MS}ms` }} />
+            )}
+          </span>
+        </div>
         <div className="sh-journey__tabs" role="group" aria-label="Collectible journey stages">
           {HOME_JOURNEY.map((item, i) => {
             const StageIcon = journeyIcons[i];
@@ -381,7 +429,7 @@ function Journey({ scrollStep, scrollEnabled }: { scrollStep: number; scrollEnab
                 key={item.label}
                 type="button"
                 aria-pressed={i === index}
-                onClick={() => setSelectedStep(i)}
+                onClick={() => playback.select(i)}
               >
                 <span className="sh-journey__step-number">0{i + 1}</span>
                 <StageIcon aria-hidden="true" />
@@ -392,12 +440,21 @@ function Journey({ scrollStep, scrollEnabled }: { scrollStep: number; scrollEnab
           })}
         </div>
         <p className="sh-sr-only" role="status" aria-live="polite" aria-atomic="true">
-          {selectedStep === null
+          {playback.manualStage === null
             ? ""
             : `Stage ${index + 1} of 6: ${stage.label}. ${stage.title} ${stage.copy}`}
         </p>
-        <div className="sh-journey__body" data-stage={index}>
+        <div
+          ref={playback.ref}
+          className="sh-journey__body"
+          data-stage={index}
+          data-home-reveal
+          onFocusCapture={playback.pause}
+        >
           <div className="sh-journey__chamber">
+            <span className="sh-chamber__ordinal" aria-hidden="true">
+              0{index + 1}
+            </span>
             <div className="sh-chamber__rings" aria-hidden="true">
               <i />
               <i />
@@ -437,7 +494,7 @@ function Journey({ scrollStep, scrollEnabled }: { scrollStep: number; scrollEnab
               <button
                 type="button"
                 aria-label={index === 5 ? "Start the journey again" : "Next journey stage"}
-                onClick={() => setSelectedStep((index + 1) % 6)}
+                onClick={() => playback.select((index + 1) % HOME_JOURNEY.length)}
               >
                 {index === 5 ? <ArrowLeft aria-hidden="true" /> : <ArrowRight aria-hidden="true" />}
               </button>
@@ -445,17 +502,6 @@ function Journey({ scrollStep, scrollEnabled }: { scrollStep: number; scrollEnab
           </div>
         </div>
         <div className="sh-journey__foot">
-          <span>
-            <i />
-            {selectedStep === null && scrollEnabled
-              ? "Scroll to explore, or choose any stage."
-              : "You’re exploring at your own pace."}
-          </span>
-          {selectedStep !== null && scrollEnabled && (
-            <button type="button" onClick={() => setSelectedStep(null)}>
-              Follow scroll again <ArrowDown aria-hidden="true" />
-            </button>
-          )}
           <small>Availability and sequence depend on the asset and offering.</small>
         </div>
       </div>
@@ -473,14 +519,12 @@ function Portfolio({ count, authenticated }: { count: number; authenticated: boo
       aria-labelledby="portfolio-title"
     >
       <div className="sh-wrap sh-portfolio__grid">
-        <div className="sh-portfolio__copy">
+        <div className="sh-portfolio__copy" data-home-reveal>
           <ChapterLabel number="04">The bigger picture. Yours.</ChapterLabel>
           <h2 id="portfolio-title">
-            Your Slices.
+            Your collection.
             <br />
-            Your story.
-            <br />
-            <span>One portfolio.</span>
+            <span>In the clear.</span>
           </h2>
           <p className="sh-lead">
             Collecting is personal. Your portfolio should make it easy to see what you own, what you
@@ -517,7 +561,7 @@ function Portfolio({ count, authenticated }: { count: number; authenticated: boo
             Explore your portfolio <ArrowUpRight aria-hidden="true" />
           </Link>
         </div>
-        <div className="sh-portfolio__visual">
+        <div className="sh-portfolio__visual" data-home-reveal>
           <div className="sh-portfolio__window">
             <header>
               <span className="sh-window-dots" aria-hidden="true">
@@ -613,7 +657,7 @@ function Marketplace() {
       aria-labelledby="market-title"
     >
       <div className="sh-wrap">
-        <header className="sh-section-heading">
+        <header className="sh-section-heading" data-home-reveal>
           <div>
             <ChapterLabel number="05">Find your next obsession</ChapterLabel>
             <h2 id="market-title">
@@ -686,7 +730,7 @@ function Marketplace() {
             </Link>
           </div>
         ) : (
-          <div className="sh-market__cards">
+          <div className="sh-market__cards" data-home-reveal>
             {assets.slice(0, 3).map((asset) => (
               <MarketAssetCard key={asset.id} asset={toMarketplaceAsset(asset)} homepageCompact />
             ))}
@@ -705,7 +749,7 @@ function CollectorInvitation({ authenticated }: { authenticated: boolean }) {
       id="home-collectors"
       aria-labelledby="collector-title"
     >
-      <div className="sh-wrap sh-collectors__panel">
+      <div className="sh-wrap sh-collectors__panel" data-home-reveal>
         <div className="sh-collectors__art" aria-hidden="true">
           <span>
             COLLECT.
@@ -763,7 +807,7 @@ function Questions() {
             How Slice works <ArrowUpRight aria-hidden="true" />
           </Link>
         </div>
-        <div className="sh-faq__items">
+        <div className="sh-faq__items" data-home-reveal>
           {HOME_QUESTIONS.map((item, i) => (
             <details key={item.question}>
               <summary>
@@ -820,12 +864,12 @@ export function CinematicHomepageStory() {
         <i className="sh-chapters__progress" aria-hidden="true" />
       </nav>
       <Ownership count={count} onChange={setCount} />
-      <Journey scrollStep={motion.journeyStep} scrollEnabled={motion.scrollJourneyEnabled} />
+      <Journey reducedMotion={motion.reducedMotion} />
       <Portfolio count={count} authenticated={isAuthenticated} />
       <Marketplace />
       <CollectorInvitation authenticated={isAuthenticated} />
       <Questions />
-      <section className="sh-finale" aria-labelledby="finale-title">
+      <section className="sh-finale" aria-labelledby="finale-title" data-home-reveal>
         <div className="sh-wrap">
           <p className="sh-eyebrow">A collector’s instinct. A new possibility.</p>
           <h2 id="finale-title">

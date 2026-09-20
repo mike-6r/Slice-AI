@@ -13,10 +13,15 @@ experience. Its ownership calculator and portfolio illustration share local exam
 state; neither creates orders nor reads private holdings. Public catalogue cards use
 the existing market service with separate loading, failure and empty states. Copy
 lives in `src/data/homepage-story.ts`, while styles and motion live beside
-`CinematicHomepageStory.tsx`. Motion uses a passive, frame-bounded scroll listener,
-respects reduced-motion preferences and leaves all content readable without animation.
-On compact screens the lifecycle is navigated with explicit stage controls; larger
-screens also progress with scrolling. Existing homepage section anchors are retained.
+`CinematicHomepageStory.tsx`. Intersection observers start finite, time-based entrance
+animations once per element. Sections stay in normal document flow: no pinned scenes,
+scroll-scrubbed animations or extra scroll runway. A passive, frame-bounded scroll
+listener only updates chapter navigation and reading progress.
+The lifecycle tour advances every 4.8 seconds while visible, stops at its final stage,
+and offers Pause, Play, Replay and manual stage controls. It pauses when offscreen,
+when the document is hidden, or after manual interaction. Reduced-motion preferences
+disable autoplay and decorative animation; all content remains readable without
+animation. Existing homepage section anchors are retained.
 
 ## Portfolio overview
 
