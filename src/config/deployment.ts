@@ -8,6 +8,25 @@ export type DeploymentConfiguration = {
 
 const previewBasePath = "/preview" as const;
 
+/** Paths do not isolate browser storage, Web Locks, or BroadcastChannels. */
+export function browserPersistenceFor(channel: DeploymentChannel) {
+  return channel === "preview"
+    ? {
+        refreshLock: "slice-preview-auth-refresh-lock",
+        refreshChannel: "slice-preview-auth-refresh-events",
+        currencyStorage: "slice.preview.display-currency",
+        currencyCookie: "slice_preview_display_currency",
+        cookiePath: "/preview",
+      }
+    : {
+        refreshLock: "slice-auth-refresh-lock",
+        refreshChannel: "slice-auth-refresh-events",
+        currencyStorage: "slice.display-currency",
+        currencyCookie: "slice_display_currency",
+        cookiePath: "/",
+      };
+}
+
 /**
  * Resolves the public deployment shape from explicit build configuration.
  * Preview is deliberately opt-in: a root-path build can never become a
@@ -54,10 +73,7 @@ export function withDeploymentBasePath(path: string, basePath: "/" | "/preview")
 }
 
 /** Converts a browser pathname back to its router-relative counterpart. */
-export function withoutDeploymentBasePath(
-  pathname: string,
-  basePath: "/" | "/preview",
-): string {
+export function withoutDeploymentBasePath(pathname: string, basePath: "/" | "/preview"): string {
   if (basePath === "/") return pathname.startsWith("/") ? pathname : "/";
   if (pathname === basePath || pathname === `${basePath}/`) return "/";
   if (pathname.startsWith(`${basePath}/`)) return pathname.slice(basePath.length);
@@ -65,10 +81,6 @@ export function withoutDeploymentBasePath(
 }
 
 /** Builds an absolute URL that remains inside the configured Slice application. */
-export function applicationUrl(
-  origin: string,
-  path: string,
-  basePath: "/" | "/preview",
-): string {
+export function applicationUrl(origin: string, path: string, basePath: "/" | "/preview"): string {
   return new URL(withDeploymentBasePath(path, basePath), origin).toString();
 }

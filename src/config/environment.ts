@@ -1,5 +1,6 @@
 import {
   applicationUrl,
+  browserPersistenceFor,
   resolveDeploymentConfiguration,
   withDeploymentBasePath,
   withoutDeploymentBasePath,
@@ -17,10 +18,10 @@ export const deployment = resolveDeploymentConfiguration({
 
 export const isPreviewEnvironment = deployment.channel === "preview";
 export const publicBasePath = deployment.basePath;
+export const browserPersistence = browserPersistenceFor(deployment.channel);
 
 export const appPath = (path: string) => withDeploymentBasePath(path, publicBasePath);
-export const routerPath = (pathname: string) =>
-  withoutDeploymentBasePath(pathname, publicBasePath);
+export const routerPath = (pathname: string) => withoutDeploymentBasePath(pathname, publicBasePath);
 export const appUrl = (origin: string, path: string) =>
   applicationUrl(origin, path, publicBasePath);
 

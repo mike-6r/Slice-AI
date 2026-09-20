@@ -1,6 +1,7 @@
 type Listener = () => void;
 import { recordQaRefresh } from "@/auth/qa-harness";
 import { apiUrl } from "@/api/api-url";
+import { browserPersistence } from "@/config/environment";
 let accessToken: string | null = null;
 let refreshPromise: Promise<string | null> | null = null;
 let refreshRetryAt = 0;
@@ -10,8 +11,8 @@ export type SessionRestoreStatus =
 let state: SessionState = "initializing";
 let restoreStatus: SessionRestoreStatus = "restoring";
 const listeners = new Set<Listener>();
-const refreshLockKey = "slice-auth-refresh-lock";
-const refreshChannelName = "slice-auth-refresh-events";
+const refreshLockKey = browserPersistence.refreshLock;
+const refreshChannelName = browserPersistence.refreshChannel;
 const refreshLeaseMs = 10_000;
 const refreshWaitMs = 12_000;
 const refreshOwner =

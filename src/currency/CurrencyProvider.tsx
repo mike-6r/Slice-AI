@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { useSession } from "@/auth/use-session";
+import { browserPersistence } from "@/config/environment";
 import type { CurrencyRates, SupportedCurrency } from "@/data/repositories";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
@@ -21,8 +22,8 @@ import {
 } from "./currency-presentation";
 import { setCurrencyPresentation } from "./currency-store";
 
-const storageKey = "slice.display-currency";
-const cookieKey = "slice_display_currency";
+const storageKey = browserPersistence.currencyStorage;
+const cookieKey = browserPersistence.currencyCookie;
 type CurrencyContextValue = {
   currency: SupportedCurrency;
   rates: CurrencyRates | null;
@@ -74,7 +75,7 @@ function browserCurrency() {
 function persistBrowserCurrency(currency: SupportedCurrency) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(storageKey, currency);
-  document.cookie = `${cookieKey}=${currency}; Max-Age=31536000; Path=/; SameSite=Lax`;
+  document.cookie = `${cookieKey}=${currency}; Max-Age=31536000; Path=${browserPersistence.cookiePath}; SameSite=Lax`;
 }
 
 export function CurrencyProvider({ children }: { children: ReactNode }) {

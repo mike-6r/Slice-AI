@@ -1,5 +1,12 @@
 # Slice
 
+## Isolated Preview
+
+The `/preview/` deployment uses separate runtime services, database, Redis,
+authentication credentials and browser persistence keys. Preview changes must
+not activate the owner's root-path staging release. See
+[the Preview runbook](docs/PREVIEW_DEPLOYMENT.md) for deployment boundaries.
+
 Slice is a collectible platform with a React/TanStack Start web application, a
 NestJS API, and a Discord companion service. The API is the authority for
 identity, submissions, canonical assets, intake/custody, valuation, ownership,
