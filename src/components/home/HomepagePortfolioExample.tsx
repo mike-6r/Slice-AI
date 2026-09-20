@@ -15,12 +15,8 @@ export function HomepagePortfolioExample({ count }: { count: number }) {
   return (
     <div className="sh-portfolio__window">
       <header>
-        <span className="sh-window-dots" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </span>
-        <span>My collection</span>
+        <Layers3 aria-hidden="true" />
+        <span>Collection overview</span>
         <span className="sh-tag">Illustrative portfolio</span>
       </header>
       <div className="sh-portfolio__overview">

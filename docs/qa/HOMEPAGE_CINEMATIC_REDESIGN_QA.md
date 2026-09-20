@@ -2,6 +2,19 @@
 
 Date: 2026-09-19. Scope: homepage presentation, local teaching interactions and route CSS.
 
+## Dark-theme and all-section composition correction — 2026-09-20
+
+- Rejected the prior pale-mint calculator treatment. All main surfaces now use the project's charcoal background, surface-raised and foreground tokens, with #22d3a5 reserved for accents and selected controls.
+- Hero: replaced the old fanned outlines/orbits with a sculpted dark exhibit, dimensional backing edge, oversized edition lettering and an independent Charizard caption. Existing card media and pointer tilt remain.
+- Ownership: open card/tile display and perspective pedestal, separate dark calculator with edge light, dark presets and accessible mint focus indicators. No pastel surface remains.
+- Journey: replaced the horizontal bar and two-pane box with a vertical six-step navigator, central collectible exhibit, open explanation and separate next-action strip. Tablet/mobile controls reflow into a three-column grid. Existing manual and finite automatic playback remain authoritative.
+- Portfolio: removed the enclosing mock browser window, backing sheets and nested position box. Uses an open overview, separate segmented tabs, a larger collectible exhibit, ownership ring and connected-example strip. Activity and Insights remain interactive.
+- Decorative elements are aria-hidden and pointer-events:none. Existing reduced-motion rules disable their entrance animations and transitions. No scroll-scrubbed or pinned scenes were introduced.
+- Browser checks at 1440×1000, 768×1024, 390×844 and 360×800: no horizontal overflow; calculator End selects 1,000/£10,000/100% and fills all 100 tiles; Activity and Insights remain usable, including arrow-key switching; manual Verify updates the stage and pauses autoplay.
+- Tablet playback advanced from stage 0 to stage 5 with scrollY fixed at 1960. Phone hero labels were repositioned so the example badge does not cover the card artwork. Phone journey controls remain 52px tall.
+- Frontend tests: 56 files / 340 tests pass. Typecheck, touched TypeScript lint, formatting and production client/SSR build pass. Whole-repository lint still reports the existing 456 errors / 25 warnings outside this change.
+- This pass is presentation-only: no backend, schema, account or transaction changes. Local catalogue reads are unavailable in the standalone frontend preview; the existing failure state remains visible.
+
 ## Interaction correction — 2026-09-20
 
 - The ownership slider now covers 1–1,000 Slices rather than stopping at 100. At 100, one row still correctly represents 10%; at 1,000 all 100 tiles fill and the example shows £10,000 / 100%.

@@ -24,6 +24,11 @@ and offers Pause, Play, Replay and manual stage controls. It pauses when offscre
 when the document is hidden, or after manual interaction. Reduced-motion preferences
 disable autoplay and decorative animation; all content remains readable without
 animation. Existing homepage section anchors are retained.
+Each chapter has its own composition using the shared charcoal surface/foreground
+tokens and mint accents: a sculpted hero exhibit, an open ownership display with a
+dark calculator, a vertical lifecycle navigator and card exhibit, and a frameless
+portfolio overview. Decorative planes are hidden from assistive technology and
+cannot intercept pointer input. Tablet/phone layouts keep controls in normal flow.
 
 ## Portfolio overview
 

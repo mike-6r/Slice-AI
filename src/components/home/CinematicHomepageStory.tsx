@@ -142,17 +142,10 @@ function Hero({ authenticated }: { authenticated: boolean }) {
             <span>The collector’s icon</span>
             <span>001 / CHARIZARD</span>
           </div>
-          <div className="sh-exhibit__outline" aria-hidden="true">
-            SLICE
-          </div>
-          <div className="sh-exhibit__sheets" aria-hidden="true">
-            <i />
-            <i />
+          <div className="sh-exhibit__monolith" aria-hidden="true">
+            <span>1999</span>
             <i />
           </div>
-          <span className="sh-exhibit__edition" aria-hidden="true">
-            THE ORIGINAL. / A NEW POSSIBILITY.
-          </span>
           <div className="sh-exhibit__plinth" aria-hidden="true" />
           <div className="sh-exhibit__card">
             <Card priority />
@@ -166,8 +159,12 @@ function Hero({ authenticated }: { authenticated: boolean }) {
               <small>1st Edition · PSA 10</small>
             </div>
           </div>
+          <div className="sh-exhibit__name" aria-hidden="true">
+            <span>BASE SET / FIRST EDITION</span>
+            <strong>Charizard.</strong>
+          </div>
           <a href="#v2-ownership-scene" className="sh-exhibit__position">
-            <span className="sh-tag">Illustrative position</span>
+            <span className="sh-tag">Your part of the story · Example</span>
             <div>
               <strong>
                 25<span> Slices</span>
@@ -231,6 +228,7 @@ function Ownership({ count, onChange }: { count: number; onChange: (value: numbe
               <span className="sh-tag">Illustrative example</span>
             </div>
             <div className="sh-ownership__transformation">
+              <div className="sh-ownership__pedestal" aria-hidden="true" />
               <Card />
               <div className="sh-slice-field" aria-hidden="true">
                 {selection.tileFills.map((fill, i) => (
@@ -270,78 +268,80 @@ function Ownership({ count, onChange }: { count: number; onChange: (value: numbe
               Slices. Move the slider to 1,000 to fill the whole collectible.
             </p>
           </div>
-          <div className="sh-calculator">
-            <div className="sh-panel-label">
-              <span>02 / Make it yours</span>
-              <span className="sh-interactive">
-                <i />
-                Try it
-              </span>
-            </div>
-            <label htmlFor="home-slice-quantity">How many Slices feel like you?</label>
-            <div className="sh-calculator__amount">
-              <strong>{count.toLocaleString("en-GB")}</strong>
-              <span>
-                {count === 1 ? "Slice" : "Slices"}
-                <small>of {example.totalSlicesCount.toLocaleString("en-GB")}</small>
-              </span>
-              <Layers3 aria-hidden="true" />
-            </div>
-            <input
-              id="home-slice-quantity"
-              type="range"
-              min={1}
-              max={example.totalSlicesCount}
-              step={1}
-              value={count}
-              onChange={(event) => onChange(Number(event.target.value))}
-              aria-valuetext={
-                count +
-                " Slices, " +
-                share(count) +
-                " ownership, " +
-                gbp(count * example.slicePriceMinor) +
-                " example cost"
-              }
-              style={{ "--range": selection.rangePercent + "%" } as CSSProperties}
-            />
-            <div className="sh-calculator__range-labels">
-              <span>1 Slice</span>
-              <span>{example.totalSlicesCount.toLocaleString("en-GB")} Slices · 100%</span>
-            </div>
-            <div
-              className="sh-calculator__presets"
-              role="group"
-              aria-label="Example Slice quantities"
-            >
-              {HOME_EXAMPLE_PRESETS.map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => onChange(value)}
-                  aria-pressed={count === value}
-                >
-                  {value.toLocaleString("en-GB")} {value === 1 ? "Slice" : "Slices"}
-                </button>
-              ))}
-            </div>
-            <div className="sh-calculator__result" aria-live="polite" aria-atomic="true">
-              <div>
-                <span>Example cost</span>
-                <strong>{gbp(count * example.slicePriceMinor)}</strong>
+          <div className="sh-calculator-shell">
+            <div className="sh-calculator">
+              <div className="sh-panel-label">
+                <span>02 / Make it yours</span>
+                <span className="sh-interactive">
+                  <i />
+                  Try it
+                </span>
               </div>
-              <div>
-                <span>Your ownership</span>
-                <strong>{share(count)}</strong>
+              <label htmlFor="home-slice-quantity">How many Slices feel like you?</label>
+              <div className="sh-calculator__amount">
+                <strong>{count.toLocaleString("en-GB")}</strong>
+                <span>
+                  {count === 1 ? "Slice" : "Slices"}
+                  <small>of {example.totalSlicesCount.toLocaleString("en-GB")}</small>
+                </span>
+                <Layers3 aria-hidden="true" />
               </div>
+              <input
+                id="home-slice-quantity"
+                type="range"
+                min={1}
+                max={example.totalSlicesCount}
+                step={1}
+                value={count}
+                onChange={(event) => onChange(Number(event.target.value))}
+                aria-valuetext={
+                  count +
+                  " Slices, " +
+                  share(count) +
+                  " ownership, " +
+                  gbp(count * example.slicePriceMinor) +
+                  " example cost"
+                }
+                style={{ "--range": selection.rangePercent + "%" } as CSSProperties}
+              />
+              <div className="sh-calculator__range-labels">
+                <span>1 Slice</span>
+                <span>{example.totalSlicesCount.toLocaleString("en-GB")} Slices · 100%</span>
+              </div>
+              <div
+                className="sh-calculator__presets"
+                role="group"
+                aria-label="Example Slice quantities"
+              >
+                {HOME_EXAMPLE_PRESETS.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => onChange(value)}
+                    aria-pressed={count === value}
+                  >
+                    {value.toLocaleString("en-GB")} {value === 1 ? "Slice" : "Slices"}
+                  </button>
+                ))}
+              </div>
+              <div className="sh-calculator__result" aria-live="polite" aria-atomic="true">
+                <div>
+                  <span>Example cost</span>
+                  <strong>{gbp(count * example.slicePriceMinor)}</strong>
+                </div>
+                <div>
+                  <span>Your ownership</span>
+                  <strong>{share(count)}</strong>
+                </div>
+              </div>
+              <a href="#v2-portfolio-scene" className="sh-text-link">
+                See this position in your portfolio <ArrowRight aria-hidden="true" />
+              </a>
+              <p className="sh-small">
+                A teaching example, not an order or valuation. Actual supply, price, fees and rights
+                depend on the offering.
+              </p>
             </div>
-            <a href="#v2-portfolio-scene" className="sh-text-link">
-              See this position in your portfolio <ArrowRight aria-hidden="true" />
-            </a>
-            <p className="sh-small">
-              A teaching example, not an order or valuation. Actual supply, price, fees and rights
-              depend on the offering.
-            </p>
           </div>
         </div>
         <div className="sh-section-note">
@@ -424,24 +424,6 @@ function Journey({ reducedMotion }: { reducedMotion: boolean }) {
             )}
           </span>
         </div>
-        <div className="sh-journey__tabs" role="group" aria-label="Collectible journey stages">
-          {HOME_JOURNEY.map((item, i) => {
-            const StageIcon = journeyIcons[i];
-            return (
-              <button
-                key={item.label}
-                type="button"
-                aria-pressed={i === index}
-                onClick={() => playback.select(i)}
-              >
-                <span className="sh-journey__step-number">0{i + 1}</span>
-                <StageIcon aria-hidden="true" />
-                <span>{item.label}</span>
-                <i aria-hidden="true" />
-              </button>
-            );
-          })}
-        </div>
         <p className="sh-sr-only" role="status" aria-live="polite" aria-atomic="true">
           {playback.manualStage === null
             ? ""
@@ -454,11 +436,29 @@ function Journey({ reducedMotion }: { reducedMotion: boolean }) {
           data-home-reveal
           onFocusCapture={playback.pause}
         >
+          <div className="sh-journey__tabs" role="group" aria-label="Collectible journey stages">
+            {HOME_JOURNEY.map((item, i) => {
+              const StageIcon = journeyIcons[i];
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  aria-pressed={i === index}
+                  onClick={() => playback.select(i)}
+                >
+                  <span className="sh-journey__step-number">0{i + 1}</span>
+                  <span>{item.label}</span>
+                  <StageIcon aria-hidden="true" />
+                  <i aria-hidden="true" />
+                </button>
+              );
+            })}
+          </div>
           <div className="sh-journey__chamber">
             <span className="sh-chamber__ordinal" aria-hidden="true">
               0{index + 1}
             </span>
-            <div className="sh-chamber__rings" aria-hidden="true">
+            <div className="sh-chamber__frame" aria-hidden="true">
               <i />
               <i />
               <i />
@@ -475,7 +475,9 @@ function Journey({ reducedMotion }: { reducedMotion: boolean }) {
           </div>
           <div className="sh-journey__detail">
             <div className="sh-panel-label">
-              <span>The collectible lifecycle</span>
+              <span>
+                Chapter 0{index + 1} / {stage.label}
+              </span>
               <span className="sh-tag">Process guide</span>
             </div>
             <div key={index} className="sh-journey__content">
