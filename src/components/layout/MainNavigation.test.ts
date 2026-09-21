@@ -9,7 +9,7 @@ import {
 
 describe("public and private navigation", () => {
   it("keeps public discovery routes visible while logged out", () => {
-    expect(primaryNavigationFor(false)).toEqual(PUBLIC_NAV);
+    expect(primaryNavigationFor(false, false)).toEqual([...PUBLIC_NAV]);
     expect(primaryNavigationFor(false).map((item) => item.label)).toEqual([
       "Home",
       "Markets",
@@ -18,7 +18,8 @@ describe("public and private navigation", () => {
   });
 
   it("adds private account routes only after authentication", () => {
-    expect(primaryNavigationFor(true)).toEqual([...PUBLIC_NAV, ...PRIVATE_NAV]);
+    expect(primaryNavigationFor(true, false)).toEqual([...PUBLIC_NAV, ...PRIVATE_NAV]);
+    expect(primaryNavigationFor(true, true).map((item) => item.label)).toContain("Drops");
     expect(primaryNavigationFor(false).map((item) => item.label)).not.toContain("Portfolio");
     expect(primaryNavigationFor(false).map((item) => item.label)).not.toContain("Governance");
     expect(primaryNavigationFor(false).map((item) => item.label)).not.toContain("Orders");

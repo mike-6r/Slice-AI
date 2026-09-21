@@ -27,6 +27,7 @@ import { CurrencyModule } from './modules/currency/currency.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { InitialOfferingModule } from './modules/initial-offering/initial-offering.module';
 import { PreSaleModule } from './modules/pre-sale/pre-sale.module';
+import { DropsModule } from './modules/drops/drops.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { PreSaleModule } from './modules/pre-sale/pre-sale.module';
     AdminModule,
     InitialOfferingModule,
     PreSaleModule,
+    DropsModule,
     MarketResearchModule,
     CollectorWorkspaceModule,
     ReadsModule,

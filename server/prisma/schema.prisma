@@ -269,6 +269,27 @@ enum AssetOperationalControlStatus {
   FROZEN
 }
 
+enum DropState {
+  DRAFT
+  READY_FOR_REVIEW
+  READY_TO_PUBLISH
+  LIVE
+  SOLD_OUT
+  CLOSED
+  CANCELLED
+  BLOCKED
+}
+
+enum DropPublicationStatus {
+  UNPUBLISHED
+  PUBLISHED
+  WITHDRAWN
+}
+
+enum PreviewFixtureClassification {
+  PREVIEW_QA
+}
+
 enum TradingOrderSide {
   BUY
   SELL
@@ -1032,6 +1053,9 @@ model User {
   platformRevenueSettlementsApproved  PlatformRevenueSettlement[]        @relation("PlatformRevenueSettlementApprover")
   adminOverrides                      AccountAdminOverride[]             @relation("AccountAdminOverrideTarget")
   authoredAdminOverrides              AccountAdminOverride[]             @relation("AccountAdminOverrideActor")
+  createdDrops                        Drop[]                              @relation("DropCreator")
+  dropHistoryEvents                   DropHistoryEvent[]                  @relation("DropHistoryActor")
+  previewDropFixtures                 PreviewDropFixture[]                @relation("PreviewDropFixtureCreator")
 
   @@index([accountStatus])
 }
@@ -1537,11 +1561,120 @@ model Asset {
   featuredCollectorAssets       PublicCollectorFeaturedAsset[]
   certificationClaims           GradingCertificationClaim[]
   operationalControl            AssetOperationalControl?
+  dropInventoryItems            DropInventoryItem[]
+  dropLock                      DropAssetLock?
+  previewDropFixtureAssets      PreviewDropFixtureAsset[]
 
   @@unique([gradeScaleEntryId, certificationNumber])
   @@index([status, categoryId, id])
   @@index([setId, status, id])
   @@index([title, id])
+}
+
+/// Slice Drops use the existing Asset, custody, and ownership authorities.
+/// This aggregate stores only the Drop workflow and publication lifecycle.
+model Drop {
+  id                String                @id @default(cuid())
+  publicId          String                @unique
+  slug              String                @unique
+  creatorUserId     String
+  name              String
+  description       String
+  state             DropState             @default(DRAFT)
+  publicationStatus DropPublicationStatus @default(UNPUBLISHED)
+  openingCount      Int                   @default(0)
+  version           Int                   @default(1)
+  submittedAt       DateTime?
+  readyAt           DateTime?
+  publishedAt       DateTime?
+  closedAt          DateTime?
+  cancelledAt       DateTime?
+  blockedReason     String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  creator           User                  @relation("DropCreator", fields: [creatorUserId], references: [id], onDelete: Restrict)
+  inventory         DropInventoryItem[]
+  assetLocks        DropAssetLock[]
+  history           DropHistoryEvent[]
+
+  @@index([creatorUserId, state, updatedAt, id])
+  @@index([publicationStatus, state, publishedAt, id])
+}
+
+/// Current inventory membership. Assets remain canonical Asset records.
+model DropInventoryItem {
+  id        String        @id @default(cuid())
+  dropId    String
+  assetId   String
+  addedAt   DateTime      @default(now())
+  createdAt DateTime      @default(now())
+  drop      Drop          @relation(fields: [dropId], references: [id], onDelete: Restrict)
+  asset     Asset         @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  lock      DropAssetLock?
+
+  @@unique([dropId, assetId])
+  @@index([assetId, dropId])
+}
+
+/// Exclusive active commitment. The assetId primary key makes concurrent
+/// attempts to place one asset into two Drops fail at the database boundary.
+model DropAssetLock {
+  assetId         String            @id
+  dropId          String
+  inventoryItemId String            @unique
+  lockedAt        DateTime          @default(now())
+  version         Int               @default(1)
+  asset           Asset             @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  drop            Drop              @relation(fields: [dropId], references: [id], onDelete: Restrict)
+  inventoryItem   DropInventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+
+  @@index([dropId, lockedAt, assetId])
+}
+
+/// Append-only operational history. before/after contain safe workflow data,
+/// never provider payloads, credentials, or financial execution state.
+model DropHistoryEvent {
+  id          String    @id @default(cuid())
+  dropId      String
+  actorUserId String?
+  action      String
+  fromState   DropState?
+  toState     DropState?
+  beforeState Json?
+  afterState  Json?
+  reference   String?
+  createdAt   DateTime  @default(now())
+  drop        Drop      @relation(fields: [dropId], references: [id], onDelete: Restrict)
+  actor       User?     @relation("DropHistoryActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([dropId, createdAt, id])
+  @@index([action, createdAt, id])
+}
+
+/// Explicit preview-only fixture manifest. It labels canonical records as QA
+/// data without pretending they are operational assets or market evidence.
+model PreviewDropFixture {
+  id             String                       @id @default(cuid())
+  fixtureKey     String                       @unique
+  creatorUserId  String
+  classification PreviewFixtureClassification @default(PREVIEW_QA)
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
+  creator        User                         @relation("PreviewDropFixtureCreator", fields: [creatorUserId], references: [id], onDelete: Restrict)
+  assets         PreviewDropFixtureAsset[]
+
+  @@index([classification, createdAt, id])
+}
+
+model PreviewDropFixtureAsset {
+  fixtureId String
+  assetId   String @unique
+  scenario  String
+  fixture   PreviewDropFixture @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  asset     Asset              @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@id([fixtureId, assetId])
+  @@index([scenario, assetId])
 }
 
 /// Administrative progression gate. This record never rewrites ownership,

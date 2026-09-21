@@ -186,6 +186,7 @@ export class OwnershipPolicyService {
             ownershipSupply: true,
             ownershipSupplyPolicy: true,
             operationalControl: true,
+            dropLock: { select: { dropId: true } },
             valuationDecisions: {
               where: { status: 'ACTIVE' },
               orderBy: { decidedAt: 'desc' },
@@ -203,6 +204,12 @@ export class OwnershipPolicyService {
             code: 'ASSET_OPERATIONS_FROZEN',
             message:
               'Ownership configuration is blocked while asset operations are frozen.',
+          });
+        if (this.config.deploymentChannel === 'preview' && asset.dropLock)
+          throw new ConflictException({
+            code: 'ASSET_COMMITTED_TO_DROP',
+            message:
+              'Ownership configuration is blocked while the asset is committed to a Drop.',
           });
         if (asset.ownershipSupply)
           throw new ConflictException({
@@ -306,6 +313,16 @@ export class OwnershipPolicyService {
         const control = await db.assetOperationalControl.findUnique({
           where: { assetId },
         });
+        const dropLock =
+          this.config.deploymentChannel === 'preview'
+            ? await db.dropAssetLock.findUnique({ where: { assetId } })
+            : null;
+        if (dropLock)
+          throw new ConflictException({
+            code: 'ASSET_COMMITTED_TO_DROP',
+            message:
+              'Ownership approval is blocked while the asset is committed to a Drop.',
+          });
         if (control?.status === 'FROZEN')
           throw new ConflictException({
             code: 'ASSET_OPERATIONS_FROZEN',

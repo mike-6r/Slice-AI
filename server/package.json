@@ -37,6 +37,7 @@
     "staging:beta:prepare": "ts-node src/scripts/prepare-live-beta.ts",
     "staging:beta:admin": "ts-node src/scripts/provision-beta-admin.ts",
     "beta:retire-fixtures": "ts-node src/scripts/retire-beta-fixtures.ts",
+    "preview:drops:setup": "ts-node src/scripts/setup-preview-drops.ts",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
     "prisma:status": "prisma migrate status",

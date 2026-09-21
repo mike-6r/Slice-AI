@@ -572,6 +572,17 @@ export type AdminAccountsSummary = {
   trialingMemberships: number;
 };
 
+export type AdminCustomerActionTarget = {
+  authority: "CUSTOMER_COMPLIANCE";
+  kind: "CUSTOMER_CONTROL" | "COMPLIANCE_CASE" | "PHONE_VERIFICATION";
+  userId: string;
+  recordId: string | null;
+  actionable: boolean;
+  unavailableReason: string | null;
+  nextActor: "ADMIN" | "CUSTOMER" | "PROVIDER" | "SYSTEM";
+  nextAction: string;
+};
+
 export type AdminUserDetail = AdminUserSummary & {
   revision: string;
   actionCenter: Array<{
@@ -581,11 +592,13 @@ export type AdminUserDetail = AdminUserSummary & {
     explanation: string;
     recommendedAction: string;
     tab: "Overview" | "Operations" | "History";
+    target?: AdminCustomerActionTarget;
   }>;
   recommendedAction: {
     title: string;
     explanation: string;
     tab: "Overview" | "Operations" | "History";
+    target?: AdminCustomerActionTarget;
   } | null;
   availableCommands: Array<{
     id: string;
@@ -675,6 +688,12 @@ export type AdminUserDetail = AdminUserSummary & {
     provider: string | null;
     lastReviewAt: string | null;
     caseCount: number;
+    activeCase: {
+      id: string;
+      type: string;
+      status: string;
+      provider: string;
+    } | null;
   };
   portfolioSummary: {
     totalValueMinor: string | null;
@@ -3703,6 +3722,7 @@ export interface AccountRepository {
 }
 
 export interface AppRepositories {
+  drops: DropRepository;
   assets: AssetRepository;
   catalogue: CatalogueRepository;
   submissions: SubmissionRepository;
@@ -3726,4 +3746,101 @@ export interface AppRepositories {
   auth: AuthRepository;
   account: AccountRepository;
   currency?: { getRates(): Promise<CurrencyRates | null> };
+}
+
+export type DropState =
+  | "DRAFT"
+  | "READY_FOR_REVIEW"
+  | "READY_TO_PUBLISH"
+  | "LIVE"
+  | "SOLD_OUT"
+  | "CLOSED"
+  | "CANCELLED"
+  | "BLOCKED";
+
+export type DropView = {
+  id: string;
+  publicId: string;
+  slug: string;
+  creator: { id: string; displayName: string };
+  name: string;
+  description: string;
+  state: DropState;
+  publicationStatus: "UNPUBLISHED" | "PUBLISHED" | "WITHDRAWN";
+  inventoryCount: number;
+  openingCount: number;
+  remainingInventoryCount: number;
+  version: number;
+  readiness: {
+    ready: boolean;
+    checks: Array<{ code: string; passed: boolean; message: string }>;
+  };
+  inventory: Array<{
+    id: string;
+    publicId: string;
+    slug: string;
+    title: string;
+    status: string;
+    imageAvailable: boolean;
+    addedAt: string;
+    vaultLock: { active: boolean; lockedAt: string | null; version: number | null };
+    eligibility: {
+      eligible: boolean;
+      reasons: Array<{ code: string; message: string }>;
+    };
+    referenceValue: { amountMinor: string; currency: string; asOf: string } | null;
+  }>;
+  history: Array<{
+    id: string;
+    action: string;
+    fromState: DropState | null;
+    toState: DropState | null;
+    reference: string | null;
+    createdAt: string;
+  }>;
+  submittedAt: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DropEligibleAsset = {
+  id: string;
+  publicId: string;
+  slug: string;
+  title: string;
+  status: string;
+  imageAvailable: boolean;
+  eligibility: {
+    eligible: boolean;
+    reasons: Array<{ code: string; message: string }>;
+  };
+  referenceValue: { amountMinor: string; currency: string; asOf: string } | null;
+  fixture: { classification: "PREVIEW_QA"; scenario: string } | null;
+};
+
+export interface DropRepository {
+  listPublic(): Promise<{ items: DropView[] }>;
+  getPublic(reference: string): Promise<DropView>;
+  listCreator(): Promise<{ items: DropView[] }>;
+  getCreator(id: string): Promise<DropView>;
+  listEligibleAssets(): Promise<{ items: DropEligibleAsset[] }>;
+  create(input: { name: string; description: string }): Promise<DropView>;
+  update(
+    id: string,
+    input: { version: number; name: string; description: string },
+  ): Promise<DropView>;
+  addInventory(id: string, input: { version: number; assetId: string }): Promise<DropView>;
+  removeInventory(id: string, assetId: string, version: number): Promise<DropView>;
+  submit(id: string, version: number): Promise<DropView>;
+  listAdmin(): Promise<{ items: DropView[] }>;
+  getAdmin(id: string): Promise<DropView>;
+  transitionAdmin(
+    id: string,
+    input: {
+      version: number;
+      target: "READY_TO_PUBLISH" | "LIVE" | "CLOSED" | "CANCELLED";
+      reason?: string;
+    },
+  ): Promise<DropView>;
 }

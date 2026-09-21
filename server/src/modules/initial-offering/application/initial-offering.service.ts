@@ -1137,6 +1137,7 @@ export class InitialOfferingService {
           take: 1,
         },
         initialOffering: true,
+        dropLock: { select: { dropId: true } },
       },
     });
     if (!asset)
@@ -1148,6 +1149,11 @@ export class InitialOfferingService {
       fail(
         'ASSET_OPERATIONS_FROZEN',
         'Initial Offering changes are blocked while asset operations are frozen.',
+      );
+    if (this.config.deploymentChannel === 'preview' && asset.dropLock)
+      fail(
+        'ASSET_COMMITTED_TO_DROP',
+        'Initial Offering changes are blocked while the asset is committed to a Drop.',
       );
     if (
       asset.status !== 'PUBLISHED' ||

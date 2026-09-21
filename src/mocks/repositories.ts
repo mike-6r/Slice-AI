@@ -82,6 +82,39 @@ const priceFor = (id: AssetId) => findAsset(id)?.marketValue ?? gbp(0);
 const total = (money: Money, units: number) => gbp((money.amount / 100) * units);
 
 export const mockRepositories: AppRepositories = {
+  drops: {
+    listPublic: async () => ({ items: [] }),
+    getPublic: async () => {
+      throw new Error("Drops require the isolated preview API service.");
+    },
+    listCreator: async () => ({ items: [] }),
+    getCreator: async () => {
+      throw new Error("Drops require the isolated preview API service.");
+    },
+    listEligibleAssets: async () => ({ items: [] }),
+    create: async () => {
+      throw new Error("Drops require the isolated preview API service.");
+    },
+    update: async () => {
+      throw new Error("Drops require the isolated preview API service.");
+    },
+    addInventory: async () => {
+      throw new Error("Drops require the isolated preview API service.");
+    },
+    removeInventory: async () => {
+      throw new Error("Drops require the isolated preview API service.");
+    },
+    submit: async () => {
+      throw new Error("Drops require the isolated preview API service.");
+    },
+    listAdmin: async () => ({ items: [] }),
+    getAdmin: async () => {
+      throw new Error("Drops require the isolated preview API service.");
+    },
+    transitionAdmin: async () => {
+      throw new Error("Drops require the isolated preview API service.");
+    },
+  },
   admin: {
     async resolveAssetRecord(reference) {
       return {

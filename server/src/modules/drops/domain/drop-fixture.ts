@@ -1,0 +1,1 @@
+export const PREVIEW_DROP_FIXTURE_CLASSIFICATION = 'PREVIEW_QA' as const;

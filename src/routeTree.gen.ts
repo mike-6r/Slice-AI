@@ -16,6 +16,8 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as CollectorWorkspaceRouteImport } from './routes/collector-workspace'
 import { Route as CollectorsRouteImport } from './routes/collectors'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as DropStudioRouteImport } from './routes/drop-studio'
+import { Route as DropsRouteImport } from './routes/drops'
 import { Route as FeesRouteImport } from './routes/fees'
 import { Route as HelpRouteImport } from './routes/help'
 import { Route as HowItWorksRouteImport } from './routes/how-it-works'
@@ -77,6 +79,16 @@ const CollectorsRoute = CollectorsRouteImport.update({
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DropStudioRoute = DropStudioRouteImport.update({
+  id: '/drop-studio',
+  path: '/drop-studio',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DropsRoute = DropsRouteImport.update({
+  id: '/drops',
+  path: '/drops',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FeesRoute = FeesRouteImport.update({
@@ -223,6 +235,8 @@ export interface FileRoutesByFullPath {
   '/collector-workspace': typeof CollectorWorkspaceRoute
   '/collectors': typeof CollectorsRoute
   '/dashboard': typeof DashboardRoute
+  '/drop-studio': typeof DropStudioRoute
+  '/drops': typeof DropsRoute
   '/fees': typeof FeesRoute
   '/help': typeof HelpRoute
   '/how-it-works': typeof HowItWorksRoute
@@ -259,6 +273,8 @@ export interface FileRoutesByTo {
   '/collector-workspace': typeof CollectorWorkspaceRoute
   '/collectors': typeof CollectorsRoute
   '/dashboard': typeof DashboardRoute
+  '/drop-studio': typeof DropStudioRoute
+  '/drops': typeof DropsRoute
   '/fees': typeof FeesRoute
   '/help': typeof HelpRoute
   '/how-it-works': typeof HowItWorksRoute
@@ -296,6 +312,8 @@ export interface FileRoutesById {
   '/collector-workspace': typeof CollectorWorkspaceRoute
   '/collectors': typeof CollectorsRoute
   '/dashboard': typeof DashboardRoute
+  '/drop-studio': typeof DropStudioRoute
+  '/drops': typeof DropsRoute
   '/fees': typeof FeesRoute
   '/help': typeof HelpRoute
   '/how-it-works': typeof HowItWorksRoute
@@ -334,6 +352,8 @@ export interface FileRouteTypes {
     | '/collector-workspace'
     | '/collectors'
     | '/dashboard'
+    | '/drop-studio'
+    | '/drops'
     | '/fees'
     | '/help'
     | '/how-it-works'
@@ -370,6 +390,8 @@ export interface FileRouteTypes {
     | '/collector-workspace'
     | '/collectors'
     | '/dashboard'
+    | '/drop-studio'
+    | '/drops'
     | '/fees'
     | '/help'
     | '/how-it-works'
@@ -406,6 +428,8 @@ export interface FileRouteTypes {
     | '/collector-workspace'
     | '/collectors'
     | '/dashboard'
+    | '/drop-studio'
+    | '/drops'
     | '/fees'
     | '/help'
     | '/how-it-works'
@@ -443,6 +467,8 @@ export interface RootRouteChildren {
   CollectorWorkspaceRoute: typeof CollectorWorkspaceRoute
   CollectorsRoute: typeof CollectorsRoute
   DashboardRoute: typeof DashboardRoute
+  DropStudioRoute: typeof DropStudioRoute
+  DropsRoute: typeof DropsRoute
   FeesRoute: typeof FeesRoute
   HelpRoute: typeof HelpRoute
   HowItWorksRoute: typeof HowItWorksRoute
@@ -520,6 +546,20 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/drop-studio': {
+      id: '/drop-studio'
+      path: '/drop-studio'
+      fullPath: '/drop-studio'
+      preLoaderRoute: typeof DropStudioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/drops': {
+      id: '/drops'
+      path: '/drops'
+      fullPath: '/drops'
+      preLoaderRoute: typeof DropsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/fees': {
@@ -733,6 +773,8 @@ const rootRouteChildren: RootRouteChildren = {
   CollectorWorkspaceRoute: CollectorWorkspaceRoute,
   CollectorsRoute: CollectorsRoute,
   DashboardRoute: DashboardRoute,
+  DropStudioRoute: DropStudioRoute,
+  DropsRoute: DropsRoute,
   FeesRoute: FeesRoute,
   HelpRoute: HelpRoute,
   HowItWorksRoute: HowItWorksRoute,

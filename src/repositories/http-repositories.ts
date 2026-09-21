@@ -33,6 +33,7 @@ import type {
   AdminUserDetail,
   AdminUserSummary,
   AppRepositories,
+  DropView,
   AssetRepository,
   AssetOperationsBoardResponse,
   InitialOfferingProjection,
@@ -2285,6 +2286,36 @@ const mapAdminUser = (raw: unknown): AdminUserSummary => {
   };
 };
 
+const mapAdminCustomerActionTarget = (
+  raw: unknown,
+): AdminUserDetail["actionCenter"][number]["target"] => {
+  if (raw === undefined || raw === null) return undefined;
+  const target = objectField(raw, "admin customer action target");
+  const kind = String(target.kind);
+  const nextActor = String(target.nextActor);
+  if (
+    target.authority !== "CUSTOMER_COMPLIANCE" ||
+    !["CUSTOMER_CONTROL", "COMPLIANCE_CASE", "PHONE_VERIFICATION"].includes(kind) ||
+    !["ADMIN", "CUSTOMER", "PROVIDER", "SYSTEM"].includes(nextActor)
+  )
+    throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid admin customer action target.");
+  return {
+    authority: "CUSTOMER_COMPLIANCE",
+    kind: kind as NonNullable<AdminUserDetail["actionCenter"][number]["target"]>["kind"],
+    userId: stringField(target.userId, "admin customer action target.userId"),
+    recordId: nullableString(target.recordId, "admin customer action target.recordId"),
+    actionable: Boolean(target.actionable),
+    unavailableReason: nullableString(
+      target.unavailableReason,
+      "admin customer action target.unavailableReason",
+    ),
+    nextActor: nextActor as NonNullable<
+      AdminUserDetail["actionCenter"][number]["target"]
+    >["nextActor"],
+    nextAction: stringField(target.nextAction, "admin customer action target.nextAction"),
+  };
+};
+
 const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
   const value = objectField(raw, "admin user detail");
   const user = mapAdminUser(value);
@@ -2302,6 +2333,10 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
     value.complianceSummary && typeof value.complianceSummary === "object"
       ? objectField(value.complianceSummary, "admin user compliance")
       : {};
+  const activeComplianceCase =
+    complianceSummary.activeCase && typeof complianceSummary.activeCase === "object"
+      ? objectField(complianceSummary.activeCase, "admin user active compliance case")
+      : null;
   const portfolioSummary =
     value.portfolioSummary && typeof value.portfolioSummary === "object"
       ? objectField(value.portfolioSummary, "admin user portfolio")
@@ -2360,6 +2395,7 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
           "admin user action center.recommendedAction",
         ),
         tab,
+        target: mapAdminCustomerActionTarget(action.target),
       };
     }),
     recommendedAction: recommendedAction
@@ -2373,6 +2409,7 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
             recommendedAction.tab === "Operations" || recommendedAction.tab === "History"
               ? recommendedAction.tab
               : "Overview",
+          target: mapAdminCustomerActionTarget(recommendedAction.target),
         }
       : null,
     availableCommands: availableCommands.map((rawCommand) => {
@@ -2544,6 +2581,20 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
         "admin user compliance.lastReviewAt",
       ),
       caseCount: Number(complianceSummary.caseCount ?? 0),
+      activeCase: activeComplianceCase
+        ? {
+            id: stringField(activeComplianceCase.id, "admin user active compliance case.id"),
+            type: stringField(activeComplianceCase.type, "admin user active compliance case.type"),
+            status: stringField(
+              activeComplianceCase.status,
+              "admin user active compliance case.status",
+            ),
+            provider: stringField(
+              activeComplianceCase.provider,
+              "admin user active compliance case.provider",
+            ),
+          }
+        : null,
     },
     portfolioSummary: {
       totalValueMinor: mapNullableMoney(portfolioSummary, "totalValueMinor"),
@@ -6411,6 +6462,54 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
   };
 
   return {
+    drops: {
+      listPublic: () => client.get<{ items: DropView[] }>("/drops"),
+      getPublic: (reference) => client.get<DropView>(`/drops/${encodeURIComponent(reference)}`),
+      listCreator: () => client.get<{ items: DropView[] }>("/creator/drops"),
+      getCreator: (id) => client.get<DropView>(`/creator/drops/${encodeURIComponent(id)}`),
+      listEligibleAssets: () => client.get("/creator/drops/eligible-assets"),
+      create: (input) =>
+        client.request<DropView>("/creator/drops", {
+          method: "POST",
+          body: input,
+          headers: { "Idempotency-Key": idempotencyKey() },
+        }),
+      update: (id, input) =>
+        client.request<DropView>(`/creator/drops/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          body: input,
+          headers: { "Idempotency-Key": idempotencyKey() },
+        }),
+      addInventory: (id, input) =>
+        client.request<DropView>(`/creator/drops/${encodeURIComponent(id)}/inventory`, {
+          method: "POST",
+          body: input,
+          headers: { "Idempotency-Key": idempotencyKey() },
+        }),
+      removeInventory: (id, assetId, version) =>
+        client.request<DropView>(
+          `/creator/drops/${encodeURIComponent(id)}/inventory/${encodeURIComponent(assetId)}`,
+          {
+            method: "DELETE",
+            body: { version },
+            headers: { "Idempotency-Key": idempotencyKey() },
+          },
+        ),
+      submit: (id, version) =>
+        client.request<DropView>(`/creator/drops/${encodeURIComponent(id)}/submit`, {
+          method: "POST",
+          body: { version },
+          headers: { "Idempotency-Key": idempotencyKey() },
+        }),
+      listAdmin: () => client.get<{ items: DropView[] }>("/admin/drops"),
+      getAdmin: (id) => client.get<DropView>(`/admin/drops/${encodeURIComponent(id)}`),
+      transitionAdmin: (id, input) =>
+        client.request<DropView>(`/admin/drops/${encodeURIComponent(id)}/transition`, {
+          method: "POST",
+          body: input,
+          headers: { "Idempotency-Key": idempotencyKey() },
+        }),
+    },
     admin: adminRepository(client),
     preSale: preSaleRepository(client),
     assets,

@@ -39,6 +39,12 @@ import {
   type AdminEnrichmentState,
 } from './admin-optional-enrichment';
 import {
+  complianceCaseActionTarget,
+  customerComplianceControlTarget,
+  phoneVerificationActionTarget,
+  type AdminCustomerActionTarget,
+} from './admin-customer-action-target';
+import {
   catalogueAttention,
   catalogueCustodyState,
   catalogueMarketState,
@@ -8351,6 +8357,7 @@ export class AdminService {
             orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
             take: 12,
             select: {
+              id: true,
               type: true,
               status: true,
               provider: true,
@@ -8436,6 +8443,22 @@ export class AdminService {
     const latestCompliance = complianceCases[0];
     const kycCase = complianceCases.find((item) => item.type.includes('KYC'));
     const kytCase = complianceCases.find((item) => item.type.includes('KYT'));
+    const activeComplianceStatuses = [
+      'PENDING',
+      'REVIEW',
+      'MANUAL_REVIEW',
+      'SUSPENDED',
+    ];
+    const activeComplianceCase =
+      complianceCases.find(
+        (item) =>
+          item.type.includes('KYC') &&
+          activeComplianceStatuses.includes(item.status),
+      ) ??
+      complianceCases.find((item) =>
+        activeComplianceStatuses.includes(item.status),
+      ) ??
+      null;
     const roleNames = user.roleAssignments.map((assignment) => assignment.role);
     const hasCollectorRole = roleNames.includes('COLLECTOR');
     const staffRoles = [
@@ -8491,9 +8514,7 @@ export class AdminService {
       hasSharedInstrumentReview,
       hasWithdrawalHold,
     ].filter(Boolean).length;
-    const hasComplianceReview = complianceCases.some((item) =>
-      ['PENDING', 'REVIEW', 'MANUAL_REVIEW', 'SUSPENDED'].includes(item.status),
-    );
+    const hasComplianceReview = Boolean(activeComplianceCase);
     const complianceState = latestCompliance
       ? latestCompliance.status === 'SUSPENDED'
         ? 'RESTRICTED'
@@ -8672,6 +8693,7 @@ export class AdminService {
       explanation: string;
       recommendedAction: string;
       tab: 'Overview' | 'Operations' | 'History';
+      target?: AdminCustomerActionTarget;
     }> = [];
     const addAction = (item: (typeof actionCenter)[number]) => {
       if (!actionCenter.some((existing) => existing.id === item.id)) {
@@ -8711,10 +8733,11 @@ export class AdminService {
         severity: 'ATTENTION',
         title: 'Compliance review is open',
         explanation:
-          latestCompliance?.type ??
+          activeComplianceCase?.type ??
           'A compliance case requires staff attention.',
         recommendedAction: 'Review compliance state',
         tab: 'Operations',
+        target: complianceCaseActionTarget(user.id, activeComplianceCase),
       });
     }
     if (
@@ -8753,6 +8776,13 @@ export class AdminService {
         explanation: `${readable(capabilityAction.capability)} is currently unavailable.`,
         recommendedAction: 'Review account access',
         tab: 'Operations',
+        target:
+          capabilityAction.reason === 'PHONE_VERIFICATION_REQUIRED'
+            ? phoneVerificationActionTarget(user.id, {
+                verified: Boolean(user.phoneVerifiedAt),
+                nextAction: capabilityAction.nextAction,
+              })
+            : undefined,
       });
     }
     const availableCommands = [
@@ -8919,6 +8949,9 @@ export class AdminService {
             title: actionCenter[0].recommendedAction,
             explanation: actionCenter[0].explanation,
             tab: actionCenter[0].tab,
+            target: actionCenter[0].target
+              ? customerComplianceControlTarget(user.id, actionCenter[0].target)
+              : undefined,
           }
         : null,
       availableCommands,
@@ -9035,6 +9068,15 @@ export class AdminService {
           ? (latestCompliance?.updatedAt.toISOString() ?? null)
           : null,
         caseCount: complianceAccess ? user._count.complianceCases : 0,
+        activeCase:
+          complianceAccess && activeComplianceCase
+            ? {
+                id: activeComplianceCase.id,
+                type: activeComplianceCase.type,
+                status: activeComplianceCase.status,
+                provider: activeComplianceCase.provider,
+              }
+            : null,
       },
       portfolioSummary: {
         totalValueMinor: null,

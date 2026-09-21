@@ -1,11 +1,14 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, type SaleProposalStatus } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { PrismaService } from '../../../database/prisma.service';
+import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
+import { assertDropLockAllowsWorkflow } from '../../drops/domain/drop-lock.policy';
 import type { Actor } from '../../identity/auth/auth.service';
 import { RecentAuthService } from '../../identity/access/recent-auth.service';
 import { createIdentityTransaction } from '../../identity/persistence/prisma-identity.repositories';
@@ -27,6 +30,7 @@ export class GovernanceService {
   constructor(
     private readonly db: PrismaService,
     private readonly recentAuth: RecentAuthService,
+    @Inject(APP_CONFIG) private readonly config?: AppConfig,
   ) {}
 
   async create(
@@ -76,6 +80,18 @@ export class GovernanceService {
           ownershipSupply: { select: { status: true, issuedUnits: true } },
         },
       });
+      const dropLock =
+        this.config?.deploymentChannel === 'preview'
+          ? await db.dropAssetLock.findUnique({
+              where: { assetId },
+              select: { dropId: true },
+            })
+          : null;
+      assertDropLockAllowsWorkflow(
+        this.config?.deploymentChannel ?? 'staging',
+        dropLock,
+        'Whole-asset sale proposal creation',
+      );
       if (
         !asset ||
         asset.status !== 'PUBLISHED' ||

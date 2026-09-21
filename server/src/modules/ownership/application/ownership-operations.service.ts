@@ -1,11 +1,14 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { PrismaService } from '../../../database/prisma.service';
+import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
+import { assertDropLockAllowsWorkflow } from '../../drops/domain/drop-lock.policy';
 import { RecentAuthService } from '../../identity/access/recent-auth.service';
 import type { Actor } from '../../identity/auth/auth.service';
 import { createIdentityTransaction } from '../../identity/persistence/prisma-identity.repositories';
@@ -20,6 +23,7 @@ export class OwnershipOperationsService {
   constructor(
     private readonly db: PrismaService,
     private readonly recentAuth: RecentAuthService,
+    @Inject(APP_CONFIG) private readonly config?: AppConfig,
   ) {}
 
   transfer(
@@ -37,6 +41,18 @@ export class OwnershipOperationsService {
       requestId,
       key,
       async (db, audit) => {
+        const dropLock =
+          this.config?.deploymentChannel === 'preview'
+            ? await db.dropAssetLock.findUnique({
+                where: { assetId },
+                select: { dropId: true },
+              })
+            : null;
+        assertDropLockAllowsWorkflow(
+          this.config?.deploymentChannel ?? 'staging',
+          dropLock,
+          'Ownership transfer',
+        );
         const supply = await this.lockSupply(db, assetId);
         const units = parseOwnershipUnits(input.units);
         const from = input.fromUserId
@@ -124,6 +140,18 @@ export class OwnershipOperationsService {
       requestId,
       key,
       async (db, audit) => {
+        const dropLock =
+          this.config?.deploymentChannel === 'preview'
+            ? await db.dropAssetLock.findUnique({
+                where: { assetId },
+                select: { dropId: true },
+              })
+            : null;
+        assertDropLockAllowsWorkflow(
+          this.config?.deploymentChannel ?? 'staging',
+          dropLock,
+          'Ownership reservation',
+        );
         const supply = await this.lockSupply(db, assetId);
         const account = await this.userAccount(db, input.userId);
         await this.lockPositions(db, assetId, [account.id]);
@@ -439,14 +467,18 @@ export class OwnershipOperationsService {
     });
     if (!account) return null;
     const position = await this.db.ownershipPosition.findUnique({
-      where: { assetId_accountId: { assetId: asset.id, accountId: account.id } },
+      where: {
+        assetId_accountId: { assetId: asset.id, accountId: account.id },
+      },
     });
     if (!position) return null;
     return {
       assetId: asset.id,
       settledUnits: position.settledUnits.toString(),
       reservedUnits: position.reservedUnits.toString(),
-      availableUnits: (position.settledUnits - position.reservedUnits).toString(),
+      availableUnits: (
+        position.settledUnits - position.reservedUnits
+      ).toString(),
     };
   }
 

@@ -959,6 +959,20 @@ export class LifecycleService {
             code: 'CUSTODY_PROOF_REQUIRED',
             message: 'Asset intake is required.',
           });
+        if (
+          this.config.deploymentChannel === 'preview' &&
+          ['RELEASE_PENDING', 'RELEASED'].includes(input.toStatus)
+        ) {
+          const dropLock = await db.dropAssetLock.findUnique({
+            where: { assetId },
+          });
+          if (dropLock)
+            throw new ConflictException({
+              code: 'ASSET_COMMITTED_TO_DROP',
+              message:
+                'Custody release is blocked while the asset is committed to a Drop.',
+            });
+        }
         if (['RECEIVED', 'INSPECTED'].includes(input.toStatus)) {
           const verifiedIntake = await db.assetSubmission.findFirst({
             where: {
