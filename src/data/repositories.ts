@@ -572,6 +572,17 @@ export type AdminAccountsSummary = {
   trialingMemberships: number;
 };
 
+export type AdminCustomerActionTarget = {
+  authority: "CUSTOMER_COMPLIANCE";
+  kind: "CUSTOMER_CONTROL" | "COMPLIANCE_CASE" | "PHONE_VERIFICATION";
+  userId: string;
+  recordId: string | null;
+  actionable: boolean;
+  unavailableReason: string | null;
+  nextActor: "ADMIN" | "CUSTOMER" | "PROVIDER" | "SYSTEM";
+  nextAction: string;
+};
+
 export type AdminUserDetail = AdminUserSummary & {
   revision: string;
   actionCenter: Array<{
@@ -581,11 +592,14 @@ export type AdminUserDetail = AdminUserSummary & {
     explanation: string;
     recommendedAction: string;
     tab: "Overview" | "Operations" | "History";
+    target?: AdminCustomerActionTarget;
   }>;
   recommendedAction: {
+    id: string;
     title: string;
     explanation: string;
     tab: "Overview" | "Operations" | "History";
+    target?: AdminCustomerActionTarget;
   } | null;
   availableCommands: Array<{
     id: string;
@@ -675,6 +689,12 @@ export type AdminUserDetail = AdminUserSummary & {
     provider: string | null;
     lastReviewAt: string | null;
     caseCount: number;
+    activeCase: {
+      id: string;
+      type: string;
+      status: string;
+      provider: string;
+    } | null;
   };
   portfolioSummary: {
     totalValueMinor: string | null;

@@ -1,3 +1,5 @@
+import type { AdminCustomerActionTarget } from "@/data/repositories";
+
 export type AdminDestination = "home" | "customers" | "assets" | "money" | "platform";
 
 export type LegacyAdminSection =
@@ -326,6 +328,68 @@ export function normalizeAdminSearch(search: Record<string, unknown>): AdminSear
 
 export function compactAdminAccountFilters(filters: Record<string, string>) {
   return Object.fromEntries(Object.entries(filters).filter(([, value]) => value.trim().length > 0));
+}
+
+export type CustomerComplianceActionResolution = {
+  search: AdminSearch | null;
+  disabledReason: string | null;
+  nextAction: string;
+};
+
+export function resolveCustomerComplianceAction(
+  selectedUserId: string,
+  target: AdminCustomerActionTarget | undefined,
+): CustomerComplianceActionResolution {
+  const unavailable = (reason: string, nextAction: string) => ({
+    search: null,
+    disabledReason: reason,
+    nextAction,
+  });
+  if (!target)
+    return unavailable(
+      "No authoritative compliance control is linked to this action.",
+      "Review the customer record for the next valid action.",
+    );
+  if (target.userId !== selectedUserId)
+    return unavailable(
+      "The compliance target does not belong to the selected customer.",
+      "Reload the customer record before continuing.",
+    );
+  if (!target.actionable)
+    return unavailable(
+      target.unavailableReason ?? "This compliance action is not currently available.",
+      target.nextAction,
+    );
+
+  const recordType =
+    target.kind === "CUSTOMER_CONTROL"
+      ? "customer-compliance"
+      : target.kind === "COMPLIANCE_CASE"
+        ? "compliance-case"
+        : "phone-verification";
+  const record =
+    target.kind === "CUSTOMER_CONTROL"
+      ? (target.recordId ?? target.userId)
+      : target.kind === "PHONE_VERIFICATION"
+        ? (target.recordId ?? "phone-verification")
+        : target.recordId;
+  if (!record)
+    return unavailable(
+      target.unavailableReason ?? "No active compliance case is available for review.",
+      target.nextAction,
+    );
+
+  return {
+    search: {
+      section: "customers",
+      view: "verification-compliance",
+      user: target.userId,
+      record,
+      recordType,
+    },
+    disabledReason: null,
+    nextAction: target.nextAction,
+  };
 }
 
 export function pipelineSection(stage: string): AdminSection {

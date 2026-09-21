@@ -5,7 +5,9 @@ import {
   normalizeAdminSearch,
   operationsTab,
   pipelineSection,
+  resolveCustomerComplianceAction,
 } from "./-admin-route-state";
+import type { AdminCustomerActionTarget } from "@/data/repositories";
 
 describe("admin route state", () => {
   it("migrates legacy deep links into the five permanent destinations", () => {
@@ -221,5 +223,138 @@ describe("admin route state", () => {
         status: "RESTRICTED",
       }),
     ).toEqual({ status: "RESTRICTED" });
+  });
+
+  const target = (input: Partial<AdminCustomerActionTarget>): AdminCustomerActionTarget => ({
+    authority: "CUSTOMER_COMPLIANCE",
+    kind: "CUSTOMER_CONTROL",
+    userId: "user-1",
+    recordId: "user-1",
+    actionable: true,
+    unavailableReason: null,
+    nextActor: "ADMIN",
+    nextAction: "Review the customer compliance record.",
+    ...input,
+  });
+
+  it("opens the authoritative customer compliance control", () => {
+    expect(resolveCustomerComplianceAction("user-1", target({}))).toMatchObject({
+      disabledReason: null,
+      search: {
+        section: "customers",
+        view: "verification-compliance",
+        user: "user-1",
+        record: "user-1",
+        recordType: "customer-compliance",
+      },
+    });
+  });
+
+  it("opens the exact active KYC case", () => {
+    expect(
+      resolveCustomerComplianceAction(
+        "user-1",
+        target({ kind: "COMPLIANCE_CASE", recordId: "case-kyc-1" }),
+      ),
+    ).toMatchObject({
+      disabledReason: null,
+      search: {
+        section: "customers",
+        view: "verification-compliance",
+        user: "user-1",
+        record: "case-kyc-1",
+        recordType: "compliance-case",
+      },
+    });
+  });
+
+  it("opens the exact phone-verification account blocker", () => {
+    expect(
+      resolveCustomerComplianceAction(
+        "user-1",
+        target({
+          kind: "PHONE_VERIFICATION",
+          recordId: "phone-verification",
+          nextActor: "CUSTOMER",
+        }),
+      ),
+    ).toMatchObject({
+      disabledReason: null,
+      search: {
+        section: "customers",
+        view: "verification-compliance",
+        user: "user-1",
+        record: "phone-verification",
+        recordType: "phone-verification",
+      },
+    });
+  });
+
+  it("does not produce a dead button when a compliance case is missing", () => {
+    expect(
+      resolveCustomerComplianceAction(
+        "user-1",
+        target({
+          kind: "COMPLIANCE_CASE",
+          recordId: null,
+          unavailableReason: "No active compliance case is available for review.",
+        }),
+      ),
+    ).toEqual({
+      search: null,
+      disabledReason: "No active compliance case is available for review.",
+      nextAction: "Review the customer compliance record.",
+    });
+  });
+
+  it("explains unavailable and invalid action targets", () => {
+    expect(
+      resolveCustomerComplianceAction(
+        "user-1",
+        target({
+          actionable: false,
+          unavailableReason: "Provider evidence is still pending.",
+          nextAction: "Wait for the provider result.",
+        }),
+      ),
+    ).toEqual({
+      search: null,
+      disabledReason: "Provider evidence is still pending.",
+      nextAction: "Wait for the provider result.",
+    });
+    expect(
+      resolveCustomerComplianceAction("user-1", target({ userId: "user-2" })).disabledReason,
+    ).toBe("The compliance target does not belong to the selected customer.");
+  });
+
+  it("preserves the selected customer, internal view, and compliance record across refresh", () => {
+    expect(
+      normalizeAdminSearch({
+        section: "customers",
+        view: "verification-compliance",
+        user: "user-1",
+        record: "case-kyc-1",
+        recordType: "compliance-case",
+      }),
+    ).toMatchObject({
+      section: "customers",
+      view: "verification-compliance",
+      user: "user-1",
+      record: "case-kyc-1",
+      recordType: "compliance-case",
+    });
+  });
+
+  it("keeps every compliance action inside the one Customers authority", () => {
+    const resolutions = [
+      target({}),
+      target({ kind: "COMPLIANCE_CASE", recordId: "case-1" }),
+      target({ kind: "PHONE_VERIFICATION", recordId: "phone-verification" }),
+    ].map((item) => resolveCustomerComplianceAction("user-1", item));
+    expect(resolutions.map((item) => [item.search?.section, item.search?.view])).toEqual([
+      ["customers", "verification-compliance"],
+      ["customers", "verification-compliance"],
+      ["customers", "verification-compliance"],
+    ]);
   });
 });

@@ -84,6 +84,7 @@ import {
   normalizeAdminSearch,
   operationsTab,
   pipelineSection,
+  resolveCustomerComplianceAction,
   type AdminDestination,
   type AdminSearch,
   type AdminSection,
@@ -92,6 +93,7 @@ import type { AssetOperationSummary, SubmissionReviewQueueResponse } from "@/dom
 import type {
   AdminAccountsSummary,
   AdminComplianceCase,
+  AdminCustomerActionTarget,
   AdminOverview,
   AdminIntakeRow,
   AdminIntakeDetail,
@@ -492,7 +494,8 @@ function AdminConsole() {
   const [accountDraft, setAccountDraft] = useState(accountFilters);
   const [accountFiltersOpen, setAccountFiltersOpen] = useState(false);
   const [complianceFilter, setComplianceFilter] = useState("All");
-  const [selectedComplianceCase, setSelectedComplianceCase] = useState<string | undefined>();
+  const selectedComplianceCase =
+    isCustomerCompliance && selectedRecordType === "compliance-case" ? selectedRecord : undefined;
   const [reviewSearchInput, setReviewSearchInput] = useState(reviewQuery ?? "");
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -868,7 +871,7 @@ function AdminConsole() {
   const userDetail = useQuery({
     queryKey: ["admin", "user", selectedUser],
     queryFn: () => services.repositories.admin.getUser(selectedUser!),
-    enabled: isCustomerDirectory && Boolean(selectedUser),
+    enabled: (isCustomerDirectory || isCustomerCompliance) && Boolean(selectedUser),
     staleTime: 30_000,
   });
   const compliance = useQuery({
@@ -908,6 +911,11 @@ function AdminConsole() {
       search: { section: "customers", view: "directory", user: id, tab: undefined },
       replace: true,
     });
+  };
+  const openCustomerComplianceAction = (userId: string, target: AdminCustomerActionTarget) => {
+    const resolution = resolveCustomerComplianceAction(userId, target);
+    if (!resolution.search) return;
+    void navigate({ search: resolution.search, replace: true });
   };
   const reviewItems =
     reviews.data?.items.map((item) => ({
@@ -1494,6 +1502,7 @@ function AdminConsole() {
             }}
             openUser={openUser}
             clearUser={() => select("customers")}
+            openComplianceAction={openCustomerComplianceAction}
             page={accountPage}
             pageSize={accountPageSize}
             setPageSize={(value) => {
@@ -1625,8 +1634,35 @@ function AdminConsole() {
             detail={complianceDetail.data}
             detailLoading={complianceDetail.isLoading}
             detailFailed={complianceDetail.isError}
-            openDetail={setSelectedComplianceCase}
-            closeDetail={() => setSelectedComplianceCase(undefined)}
+            customer={userDetail.data}
+            customerLoading={userDetail.isLoading}
+            customerFailed={userDetail.isError}
+            selectedRecord={selectedRecord}
+            selectedRecordType={selectedRecordType}
+            openDetail={(id, userId) =>
+              void navigate({
+                search: (current) => ({
+                  ...current,
+                  section: "customers",
+                  view: "verification-compliance",
+                  user: userId ?? selectedUser,
+                  record: id,
+                  recordType: "compliance-case",
+                }),
+                replace: true,
+              })
+            }
+            closeDetail={() =>
+              void navigate({
+                search: (current) => ({
+                  ...current,
+                  user: undefined,
+                  record: undefined,
+                  recordType: undefined,
+                }),
+                replace: true,
+              })
+            }
           />
         ) : isMoney ? (
           <AdminFinanceTrading
@@ -6829,6 +6865,7 @@ function AccountsWorkspace({
   setUserTab,
   openUser,
   clearUser,
+  openComplianceAction,
   page,
   pageSize,
   setPageSize,
@@ -6860,6 +6897,7 @@ function AccountsWorkspace({
   setUserTab: (value: string) => void;
   openUser: (id: string) => void;
   clearUser: () => void;
+  openComplianceAction: (userId: string, target: AdminCustomerActionTarget) => void;
   page: number;
   pageSize: 10 | 25 | 50 | 100;
   setPageSize: (value: string) => void;
@@ -6896,6 +6934,7 @@ function AccountsWorkspace({
           back={clearUser}
           tab={userTab}
           setTab={setUserTab}
+          openComplianceAction={openComplianceAction}
         />
       </AdminRecordDrawer>
     );
@@ -7673,6 +7712,7 @@ function UserDetailExperience({
         retry={retry}
       />
     );
+
   const tabs = [
     "Overview",
     "Access",
@@ -8118,6 +8158,134 @@ function UserDetailExperience({
   );
 }
 
+const authoritativeComplianceActionIds = new Set([
+  "compliance-review",
+  "capability-phone_verification_required",
+]);
+
+function requiresAuthoritativeComplianceTarget(actionId: string) {
+  return authoritativeComplianceActionIds.has(actionId);
+}
+
+type AdminCustomerAction = AdminUserDetail["actionCenter"][number];
+type AdminRecommendedAction = NonNullable<AdminUserDetail["recommendedAction"]>;
+
+export function AdminCustomerActionCenter({
+  userId,
+  actions,
+  recommendedAction,
+  openComplianceAction,
+  openLegacyAction,
+  reviewAccess,
+}: {
+  userId: string;
+  actions: AdminCustomerAction[];
+  recommendedAction: AdminRecommendedAction | null;
+  openComplianceAction: (userId: string, target: AdminCustomerActionTarget) => void;
+  openLegacyAction: (tab: string) => void;
+  reviewAccess: () => void;
+}) {
+  const resolution = (target: AdminCustomerActionTarget | undefined) =>
+    resolveCustomerComplianceAction(userId, target);
+  const unavailable = (actionId: string, target: AdminCustomerActionTarget | undefined) => {
+    if (target) return resolution(target).search ? null : resolution(target);
+    return requiresAuthoritativeComplianceTarget(actionId) ? resolution(undefined) : null;
+  };
+  const openAction = (
+    actionId: string,
+    target: AdminCustomerActionTarget | undefined,
+    fallbackTab: string,
+  ) => {
+    if (target) {
+      if (resolution(target).search) openComplianceAction(userId, target);
+      return;
+    }
+    if (!requiresAuthoritativeComplianceTarget(actionId)) openLegacyAction(fallbackTab);
+  };
+  const recommendedUnavailable = recommendedAction
+    ? unavailable(recommendedAction.id, recommendedAction.target)
+    : null;
+
+  return (
+    <section className="admin-account-action-center" aria-label="Account action center">
+      <div className="admin-account-action-center-heading">
+        <div className="admin-account-action-center-status">
+          {actions.length ? (
+            <AlertTriangle aria-hidden="true" />
+          ) : (
+            <CheckCircle2 aria-hidden="true" />
+          )}
+          <div>
+            <p className="admin-console-eyebrow">Next required action</p>
+            <h3>{recommendedAction?.title ?? "No account action required"}</h3>
+            <span>
+              {recommendedAction?.explanation ??
+                "No backend-derived account blocker requires a protected change."}
+            </span>
+          </div>
+        </div>
+        <button
+          type="button"
+          disabled={Boolean(recommendedUnavailable)}
+          title={recommendedUnavailable?.disabledReason ?? undefined}
+          onClick={() => {
+            if (recommendedAction)
+              openAction(recommendedAction.id, recommendedAction.target, recommendedAction.tab);
+            else reviewAccess();
+          }}
+        >
+          {recommendedAction ? "Open control" : "Review access"} <ArrowRight aria-hidden="true" />
+        </button>
+      </div>
+      {recommendedUnavailable ? (
+        <p className="admin-safe-note" role="status">
+          {recommendedUnavailable.disabledReason} Next valid action:{" "}
+          {recommendedUnavailable.nextAction}
+        </p>
+      ) : null}
+      {actions.length ? (
+        <div className="admin-account-action-list">
+          {actions.map((item) => {
+            const itemUnavailable = unavailable(item.id, item.target);
+            return (
+              <article
+                className={`admin-account-action-item admin-account-action-item--${item.severity.toLowerCase()}`}
+                key={item.id}
+              >
+                <AlertTriangle aria-hidden="true" />
+                <div>
+                  <strong>{item.title}</strong>
+                  <span>{item.explanation}</span>
+                  <small>{item.recommendedAction}</small>
+                  {itemUnavailable ? (
+                    <small role="status">
+                      {itemUnavailable.disabledReason} Next valid action:{" "}
+                      {itemUnavailable.nextAction}
+                    </small>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  aria-label={`${item.title}: Review`}
+                  disabled={Boolean(itemUnavailable)}
+                  title={itemUnavailable?.disabledReason ?? undefined}
+                  onClick={() => openAction(item.id, item.target, item.tab)}
+                >
+                  Review <ArrowRight aria-hidden="true" />
+                </button>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="admin-account-action-clear">
+          <CheckCircle2 aria-hidden="true" /> No backend-derived account blockers require action.
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ConsolidatedUserDetailExperience({
   user,
   loading,
@@ -8126,6 +8294,7 @@ function ConsolidatedUserDetailExperience({
   back,
   tab,
   setTab,
+  openComplianceAction,
 }: {
   user?: AdminUserDetail;
   loading: boolean;
@@ -8134,6 +8303,7 @@ function ConsolidatedUserDetailExperience({
   back: () => void;
   tab?: string;
   setTab: (value: string) => void;
+  openComplianceAction: (userId: string, target: AdminCustomerActionTarget) => void;
 }) {
   const [historyFilter, setHistoryFilter] = useState("All");
   const [historyPage, setHistoryPage] = useState(1);
@@ -8207,6 +8377,19 @@ function ConsolidatedUserDetailExperience({
         retry={retry}
       />
     );
+
+  const openProjectedAction = (
+    actionId: string,
+    target: AdminCustomerActionTarget | undefined,
+    fallbackTab: string,
+  ) => {
+    if (target) {
+      if (resolveCustomerComplianceAction(user.id, target).search)
+        openComplianceAction(user.id, target);
+      return;
+    }
+    if (!requiresAuthoritativeComplianceTarget(actionId)) setTab(fallbackTab);
+  };
 
   const roles = uniqueRoleAssignments(user.roles);
   const money = (value: string | null, currency = "GBP") =>
@@ -8378,60 +8561,14 @@ function ConsolidatedUserDetailExperience({
     </section>
   );
   const renderActionCenter = () => (
-    <section className="admin-account-action-center" aria-label="Account action center">
-      <div className="admin-account-action-center-heading">
-        <div className="admin-account-action-center-status">
-          {user.actionCenter.length ? (
-            <AlertTriangle aria-hidden="true" />
-          ) : (
-            <CheckCircle2 aria-hidden="true" />
-          )}
-          <div>
-            <p className="admin-console-eyebrow">Next required action</p>
-            <h3>{user.recommendedAction?.title ?? "No account action required"}</h3>
-            <span>
-              {user.recommendedAction?.explanation ??
-                "No backend-derived account blocker requires a protected change."}
-            </span>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() =>
-            user.recommendedAction
-              ? setTab(user.recommendedAction.tab)
-              : setGeneralControl("access")
-          }
-        >
-          {user.recommendedAction ? "Open control" : "Review access"}{" "}
-          <ArrowRight aria-hidden="true" />
-        </button>
-      </div>
-      {user.actionCenter.length ? (
-        <div className="admin-account-action-list">
-          {user.actionCenter.map((item) => (
-            <article
-              className={`admin-account-action-item admin-account-action-item--${item.severity.toLowerCase()}`}
-              key={item.id}
-            >
-              <AlertTriangle aria-hidden="true" />
-              <div>
-                <strong>{item.title}</strong>
-                <span>{item.explanation}</span>
-                <small>{item.recommendedAction}</small>
-              </div>
-              <button type="button" onClick={() => setTab(item.tab)}>
-                Review <ArrowRight aria-hidden="true" />
-              </button>
-            </article>
-          ))}
-        </div>
-      ) : (
-        <div className="admin-account-action-clear">
-          <CheckCircle2 aria-hidden="true" /> No backend-derived account blockers require action.
-        </div>
-      )}
-    </section>
+    <AdminCustomerActionCenter
+      userId={user.id}
+      actions={user.actionCenter}
+      recommendedAction={user.recommendedAction}
+      openComplianceAction={openComplianceAction}
+      openLegacyAction={setTab}
+      reviewAccess={() => setGeneralControl("access")}
+    />
   );
   const renderCommandRail = () => {
     const urgentBlockers = user.actionCenter.filter((item) => item.severity !== "ATTENTION");
@@ -8463,7 +8600,26 @@ function ConsolidatedUserDetailExperience({
         {user.recommendedAction ? (
           <section className="admin-account-detail-rail-card admin-account-detail-rail-card--next">
             <AdminPanelHeading title="Recommended action" />
-            <button type="button" onClick={() => setTab(user.recommendedAction!.tab)}>
+            <button
+              type="button"
+              disabled={Boolean(
+                requiresAuthoritativeComplianceTarget(user.recommendedAction.id) &&
+                !user.recommendedAction.target,
+              )}
+              title={
+                requiresAuthoritativeComplianceTarget(user.recommendedAction.id) &&
+                !user.recommendedAction.target
+                  ? "No authoritative compliance control is linked to this action."
+                  : undefined
+              }
+              onClick={() =>
+                openProjectedAction(
+                  user.recommendedAction!.id,
+                  user.recommendedAction!.target,
+                  user.recommendedAction!.tab,
+                )
+              }
+            >
               <strong>{user.recommendedAction.title}</strong>
               <span>{user.recommendedAction.explanation}</span>
               <small>
@@ -8495,9 +8651,15 @@ function ConsolidatedUserDetailExperience({
             </Link>
             <Link
               to="/admin"
-              search={{ section: "customers", view: "verification-compliance", tab: "compliance" }}
+              search={{
+                section: "customers",
+                view: "verification-compliance",
+                user: user.id,
+                record: user.id,
+                recordType: "customer-compliance",
+              }}
             >
-              Open Trust &amp; Support <ArrowRight aria-hidden="true" />
+              Open Verification &amp; Compliance <ArrowRight aria-hidden="true" />
             </Link>
             <Link to="/admin" search={{ section: "customers", view: "support", tab: "tickets" }}>
               Send secure message <ArrowRight aria-hidden="true" />
@@ -10913,7 +11075,7 @@ function UserDetail({
   );
 }
 
-function ComplianceWorkspace({
+export function ComplianceWorkspace({
   cases,
   loading,
   failed,
@@ -10925,6 +11087,11 @@ function ComplianceWorkspace({
   detail,
   detailLoading,
   detailFailed,
+  customer,
+  customerLoading,
+  customerFailed,
+  selectedRecord,
+  selectedRecordType,
   openDetail,
   closeDetail,
 }: {
@@ -10939,7 +11106,12 @@ function ComplianceWorkspace({
   detail?: import("@/data/repositories").AdminComplianceDetail;
   detailLoading: boolean;
   detailFailed: boolean;
-  openDetail: (id: string) => void;
+  customer?: AdminUserDetail;
+  customerLoading: boolean;
+  customerFailed: boolean;
+  selectedRecord?: string;
+  selectedRecordType?: string;
+  openDetail: (id: string, userId?: string) => void;
   closeDetail: () => void;
 }) {
   const visibleCases = cases.filter((item) => {
@@ -10950,6 +11122,16 @@ function ComplianceWorkspace({
     if (filter === "Manual Review") return value.includes("manual");
     return value.includes(filter.toLowerCase().replace(" / ", " "));
   });
+  const customerControlOpen =
+    Boolean(selectedRecord) &&
+    ["customer-compliance", "phone-verification"].includes(selectedRecordType ?? "");
+  const complianceCaseOpen = Boolean(selectedRecord) && selectedRecordType === "compliance-case";
+  const phoneFocus = selectedRecordType === "phone-verification";
+  const phoneBlockers =
+    customer?.capabilitySummary.filter(
+      (decision) => !decision.allowed && decision.reason === "PHONE_VERIFICATION_REQUIRED",
+    ) ?? [];
+  const activeCustomerCase = customer?.complianceSummary.activeCase ?? null;
   return (
     <AdminPageSection
       title="Verification & Compliance"
@@ -11011,7 +11193,10 @@ function ComplianceWorkspace({
                 </small>
               </div>
               <span className="admin-status-pill">{sentence(item.status)}</span>
-              <button className="admin-inline-action" onClick={() => openDetail(item.id)}>
+              <button
+                className="admin-inline-action"
+                onClick={() => openDetail(item.id, item.user.id)}
+              >
                 Open detail <ArrowRight aria-hidden="true" />
               </button>
             </article>
@@ -11023,108 +11208,272 @@ function ComplianceWorkspace({
           icon={ShieldCheck}
         />
       )}
-      {detailLoading ? (
-        <AdminState
-          title="Loading case detail"
-          detail="Reading normalized provider and restriction history."
-        />
-      ) : detailFailed ? (
-        <AdminState
-          title="Case detail unavailable"
-          detail="The case detail could not be loaded safely."
-        />
-      ) : detail ? (
+      {customerControlOpen ? (
         <AdminRecordDrawer
-          title={detail.user.displayName}
-          subtitle="Verification, compliance, restrictions, permitted actions, and immutable decision history."
+          title={customer?.displayName ?? "Customer compliance control"}
+          subtitle="The authoritative customer record for provider verification, Slice compliance state, and account-access blockers."
           onClose={closeDetail}
         >
-          <section className="admin-panel">
-            <AdminPanelHeading
-              title={detail.user.displayName}
-              action="Close detail"
-              onClick={closeDetail}
+          {customerLoading ? (
+            <AdminState
+              title="Loading customer compliance"
+              detail="Reading the authoritative customer and capability projection."
             />
-            <div className="admin-kpi-grid admin-kpi-grid--compact">
-              <AdminKpi
-                icon={ShieldCheck}
-                label="Provider status"
-                value={sentence(detail.providerStatus)}
-              />
-              <AdminKpi
-                icon={ShieldCheck}
-                label="Identity"
-                value={sentence(detail.identity?.state ?? detail.status)}
-              />
-              <AdminKpi
-                icon={AlertTriangle}
-                label="Risk review"
-                value={sentence(detail.riskReview?.status ?? "Not reported")}
-              />
-              <AdminKpi
-                icon={Users}
-                label="Payout readiness"
-                value={
-                  detail.connectPayoutReadiness?.[0]
-                    ? sentence(detail.connectPayoutReadiness[0].status)
-                    : "Not started"
-                }
-              />
-              <AdminKpi icon={AlertTriangle} label="Decisions" value={detail.decisions.length} />
-              <AdminKpi icon={Users} label="Restrictions" value={detail.restrictions.length} />
-              <AdminKpi icon={FileClock} label="Audit events" value={detail.audit.length} />
+          ) : customerFailed || !customer ? (
+            <AdminState
+              title="Customer compliance unavailable"
+              detail="The selected customer control could not be loaded safely."
+            />
+          ) : (
+            <div className="admin-account-detail-stack admin-account-control-tab-panel">
+              <section className="admin-account-control-intro">
+                <p className="admin-console-eyebrow">Customers · Verification &amp; Compliance</p>
+                <h3>{phoneFocus ? "Phone verification blocker" : "Customer compliance control"}</h3>
+                <span>
+                  Provider evidence and Slice decisions remain separate. This surface does not
+                  expose a force-verified action.
+                </span>
+              </section>
+
+              <section className="admin-account-detail-panel">
+                <AdminPanelHeading title="Compliance and provider state" />
+                <div className="admin-account-detail-finance-grid">
+                  <DetailRow
+                    label="Slice internal state"
+                    value={sentence(customer.complianceState)}
+                  />
+                  <DetailRow
+                    label="KYC provider state"
+                    value={sentence(customer.complianceSummary.kycStatus)}
+                  />
+                  <DetailRow
+                    label="Provider"
+                    value={customer.complianceSummary.provider ?? "Not configured"}
+                  />
+                  <DetailRow
+                    label="Open cases"
+                    value={String(customer.complianceSummary.caseCount)}
+                  />
+                </div>
+                {activeCustomerCase ? (
+                  <div className="admin-record-list">
+                    <article className="admin-record admin-record--case">
+                      <span className="admin-record-icon">
+                        <ShieldCheck aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0">
+                        <strong>{sentence(activeCustomerCase.type)}</strong>
+                        <small>
+                          {activeCustomerCase.provider} · {sentence(activeCustomerCase.status)}
+                        </small>
+                        <small>
+                          {activeCustomerCase.status === "PENDING"
+                            ? "Next actor: provider. Wait for normalized provider evidence before any Slice decision."
+                            : "Next actor: authorized compliance staff. Use only actions exposed by the case."}
+                        </small>
+                      </div>
+                      <button
+                        type="button"
+                        className="admin-inline-action"
+                        onClick={() => openDetail(activeCustomerCase.id, customer.id)}
+                      >
+                        Open active case <ArrowRight aria-hidden="true" />
+                      </button>
+                    </article>
+                  </div>
+                ) : (
+                  <div className="admin-record-list">
+                    <article className="admin-record">
+                      <div className="min-w-0">
+                        <strong>No active compliance case</strong>
+                        <small>
+                          There is no provider-backed or manual-review case available to open.
+                        </small>
+                        <small>
+                          Next valid action: wait for provider evidence or a new compliance
+                          exception.
+                        </small>
+                      </div>
+                      <span className="admin-muted">Unavailable</span>
+                    </article>
+                  </div>
+                )}
+              </section>
+
+              <section className="admin-account-detail-panel">
+                <AdminPanelHeading title="Phone verification and account access" />
+                <div className="admin-account-detail-finance-grid">
+                  <DetailRow
+                    label="Current phone state"
+                    value={
+                      customer.identity.phoneVerified
+                        ? "Verified"
+                        : customer.identity.phone
+                          ? "Not verified"
+                          : "Not enrolled"
+                    }
+                  />
+                  <DetailRow
+                    label="Phone on record"
+                    value={customer.identity.phone ?? "No phone number on record"}
+                  />
+                  <DetailRow
+                    label="Blocked capabilities"
+                    value={
+                      phoneBlockers.length
+                        ? phoneBlockers.map((decision) => sentence(decision.capability)).join(", ")
+                        : "None"
+                    }
+                  />
+                  <DetailRow
+                    label="Next actor"
+                    value={phoneBlockers.length ? "Customer" : "No action required"}
+                  />
+                </div>
+                <div className="admin-record-list">
+                  {phoneBlockers.length ? (
+                    phoneBlockers.map((decision) => (
+                      <article className="admin-record" key={decision.capability}>
+                        <div className="min-w-0">
+                          <strong>{sentence(decision.capability)} is blocked</strong>
+                          <small>
+                            Reason: {sentence(decision.reason ?? decision.status)}. Current state:{" "}
+                            {sentence(decision.status)}.
+                          </small>
+                          <small>
+                            Next valid action:{" "}
+                            {decision.nextAction ??
+                              "The customer must complete provider-backed phone verification from Account settings."}
+                          </small>
+                        </div>
+                        <span className="admin-muted">Customer action</span>
+                      </article>
+                    ))
+                  ) : (
+                    <article className="admin-record">
+                      <div className="min-w-0">
+                        <strong>No phone-verification blocker is active</strong>
+                        <small>
+                          The current capability projection does not require a phone-verification
+                          action.
+                        </small>
+                      </div>
+                      <span className="admin-muted">Current</span>
+                    </article>
+                  )}
+                </div>
+                <p className="admin-safe-note">
+                  Phone verification remains customer- and provider-owned. Admin cannot fabricate a
+                  verified phone state from this surface.
+                </p>
+              </section>
             </div>
-            <div className="admin-record-list">
-              <article className="admin-record">
-                <div className="min-w-0">
-                  <strong>Summary</strong>
-                  <small>
-                    {sentence(detail.type)} · {sentence(detail.status)} · {detail.provider} ·
-                    updated {date(detail.updatedAt)}
-                  </small>
-                </div>
-              </article>
-              <article className="admin-record">
-                <div className="min-w-0">
-                  <strong>Provider status</strong>
-                  <small>
-                    {detail.providerStatus === "Unknown"
-                      ? "Provider information is temporarily unavailable."
-                      : `Normalized provider state: ${sentence(detail.providerStatus)}`}
-                  </small>
-                </div>
-              </article>
-              {detail.restrictions.map((restriction) => (
-                <article
-                  className="admin-record"
-                  key={`${restriction.createdAt}-${restriction.scope}`}
-                >
+          )}
+        </AdminRecordDrawer>
+      ) : complianceCaseOpen ? (
+        <AdminRecordDrawer
+          title={detail?.user.displayName ?? "Compliance case review"}
+          subtitle={`Selected case ${selectedRecord}. Verification, restrictions, permitted actions, and immutable decision history.`}
+          onClose={closeDetail}
+        >
+          {detailLoading ? (
+            <AdminState
+              title="Loading selected compliance case"
+              detail="Reading normalized provider and restriction history."
+            />
+          ) : detailFailed || !detail ? (
+            <AdminState
+              title="Selected compliance case unavailable"
+              detail="The exact selected case could not be loaded safely. Return to the queue and choose an available case."
+            />
+          ) : (
+            <section className="admin-panel">
+              <AdminPanelHeading
+                title={detail.user.displayName}
+                action="Close detail"
+                onClick={closeDetail}
+              />
+              <div className="admin-kpi-grid admin-kpi-grid--compact">
+                <AdminKpi
+                  icon={ShieldCheck}
+                  label="Provider status"
+                  value={sentence(detail.providerStatus)}
+                />
+                <AdminKpi
+                  icon={ShieldCheck}
+                  label="Identity"
+                  value={sentence(detail.identity?.state ?? detail.status)}
+                />
+                <AdminKpi
+                  icon={AlertTriangle}
+                  label="Risk review"
+                  value={sentence(detail.riskReview?.status ?? "Not reported")}
+                />
+                <AdminKpi
+                  icon={Users}
+                  label="Payout readiness"
+                  value={
+                    detail.connectPayoutReadiness?.[0]
+                      ? sentence(detail.connectPayoutReadiness[0].status)
+                      : "Not started"
+                  }
+                />
+                <AdminKpi icon={AlertTriangle} label="Decisions" value={detail.decisions.length} />
+                <AdminKpi icon={Users} label="Restrictions" value={detail.restrictions.length} />
+                <AdminKpi icon={FileClock} label="Audit events" value={detail.audit.length} />
+              </div>
+              <div className="admin-record-list">
+                <article className="admin-record">
                   <div className="min-w-0">
-                    <strong>Restriction · {sentence(restriction.scope)}</strong>
+                    <strong>Summary</strong>
                     <small>
-                      {sentence(restriction.status)} · {restriction.reasonCode} · source{" "}
-                      {restriction.source} · {date(restriction.createdAt)}
+                      {sentence(detail.type)} · {sentence(detail.status)} · {detail.provider} ·
+                      updated {date(detail.updatedAt)}
                     </small>
                   </div>
                 </article>
-              ))}
-              {detail.decisions.map((decision) => (
-                <article
-                  className="admin-record"
-                  key={`${decision.createdAt}-${decision.reasonCode}`}
-                >
+                <article className="admin-record">
                   <div className="min-w-0">
-                    <strong>Decision · {sentence(decision.status)}</strong>
+                    <strong>Provider status</strong>
                     <small>
-                      {decision.reasonCode} · actor{" "}
-                      {decision.actorUserId ? shortId(decision.actorUserId) : "System"} ·{" "}
-                      {date(decision.createdAt)}
+                      {detail.providerStatus === "Unknown"
+                        ? "Provider information is temporarily unavailable."
+                        : `Normalized provider state: ${sentence(detail.providerStatus)}`}
                     </small>
                   </div>
                 </article>
-              ))}
-            </div>
-          </section>
+                {detail.restrictions.map((restriction) => (
+                  <article
+                    className="admin-record"
+                    key={`${restriction.createdAt}-${restriction.scope}`}
+                  >
+                    <div className="min-w-0">
+                      <strong>Restriction · {sentence(restriction.scope)}</strong>
+                      <small>
+                        {sentence(restriction.status)} · {restriction.reasonCode} · source{" "}
+                        {restriction.source} · {date(restriction.createdAt)}
+                      </small>
+                    </div>
+                  </article>
+                ))}
+                {detail.decisions.map((decision) => (
+                  <article
+                    className="admin-record"
+                    key={`${decision.createdAt}-${decision.reasonCode}`}
+                  >
+                    <div className="min-w-0">
+                      <strong>Decision · {sentence(decision.status)}</strong>
+                      <small>
+                        {decision.reasonCode} · actor{" "}
+                        {decision.actorUserId ? shortId(decision.actorUserId) : "System"} ·{" "}
+                        {date(decision.createdAt)}
+                      </small>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
         </AdminRecordDrawer>
       ) : null}
     </AdminPageSection>
