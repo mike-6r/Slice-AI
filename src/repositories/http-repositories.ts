@@ -2,6 +2,7 @@ import { ApiClient, ApiError } from "@/api/http-client";
 import type {
   AdminAccountHistoryResponse,
   AdminComplianceCase,
+  AdminComplianceRefreshResult,
   AdminFinanceDashboard,
   AdminFinanceRecord,
   AdminFinanceRecordsResponse,
@@ -4684,6 +4685,28 @@ const mapAdminComplianceDetail = (raw: unknown): AdminComplianceDetail => {
       username: nullableString(user.username, "compliance.user.username"),
     },
     providerStatus: stringField(value.providerStatus, "compliance.providerStatus"),
+    identityState: stringField(value.identityState, "compliance.identityState"),
+    verificationSessionReference: nullableString(
+      value.verificationSessionReference,
+      "compliance.verificationSessionReference",
+    ),
+    identityRequestedAt: nullableString(
+      value.identityRequestedAt,
+      "compliance.identityRequestedAt",
+    ),
+    identityCompletedAt: nullableString(
+      value.identityCompletedAt,
+      "compliance.identityCompletedAt",
+    ),
+    identityVerifiedAt: nullableString(value.identityVerifiedAt, "compliance.identityVerifiedAt"),
+    identitySafeFailureCode: nullableString(
+      value.identitySafeFailureCode,
+      "compliance.identitySafeFailureCode",
+    ),
+    identityLastProviderSync: nullableString(
+      value.identityLastProviderSync,
+      "compliance.identityLastProviderSync",
+    ),
     identity:
       value.identity && typeof value.identity === "object"
         ? (() => {
@@ -5112,6 +5135,23 @@ const adminRepository = (client: ApiClient): AdminRepository => {
     },
     async getComplianceCase(id) {
       return mapAdminComplianceDetail(await client.get<unknown>(`/admin/compliance/cases/${id}`));
+    },
+    async refreshComplianceCase(id) {
+      const value = objectField(
+        await client.request<unknown>(`/admin/compliance/cases/${encodeURIComponent(id)}/refresh`, {
+          method: "POST",
+          headers: { "Idempotency-Key": idempotencyKey() },
+        }),
+        "admin compliance refresh",
+      );
+      return {
+        caseId: stringField(value.caseId, "compliance refresh.caseId"),
+        provider: stringField(value.provider, "compliance refresh.provider"),
+        status: stringField(value.status, "compliance refresh.status"),
+        identityState: stringField(value.identityState, "compliance refresh.identityState"),
+        changed: Boolean(value.changed),
+        checkedAt: stringField(value.checkedAt, "compliance refresh.checkedAt"),
+      } satisfies AdminComplianceRefreshResult;
     },
     async getOperationsOverview() {
       const value = objectField(

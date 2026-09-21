@@ -70,6 +70,7 @@ import { AdminPlatformSettings } from "@/components/admin/AdminPlatformSettings"
 import { AdminRecordDrawer } from "@/components/admin/AdminRecordDrawer";
 import { AdminReviewMedia } from "@/components/admin/AdminReviewMedia";
 import { AdminIntakeLocations } from "@/components/admin/AdminIntakeLocations";
+import { AdminComplianceCaseReview } from "@/components/admin/AdminComplianceCaseReview";
 import {
   GuidancePanel,
   guidanceActorFromAuthority,
@@ -880,6 +881,15 @@ function AdminConsole() {
     enabled: isCustomerCompliance,
     staleTime: 30_000,
   });
+  const complianceProviderRefresh = useMutation({
+    mutationFn: (caseId: string) => services.repositories.admin.refreshComplianceCase(caseId),
+    onSuccess: () => {
+      void complianceDetail.refetch();
+      void userDetail.refetch();
+      void compliance.refetch();
+      void queryClient.invalidateQueries({ queryKey: ["admin", "overview"] });
+    },
+  });
   const globalSearch = useQuery({
     queryKey: ["admin", "search", search],
     queryFn: () => services.repositories.admin.search(search, 8),
@@ -1634,9 +1644,20 @@ function AdminConsole() {
             detail={complianceDetail.data}
             detailLoading={complianceDetail.isLoading}
             detailFailed={complianceDetail.isError}
+            refreshingProvider={complianceProviderRefresh.isPending}
+            refreshProviderError={complianceProviderRefresh.isError}
+            refreshResult={complianceProviderRefresh.data}
+            refreshProvider={() => {
+              if (selectedComplianceCase) complianceProviderRefresh.mutate(selectedComplianceCase);
+            }}
             customer={userDetail.data}
             customerLoading={userDetail.isLoading}
             customerFailed={userDetail.isError}
+            onCaseChanged={() => {
+              void complianceDetail.refetch();
+              void userDetail.refetch();
+              void compliance.refetch();
+            }}
             selectedRecord={selectedRecord}
             selectedRecordType={selectedRecordType}
             openDetail={(id, userId) =>
@@ -11087,9 +11108,14 @@ export function ComplianceWorkspace({
   detail,
   detailLoading,
   detailFailed,
+  refreshingProvider,
+  refreshProviderError,
+  refreshResult,
+  refreshProvider,
   customer,
   customerLoading,
   customerFailed,
+  onCaseChanged,
   selectedRecord,
   selectedRecordType,
   openDetail,
@@ -11106,9 +11132,14 @@ export function ComplianceWorkspace({
   detail?: import("@/data/repositories").AdminComplianceDetail;
   detailLoading: boolean;
   detailFailed: boolean;
+  refreshingProvider?: boolean;
+  refreshProviderError?: boolean;
+  refreshResult?: import("@/data/repositories").AdminComplianceRefreshResult | null;
+  refreshProvider?: () => void;
   customer?: AdminUserDetail;
   customerLoading: boolean;
   customerFailed: boolean;
+  onCaseChanged?: () => void;
   selectedRecord?: string;
   selectedRecordType?: string;
   openDetail: (id: string, userId?: string) => void;
@@ -11387,92 +11418,22 @@ export function ComplianceWorkspace({
               detail="The exact selected case could not be loaded safely. Return to the queue and choose an available case."
             />
           ) : (
-            <section className="admin-panel">
-              <AdminPanelHeading
-                title={detail.user.displayName}
-                action="Close detail"
-                onClick={closeDetail}
-              />
-              <div className="admin-kpi-grid admin-kpi-grid--compact">
-                <AdminKpi
-                  icon={ShieldCheck}
-                  label="Provider status"
-                  value={sentence(detail.providerStatus)}
-                />
-                <AdminKpi
-                  icon={ShieldCheck}
-                  label="Identity"
-                  value={sentence(detail.identity?.state ?? detail.status)}
-                />
-                <AdminKpi
-                  icon={AlertTriangle}
-                  label="Risk review"
-                  value={sentence(detail.riskReview?.status ?? "Not reported")}
-                />
-                <AdminKpi
-                  icon={Users}
-                  label="Payout readiness"
-                  value={
-                    detail.connectPayoutReadiness?.[0]
-                      ? sentence(detail.connectPayoutReadiness[0].status)
-                      : "Not started"
-                  }
-                />
-                <AdminKpi icon={AlertTriangle} label="Decisions" value={detail.decisions.length} />
-                <AdminKpi icon={Users} label="Restrictions" value={detail.restrictions.length} />
-                <AdminKpi icon={FileClock} label="Audit events" value={detail.audit.length} />
-              </div>
-              <div className="admin-record-list">
-                <article className="admin-record">
-                  <div className="min-w-0">
-                    <strong>Summary</strong>
-                    <small>
-                      {sentence(detail.type)} · {sentence(detail.status)} · {detail.provider} ·
-                      updated {date(detail.updatedAt)}
-                    </small>
-                  </div>
-                </article>
-                <article className="admin-record">
-                  <div className="min-w-0">
-                    <strong>Provider status</strong>
-                    <small>
-                      {detail.providerStatus === "Unknown"
-                        ? "Provider information is temporarily unavailable."
-                        : `Normalized provider state: ${sentence(detail.providerStatus)}`}
-                    </small>
-                  </div>
-                </article>
-                {detail.restrictions.map((restriction) => (
-                  <article
-                    className="admin-record"
-                    key={`${restriction.createdAt}-${restriction.scope}`}
-                  >
-                    <div className="min-w-0">
-                      <strong>Restriction · {sentence(restriction.scope)}</strong>
-                      <small>
-                        {sentence(restriction.status)} · {restriction.reasonCode} · source{" "}
-                        {restriction.source} · {date(restriction.createdAt)}
-                      </small>
-                    </div>
-                  </article>
-                ))}
-                {detail.decisions.map((decision) => (
-                  <article
-                    className="admin-record"
-                    key={`${decision.createdAt}-${decision.reasonCode}`}
-                  >
-                    <div className="min-w-0">
-                      <strong>Decision · {sentence(decision.status)}</strong>
-                      <small>
-                        {decision.reasonCode} · actor{" "}
-                        {decision.actorUserId ? shortId(decision.actorUserId) : "System"} ·{" "}
-                        {date(decision.createdAt)}
-                      </small>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
+            <AdminComplianceCaseReview
+              detail={detail}
+              customer={customer}
+              refreshing={refreshingProvider}
+              refreshError={refreshProviderError}
+              refreshResult={refreshResult}
+              onRefresh={refreshProvider}
+              controls={
+                customer && onCaseChanged ? (
+                  <>
+                    <AccountRestrictionControls user={customer} onChanged={onCaseChanged} />
+                    <AccountNoteControls user={customer} onChanged={onCaseChanged} />
+                  </>
+                ) : undefined
+              }
+            />
           )}
         </AdminRecordDrawer>
       ) : null}

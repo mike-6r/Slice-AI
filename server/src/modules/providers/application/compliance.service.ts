@@ -1,17 +1,32 @@
-import { ConflictException, Inject, Injectable, Optional } from '@nestjs/common';
+import {
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../../database/prisma.service';
 import type { Actor } from '../../identity/auth/auth.service';
 import { createIdentityTransaction } from '../../identity/persistence/prisma-identity.repositories';
 import { ProviderCryptoService } from './provider-crypto.service';
 import { LocalIdentityVerificationAdapter } from './local-provider.adapters';
-import type { IdentityVerificationProvider, IdentityVerificationState, NormalizedComplianceStatus, VerifiedIdentityDetails } from '../domain/provider.types';
+import type {
+  IdentityVerificationProvider,
+  IdentityVerificationState,
+  NormalizedComplianceStatus,
+  VerifiedIdentityDetails,
+} from '../domain/provider.types';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import {
   UnavailableExternalIdentityProvider,
   providerCode,
 } from './external-provider-boundaries';
-import { StripeIdentityVerificationService, mapIdentityStatus, safeFailureCode } from './stripe-identity.service';
+import {
+  StripeIdentityVerificationService,
+  mapIdentityStatus,
+  safeFailureCode,
+} from './stripe-identity.service';
 
 @Injectable()
 export class ComplianceService {
@@ -21,12 +36,16 @@ export class ComplianceService {
     private readonly crypto: ProviderCryptoService,
     @Inject(APP_CONFIG)
     private readonly config: AppConfig = { providerMode: 'local' } as AppConfig,
-    @Optional() private readonly stripeIdentity?: StripeIdentityVerificationService,
+    @Optional()
+    private readonly stripeIdentity?: StripeIdentityVerificationService,
   ) {
     this.identity =
       config.providerMode === 'local'
         ? new LocalIdentityVerificationAdapter()
-        : stripeIdentity ?? new UnavailableExternalIdentityProvider(providerCode(config.providerMode));
+        : (stripeIdentity ??
+          new UnavailableExternalIdentityProvider(
+            providerCode(config.providerMode),
+          ));
   }
   async start(actor: Actor, requestId: string) {
     if (this.config.isBeta && !this.config.stripeIdentityEnabled) {
@@ -38,7 +57,10 @@ export class ComplianceService {
         capability: 'NOT_REQUIRED_IN_CURRENT_BETA' as const,
       };
     }
-    if (this.config.providerMode !== 'local' && !this.config.stripeIdentityEnabled) {
+    if (
+      this.config.providerMode !== 'local' &&
+      !this.config.stripeIdentityEnabled
+    ) {
       return {
         status: 'NOT_STARTED' as const,
         identityState: 'NOT_STARTED' as const,
@@ -55,7 +77,12 @@ export class ComplianceService {
           type: 'KYC',
         },
       },
-      select: { status: true, identityState: true, identityCompletedAt: true, providerReferenceCiphertext: true },
+      select: {
+        status: true,
+        identityState: true,
+        identityCompletedAt: true,
+        providerReferenceCiphertext: true,
+      },
     });
     if (existing?.status === 'APPROVED') {
       return {
@@ -74,8 +101,14 @@ export class ComplianceService {
         `compliance:${actor.userId}`,
       );
       const current = await this.identity.getIdentityVerification?.(reference);
-      const nextIdentityState = current?.identityState ?? legacyIdentityState(current?.status ?? existing.status);
-      if (current && (current.status !== existing.status || nextIdentityState !== existing.identityState)) {
+      const nextIdentityState =
+        current?.identityState ??
+        legacyIdentityState(current?.status ?? existing.status);
+      if (
+        current &&
+        (current.status !== existing.status ||
+          nextIdentityState !== existing.identityState)
+      ) {
         await this.ingestIdentityProviderEvent({
           provider: this.provider(),
           providerReference: reference,
@@ -89,7 +122,10 @@ export class ComplianceService {
       }
       return {
         status: customerStatus(current?.status ?? existing.status),
-        identityState: nextIdentityState ?? existing.identityState ?? legacyIdentityState(existing.status),
+        identityState:
+          nextIdentityState ??
+          existing.identityState ??
+          legacyIdentityState(existing.status),
         provider: this.provider(),
         sessionUrl: current?.sessionUrl ?? null,
       };
@@ -115,7 +151,8 @@ export class ComplianceService {
           provider: this.provider(),
           type: 'KYC',
           status: session.status,
-          identityState: session.identityState ?? legacyIdentityState(session.status),
+          identityState:
+            session.identityState ?? legacyIdentityState(session.status),
           providerReferenceCiphertext: this.crypto.encrypt(
             session.providerReference,
             `compliance:${actor.userId}`,
@@ -133,10 +170,16 @@ export class ComplianceService {
           ),
           providerReferenceHash: referenceHash,
           encryptionKeyVersion: this.crypto.keyVersion,
-          identityState: session.identityState ?? legacyIdentityState(session.status),
+          identityState:
+            session.identityState ?? legacyIdentityState(session.status),
           identityRequestedAt: new Date(),
-          identityCompletedAt: session.identityState && ['VERIFIED', 'FAILED', 'CANCELED'].includes(session.identityState) ? new Date() : null,
-          identityVerifiedAt: session.identityState === 'VERIFIED' ? new Date() : null,
+          identityCompletedAt:
+            session.identityState &&
+            ['VERIFIED', 'FAILED', 'CANCELED'].includes(session.identityState)
+              ? new Date()
+              : null,
+          identityVerifiedAt:
+            session.identityState === 'VERIFIED' ? new Date() : null,
           identitySafeFailureCode: null,
           identityLastProviderSync: new Date(),
         },
@@ -165,12 +208,123 @@ export class ComplianceService {
       });
       return {
         status: customerStatus(item.status),
-        identityState: session.identityState ?? legacyIdentityState(item.status),
+        identityState:
+          session.identityState ?? legacyIdentityState(item.status),
         provider: this.provider(),
         sessionUrl: session.sessionUrl,
       };
     });
   }
+
+  async refreshCase(actor: Actor, caseId: string, requestId: string) {
+    const item = await this.db.complianceCase.findUnique({
+      where: { id: caseId },
+      select: {
+        id: true,
+        userId: true,
+        provider: true,
+        status: true,
+        identityState: true,
+        providerReferenceCiphertext: true,
+        identityCompletedAt: true,
+        identityVerifiedAt: true,
+        identitySafeFailureCode: true,
+      },
+    });
+    if (!item)
+      throw new NotFoundException({
+        code: 'COMPLIANCE_CASE_NOT_FOUND',
+        message: 'Compliance case not found.',
+      });
+    if (item.provider !== this.provider())
+      throw new ConflictException({
+        code: 'COMPLIANCE_PROVIDER_MISMATCH',
+        message: 'This case belongs to a different configured provider.',
+      });
+    if (
+      !item.providerReferenceCiphertext ||
+      !this.identity.getIdentityVerification
+    )
+      throw new ConflictException({
+        code: 'COMPLIANCE_PROVIDER_REFRESH_UNAVAILABLE',
+        message:
+          'This compliance case does not have a refreshable provider session.',
+      });
+
+    const providerReference = this.crypto.decrypt(
+      item.providerReferenceCiphertext,
+      `compliance:${item.userId}`,
+    );
+    const current =
+      await this.identity.getIdentityVerification(providerReference);
+    const identityState =
+      current.identityState ?? legacyIdentityState(current.status);
+    const failureCode = safeFailureCode(current.safeFailureCode);
+    const checkedAt = new Date();
+    const changed =
+      current.status !== item.status ||
+      identityState !== item.identityState ||
+      failureCode !== item.identitySafeFailureCode;
+    const terminal = ['VERIFIED', 'FAILED', 'CANCELED'].includes(identityState);
+
+    await this.db.$transaction(async (db) => {
+      await db.complianceCase.update({
+        where: { id: item.id },
+        data: {
+          status: current.status,
+          identityState,
+          identityCompletedAt: terminal
+            ? (item.identityCompletedAt ?? checkedAt)
+            : null,
+          identityVerifiedAt:
+            identityState === 'VERIFIED'
+              ? (item.identityVerifiedAt ?? checkedAt)
+              : null,
+          identitySafeFailureCode: failureCode,
+          identityLastProviderSync: checkedAt,
+        },
+      });
+      if (changed) {
+        await db.complianceDecision.create({
+          data: {
+            id: randomUUID(),
+            caseId: item.id,
+            status: current.status,
+            reasonCode: `ADMIN_PROVIDER_REFRESH_${identityState}`,
+            actorUserId: actor.userId,
+          },
+        });
+      }
+      await createIdentityTransaction(db).audit.append({
+        id: randomUUID(),
+        actorUserId: actor.userId,
+        actorType: 'USER',
+        action: 'ADMIN_COMPLIANCE_PROVIDER_REFRESHED',
+        resourceType: 'compliance-case',
+        resourceId: item.id,
+        requestId,
+        sessionId: actor.sessionId as never,
+        result: 'SUCCESS',
+        metadata: {
+          provider: item.provider,
+          status: current.status,
+          identityState,
+          changed,
+        },
+        createdAt: checkedAt,
+      });
+    });
+
+    return {
+      caseId: item.id,
+      provider: item.provider,
+      status: current.status,
+      identityState,
+      changed,
+      checkedAt: checkedAt.toISOString(),
+    };
+  }
+
   async self(userId: string) {
     if (this.config.isBeta && !this.config.stripeIdentityEnabled) {
       return {
@@ -181,7 +335,10 @@ export class ComplianceService {
         capability: 'NOT_REQUIRED_IN_CURRENT_BETA' as const,
       };
     }
-    if (this.config.providerMode !== 'local' && !this.config.stripeIdentityEnabled) {
+    if (
+      this.config.providerMode !== 'local' &&
+      !this.config.stripeIdentityEnabled
+    ) {
       return {
         status: 'NOT_STARTED' as const,
         identityState: 'NOT_STARTED' as const,
@@ -199,11 +356,18 @@ export class ComplianceService {
           type: 'KYC',
         },
       },
-      select: { status: true, identityState: true, expiresAt: true, updatedAt: true },
+      select: {
+        status: true,
+        identityState: true,
+        expiresAt: true,
+        updatedAt: true,
+      },
     });
     return {
       status: customerStatus(item?.status ?? 'NOT_STARTED'),
-      identityState: (item?.identityState as IdentityVerificationState | undefined) ?? legacyIdentityState(item?.status ?? 'NOT_STARTED'),
+      identityState:
+        (item?.identityState as IdentityVerificationState | undefined) ??
+        legacyIdentityState(item?.status ?? 'NOT_STARTED'),
       provider: this.provider(),
       expiresAt: item?.expiresAt?.toISOString() ?? null,
       updatedAt: item?.updatedAt.toISOString() ?? null,
@@ -229,13 +393,28 @@ export class ComplianceService {
         providerReferenceCiphertext: true,
       },
     });
-    if (item?.status !== 'APPROVED' || !item.providerReferenceCiphertext || !this.identity.getIdentityVerification) {
-      return { available: false as const, verifiedAt: item?.identityVerifiedAt?.toISOString() ?? null, details: null };
+    if (
+      item?.status !== 'APPROVED' ||
+      !item.providerReferenceCiphertext ||
+      !this.identity.getIdentityVerification
+    ) {
+      return {
+        available: false as const,
+        verifiedAt: item?.identityVerifiedAt?.toISOString() ?? null,
+        details: null,
+      };
     }
-    const reference = this.crypto.decrypt(item.providerReferenceCiphertext, `compliance:${userId}`);
+    const reference = this.crypto.decrypt(
+      item.providerReferenceCiphertext,
+      `compliance:${userId}`,
+    );
     const current = await this.identity.getIdentityVerification(reference);
     if (current.status !== 'APPROVED') {
-      return { available: false as const, verifiedAt: item.identityVerifiedAt?.toISOString() ?? null, details: null };
+      return {
+        available: false as const,
+        verifiedAt: item.identityVerifiedAt?.toISOString() ?? null,
+        details: null,
+      };
     }
     return {
       available: Boolean(current.verifiedDetails),
@@ -289,7 +468,10 @@ export class ComplianceService {
       });
   }
   /** Backwards-compatible name for existing callers; this is identity-only. */
-  async requireApproved(userId: string, scopes: string[] = ['EXTERNAL_MOVEMENT', 'ACCOUNT']) {
+  async requireApproved(
+    userId: string,
+    scopes: string[] = ['EXTERNAL_MOVEMENT', 'ACCOUNT'],
+  ) {
     return this.requireIdentityApproved(userId, scopes);
   }
   async ingestDecision(
@@ -321,36 +503,99 @@ export class ComplianceService {
     occurredAt: Date;
     requestId: string;
   }) {
-    if (input.provider !== this.provider()) return { ignored: true, reason: 'PROVIDER_MISMATCH' };
+    if (input.provider !== this.provider())
+      return { ignored: true, reason: 'PROVIDER_MISMATCH' };
     const item = await this.db.complianceCase.findUnique({
-      where: { provider_providerReferenceHash: { provider: input.provider, providerReferenceHash: this.crypto.hash(input.providerReference) } },
-      select: { id: true, userId: true, status: true, identityState: true, identityLastProviderSync: true },
+      where: {
+        provider_providerReferenceHash: {
+          provider: input.provider,
+          providerReferenceHash: this.crypto.hash(input.providerReference),
+        },
+      },
+      select: {
+        id: true,
+        userId: true,
+        status: true,
+        identityState: true,
+        identityLastProviderSync: true,
+      },
     });
     if (!item) return { ignored: true, reason: 'SESSION_UNKNOWN' };
     const mapped = mapIdentityStatus(input.providerStatus);
-    const effective = input.identityState ? { ...mapped, identityState: input.identityState } : mapped;
-    if (item.identityState === 'VERIFIED' && effective.identityState !== 'VERIFIED') return { ignored: true, stale: true };
-    if (item.identityLastProviderSync && item.identityLastProviderSync > input.occurredAt) return { ignored: true, stale: true };
+    const effective = input.identityState
+      ? { ...mapped, identityState: input.identityState }
+      : mapped;
+    if (
+      item.identityState === 'VERIFIED' &&
+      effective.identityState !== 'VERIFIED'
+    )
+      return { ignored: true, stale: true };
+    if (
+      item.identityLastProviderSync &&
+      item.identityLastProviderSync > input.occurredAt
+    )
+      return { ignored: true, stale: true };
     const safeCode = safeFailureCode(input.failureCode);
     return this.db.$transaction(async (db) => {
       const hash = this.crypto.hash(input.providerEventId);
-      const duplicate = await db.complianceDecision.findFirst({ where: { caseId: item.id, providerEventIdHash: hash } });
-      if (duplicate) return { ignored: false, replayed: true, status: effective.identityState };
-      const terminal = ['VERIFIED', 'FAILED', 'CANCELED'].includes(effective.identityState);
+      const duplicate = await db.complianceDecision.findFirst({
+        where: { caseId: item.id, providerEventIdHash: hash },
+      });
+      if (duplicate)
+        return {
+          ignored: false,
+          replayed: true,
+          status: effective.identityState,
+        };
+      const terminal = ['VERIFIED', 'FAILED', 'CANCELED'].includes(
+        effective.identityState,
+      );
       await db.complianceCase.update({
         where: { id: item.id },
         data: {
           status: mapped.complianceStatus,
           identityState: effective.identityState,
           identityCompletedAt: terminal ? input.occurredAt : null,
-          identityVerifiedAt: effective.identityState === 'VERIFIED' ? input.occurredAt : null,
+          identityVerifiedAt:
+            effective.identityState === 'VERIFIED' ? input.occurredAt : null,
           identitySafeFailureCode: safeCode,
           identityLastProviderSync: input.occurredAt,
         },
       });
-      await db.complianceDecision.create({ data: { id: randomUUID(), caseId: item.id, status: mapped.complianceStatus, reasonCode: safeCode ? `STRIPE_IDENTITY_${safeCode}` : `STRIPE_IDENTITY_${effective.identityState}`, providerEventIdHash: hash, actorUserId: null } });
-      await createIdentityTransaction(db).audit.append({ id: randomUUID(), actorUserId: null, actorType: 'SYSTEM', action: 'IDENTITY_VERIFICATION_UPDATED', resourceType: 'compliance-case', resourceId: item.id, requestId: input.requestId, sessionId: null, result: 'SUCCESS', metadata: { source: 'PROVIDER', provider: input.provider, identityState: effective.identityState }, createdAt: new Date() });
-      return { ignored: false, replayed: false, status: effective.identityState };
+      await db.complianceDecision.create({
+        data: {
+          id: randomUUID(),
+          caseId: item.id,
+          status: mapped.complianceStatus,
+          reasonCode: safeCode
+            ? `STRIPE_IDENTITY_${safeCode}`
+            : `STRIPE_IDENTITY_${effective.identityState}`,
+          providerEventIdHash: hash,
+          actorUserId: null,
+        },
+      });
+      await createIdentityTransaction(db).audit.append({
+        id: randomUUID(),
+        actorUserId: null,
+        actorType: 'SYSTEM',
+        action: 'IDENTITY_VERIFICATION_UPDATED',
+        resourceType: 'compliance-case',
+        resourceId: item.id,
+        requestId: input.requestId,
+        sessionId: null,
+        result: 'SUCCESS',
+        metadata: {
+          source: 'PROVIDER',
+          provider: input.provider,
+          identityState: effective.identityState,
+        },
+        createdAt: new Date(),
+      });
+      return {
+        ignored: false,
+        replayed: false,
+        status: effective.identityState,
+      };
     });
   }
   /** Verified provider callbacks are system actions, never impersonated users. */

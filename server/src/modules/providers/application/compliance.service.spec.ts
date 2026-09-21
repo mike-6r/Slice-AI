@@ -5,8 +5,12 @@ describe('ComplianceService identity gate and manual hold separation', () => {
   it('blocks a configured action while a hold is active and restores policy evaluation after release', async () => {
     let activeHold: { status: 'ACTIVE' } | null = { status: 'ACTIVE' };
     const db = {
-      complianceCase: { findUnique: jest.fn().mockResolvedValue({ status: 'APPROVED' }) },
-      complianceHold: { findFirst: jest.fn().mockImplementation(async () => activeHold) },
+      complianceCase: {
+        findUnique: jest.fn().mockResolvedValue({ status: 'APPROVED' }),
+      },
+      complianceHold: {
+        findFirst: jest.fn().mockImplementation(async () => activeHold),
+      },
     };
     const service = new ComplianceService(
       db as never,
@@ -18,7 +22,9 @@ describe('ComplianceService identity gate and manual hold separation', () => {
     await expect(blocked).rejects.toBeInstanceOf(ConflictException);
 
     activeHold = null;
-    await expect(service.requireIdentityApproved('user-1', ['WITHDRAWAL'])).resolves.toBeUndefined();
+    await expect(
+      service.requireIdentityApproved('user-1', ['WITHDRAWAL']),
+    ).resolves.toBeUndefined();
     expect(db.complianceCase.findUnique).toHaveBeenCalledTimes(2);
     expect(db.complianceHold.findFirst).toHaveBeenCalledTimes(2);
   });
@@ -65,8 +71,13 @@ describe('ComplianceService identity gate and manual hold separation', () => {
       verifiedAt: '2026-08-20T10:00:00.000Z',
       details: { fullName: 'Michael Fultz', address: { countryCode: 'GB' } },
     });
-    expect(crypto.decrypt).toHaveBeenCalledWith('encrypted-reference', 'compliance:user-1');
-    expect(identity.getIdentityVerification).toHaveBeenCalledWith('vs_test_verified');
+    expect(crypto.decrypt).toHaveBeenCalledWith(
+      'encrypted-reference',
+      'compliance:user-1',
+    );
+    expect(identity.getIdentityVerification).toHaveBeenCalledWith(
+      'vs_test_verified',
+    );
   });
 
   it('does not ask the provider for details before approval', async () => {
@@ -93,5 +104,140 @@ describe('ComplianceService identity gate and manual hold separation', () => {
       details: null,
     });
     expect(identity.getIdentityVerification).not.toHaveBeenCalled();
+  });
+
+  it('refreshes an exact admin case from the configured provider and records the change', async () => {
+    const item = {
+      id: 'case-1',
+      userId: 'customer-1',
+      provider: 'STRIPE_SANDBOX',
+      status: 'PENDING',
+      identityState: 'REQUIRES_INPUT',
+      providerReferenceCiphertext: 'encrypted-reference',
+      identityCompletedAt: null,
+      identityVerifiedAt: null,
+      identitySafeFailureCode: null,
+    };
+    const transaction = {
+      complianceCase: { update: jest.fn().mockResolvedValue({}) },
+      complianceDecision: { create: jest.fn().mockResolvedValue({}) },
+      auditEvent: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const db = {
+      complianceCase: { findUnique: jest.fn().mockResolvedValue(item) },
+      $transaction: jest.fn(async (work: (tx: typeof transaction) => unknown) =>
+        work(transaction),
+      ),
+    };
+    const crypto = { decrypt: jest.fn().mockReturnValue('vs_test_verified') };
+    const identity = {
+      getIdentityVerification: jest.fn().mockResolvedValue({
+        status: 'APPROVED',
+        identityState: 'VERIFIED',
+        safeFailureCode: null,
+        sessionUrl: null,
+      }),
+    };
+    const service = new ComplianceService(
+      db as never,
+      crypto as never,
+      { providerMode: 'stripe_sandbox' } as never,
+      identity as never,
+    );
+
+    await expect(
+      service.refreshCase(
+        { userId: 'admin-1', sessionId: 'session-1' } as never,
+        'case-1',
+        'request-1',
+      ),
+    ).resolves.toMatchObject({
+      caseId: 'case-1',
+      provider: 'STRIPE_SANDBOX',
+      status: 'APPROVED',
+      identityState: 'VERIFIED',
+      changed: true,
+    });
+    expect(crypto.decrypt).toHaveBeenCalledWith(
+      'encrypted-reference',
+      'compliance:customer-1',
+    );
+    expect(transaction.complianceCase.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'case-1' },
+        data: expect.objectContaining({
+          status: 'APPROVED',
+          identityState: 'VERIFIED',
+          identityLastProviderSync: expect.any(Date),
+        }),
+      }),
+    );
+    expect(transaction.complianceDecision.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          caseId: 'case-1',
+          status: 'APPROVED',
+          actorUserId: 'admin-1',
+        }),
+      }),
+    );
+    expect(transaction.auditEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'ADMIN_COMPLIANCE_PROVIDER_REFRESHED',
+          resourceId: 'case-1',
+        }),
+      }),
+    );
+  });
+
+  it('keeps a repeated unchanged provider refresh free of duplicate decisions', async () => {
+    const transaction = {
+      complianceCase: { update: jest.fn().mockResolvedValue({}) },
+      complianceDecision: { create: jest.fn().mockResolvedValue({}) },
+      auditEvent: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const db = {
+      complianceCase: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'case-1',
+          userId: 'customer-1',
+          provider: 'STRIPE_SANDBOX',
+          status: 'PENDING',
+          identityState: 'REQUIRES_INPUT',
+          providerReferenceCiphertext: 'encrypted-reference',
+          identityCompletedAt: null,
+          identityVerifiedAt: null,
+          identitySafeFailureCode: null,
+        }),
+      },
+      $transaction: jest.fn(async (work: (tx: typeof transaction) => unknown) =>
+        work(transaction),
+      ),
+    };
+    const service = new ComplianceService(
+      db as never,
+      { decrypt: jest.fn().mockReturnValue('vs_test_pending') } as never,
+      { providerMode: 'stripe_sandbox' } as never,
+      {
+        getIdentityVerification: jest.fn().mockResolvedValue({
+          status: 'PENDING',
+          identityState: 'REQUIRES_INPUT',
+          safeFailureCode: null,
+          sessionUrl: null,
+        }),
+      } as never,
+    );
+
+    await expect(
+      service.refreshCase(
+        { userId: 'admin-1', sessionId: 'session-1' } as never,
+        'case-1',
+        'request-1',
+      ),
+    ).resolves.toMatchObject({ changed: false });
+    expect(transaction.complianceCase.update).toHaveBeenCalledTimes(1);
+    expect(transaction.complianceDecision.create).not.toHaveBeenCalled();
+    expect(transaction.auditEvent.create).toHaveBeenCalledTimes(1);
   });
 });

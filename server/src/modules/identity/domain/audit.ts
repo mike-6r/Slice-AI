@@ -368,6 +368,12 @@ const metadataKeys: Record<string, readonly string[]> = {
   DISTRIBUTION_PREPARED: ['netMinor'],
   DISTRIBUTION_POSTED: ['netMinor'],
   COMPLIANCE_SESSION_STARTED: ['provider'],
+  ADMIN_COMPLIANCE_PROVIDER_REFRESHED: [
+    'provider',
+    'status',
+    'identityState',
+    'changed',
+  ],
   IDENTITY_VERIFICATION_UPDATED: ['source', 'provider', 'identityState'],
   BANK_CONNECTION_CONNECTED: ['provider', 'accountCount'],
   COMPLIANCE_DECISION_RECORDED: ['status', 'reasonCode'],

@@ -2,7 +2,7 @@
 
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 
 import type {
@@ -54,6 +54,13 @@ const complianceCase: AdminComplianceCase = {
 const complianceDetail: AdminComplianceDetail = {
   ...complianceCase,
   providerStatus: "requires_input",
+  identityState: "REQUIRES_INPUT",
+  verificationSessionReference: "…test0092",
+  identityRequestedAt: now,
+  identityCompletedAt: null,
+  identityVerifiedAt: null,
+  identitySafeFailureCode: "DOCUMENT_REVIEW",
+  identityLastProviderSync: now,
   identity: {
     state: "MANUAL_REVIEW",
     provider: "Stripe Identity",
@@ -102,6 +109,7 @@ const customer = {
       nextAction: "The customer must complete provider-backed phone verification.",
     },
   ],
+  permissions: { canManageCompliance: true },
 } as AdminUserDetail;
 
 const overview: AdminOverview = {
@@ -284,5 +292,41 @@ describe("Admin customer compliance click flow", () => {
     const review = screen.getByRole("button", { name: "Compliance review is open: Review" });
     expect(review.hasAttribute("disabled")).toBe(true);
     expect(screen.getByText(/No authoritative compliance control is linked/)).toBeTruthy();
+  });
+
+  it("renders the complete KYC workspace and executes provider refresh", async () => {
+    const refreshProvider = vi.fn();
+    render(
+      <ComplianceWorkspace
+        cases={[complianceCase]}
+        loading={false}
+        failed={false}
+        retry={() => undefined}
+        overview={overview}
+        filter="All"
+        setFilter={() => undefined}
+        detail={complianceDetail}
+        detailLoading={false}
+        detailFailed={false}
+        refreshProvider={refreshProvider}
+        customer={customer}
+        customerLoading={false}
+        customerFailed={false}
+        selectedRecord={caseId}
+        selectedRecordType="compliance-case"
+        openDetail={() => undefined}
+        closeDetail={() => undefined}
+      />,
+    );
+
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Where this case is now")).toBeTruthy();
+    expect(within(dialog).getByText("Identity & provider evidence")).toBeTruthy();
+    expect(within(dialog).getByText("Capabilities & payout readiness")).toBeTruthy();
+    expect(within(dialog).getByText("Decision & audit timeline")).toBeTruthy();
+    expect(within(dialog).getByText("Authority boundary")).toBeTruthy();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Refresh provider status" }));
+    expect(refreshProvider).toHaveBeenCalledTimes(1);
   });
 });

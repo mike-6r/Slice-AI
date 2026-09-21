@@ -445,6 +445,22 @@ export class ProvidersController {
       }),
     );
   }
+  @Post('admin/compliance/cases/:caseId/refresh')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('compliance.manage')
+  async refreshComplianceCase(
+    @Param('caseId') caseId: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.compliance.refreshCase(
+        req.actor!,
+        caseId,
+        req.requestId ?? 'unknown',
+      ),
+    );
+  }
   @Post('admin/compliance/holds/:holdId/release')
   @UseGuards(AccessTokenGuard, PermissionGuard)
   @RequirePermission('compliance.manage')

@@ -814,6 +814,13 @@ export type AdminComplianceCase = {
 
 export type AdminComplianceDetail = AdminComplianceCase & {
   providerStatus: string;
+  identityState: string;
+  verificationSessionReference: string | null;
+  identityRequestedAt: string | null;
+  identityCompletedAt: string | null;
+  identityVerifiedAt: string | null;
+  identitySafeFailureCode: string | null;
+  identityLastProviderSync: string | null;
   identity?: {
     state: string;
     provider: string;
@@ -846,6 +853,15 @@ export type AdminComplianceDetail = AdminComplianceCase & {
     releasedAt: string | null;
   }>;
   audit: Array<{ action: string; result: string; createdAt: string }>;
+};
+
+export type AdminComplianceRefreshResult = {
+  caseId: string;
+  provider: string;
+  status: string;
+  identityState: string;
+  changed: boolean;
+  checkedAt: string;
 };
 
 export type AdminRiskOperations = {
@@ -2554,6 +2570,7 @@ export interface AdminRepository {
     pageSize?: number;
   }): Promise<AdminPlatformRecordsResponse>;
   getComplianceCase(id: string): Promise<AdminComplianceDetail>;
+  refreshComplianceCase(id: string): Promise<AdminComplianceRefreshResult>;
   getOperationsOverview(): Promise<AdminOperationsOverview>;
   listCatalogueAssets(input?: {
     q?: string;

@@ -216,6 +216,9 @@ export const mockRepositories: AppRepositories = {
     async getComplianceCase() {
       throw new Error("Admin compliance requires the API service.");
     },
+    async refreshComplianceCase() {
+      throw new Error("Admin compliance refresh requires the API service.");
+    },
     async getOperationsOverview() {
       return {
         kpis: {
