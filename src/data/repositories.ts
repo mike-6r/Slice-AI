@@ -595,6 +595,7 @@ export type AdminUserDetail = AdminUserSummary & {
     target?: AdminCustomerActionTarget;
   }>;
   recommendedAction: {
+    id: string;
     title: string;
     explanation: string;
     tab: "Overview" | "Operations" | "History";

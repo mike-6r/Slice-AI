@@ -2400,6 +2400,7 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
     }),
     recommendedAction: recommendedAction
       ? {
+          id: stringField(recommendedAction.id, "admin user recommended action.id"),
           title: stringField(recommendedAction.title, "admin user recommended action.title"),
           explanation: stringField(
             recommendedAction.explanation,

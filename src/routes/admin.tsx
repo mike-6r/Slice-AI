@@ -8164,6 +8164,134 @@ function UserDetailExperience({
   );
 }
 
+const authoritativeComplianceActionIds = new Set([
+  "compliance-review",
+  "capability-phone_verification_required",
+]);
+
+function requiresAuthoritativeComplianceTarget(actionId: string) {
+  return authoritativeComplianceActionIds.has(actionId);
+}
+
+type AdminCustomerAction = AdminUserDetail["actionCenter"][number];
+type AdminRecommendedAction = NonNullable<AdminUserDetail["recommendedAction"]>;
+
+export function AdminCustomerActionCenter({
+  userId,
+  actions,
+  recommendedAction,
+  openComplianceAction,
+  openLegacyAction,
+  reviewAccess,
+}: {
+  userId: string;
+  actions: AdminCustomerAction[];
+  recommendedAction: AdminRecommendedAction | null;
+  openComplianceAction: (userId: string, target: AdminCustomerActionTarget) => void;
+  openLegacyAction: (tab: string) => void;
+  reviewAccess: () => void;
+}) {
+  const resolution = (target: AdminCustomerActionTarget | undefined) =>
+    resolveCustomerComplianceAction(userId, target);
+  const unavailable = (actionId: string, target: AdminCustomerActionTarget | undefined) => {
+    if (target) return resolution(target).search ? null : resolution(target);
+    return requiresAuthoritativeComplianceTarget(actionId) ? resolution(undefined) : null;
+  };
+  const openAction = (
+    actionId: string,
+    target: AdminCustomerActionTarget | undefined,
+    fallbackTab: string,
+  ) => {
+    if (target) {
+      if (resolution(target).search) openComplianceAction(userId, target);
+      return;
+    }
+    if (!requiresAuthoritativeComplianceTarget(actionId)) openLegacyAction(fallbackTab);
+  };
+  const recommendedUnavailable = recommendedAction
+    ? unavailable(recommendedAction.id, recommendedAction.target)
+    : null;
+
+  return (
+    <section className="admin-account-action-center" aria-label="Account action center">
+      <div className="admin-account-action-center-heading">
+        <div className="admin-account-action-center-status">
+          {actions.length ? (
+            <AlertTriangle aria-hidden="true" />
+          ) : (
+            <CheckCircle2 aria-hidden="true" />
+          )}
+          <div>
+            <p className="admin-console-eyebrow">Next required action</p>
+            <h3>{recommendedAction?.title ?? "No account action required"}</h3>
+            <span>
+              {recommendedAction?.explanation ??
+                "No backend-derived account blocker requires a protected change."}
+            </span>
+          </div>
+        </div>
+        <button
+          type="button"
+          disabled={Boolean(recommendedUnavailable)}
+          title={recommendedUnavailable?.disabledReason ?? undefined}
+          onClick={() => {
+            if (recommendedAction)
+              openAction(recommendedAction.id, recommendedAction.target, recommendedAction.tab);
+            else reviewAccess();
+          }}
+        >
+          {recommendedAction ? "Open control" : "Review access"} <ArrowRight aria-hidden="true" />
+        </button>
+      </div>
+      {recommendedUnavailable ? (
+        <p className="admin-safe-note" role="status">
+          {recommendedUnavailable.disabledReason} Next valid action:{" "}
+          {recommendedUnavailable.nextAction}
+        </p>
+      ) : null}
+      {actions.length ? (
+        <div className="admin-account-action-list">
+          {actions.map((item) => {
+            const itemUnavailable = unavailable(item.id, item.target);
+            return (
+              <article
+                className={`admin-account-action-item admin-account-action-item--${item.severity.toLowerCase()}`}
+                key={item.id}
+              >
+                <AlertTriangle aria-hidden="true" />
+                <div>
+                  <strong>{item.title}</strong>
+                  <span>{item.explanation}</span>
+                  <small>{item.recommendedAction}</small>
+                  {itemUnavailable ? (
+                    <small role="status">
+                      {itemUnavailable.disabledReason} Next valid action:{" "}
+                      {itemUnavailable.nextAction}
+                    </small>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  aria-label={`${item.title}: Review`}
+                  disabled={Boolean(itemUnavailable)}
+                  title={itemUnavailable?.disabledReason ?? undefined}
+                  onClick={() => openAction(item.id, item.target, item.tab)}
+                >
+                  Review <ArrowRight aria-hidden="true" />
+                </button>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="admin-account-action-clear">
+          <CheckCircle2 aria-hidden="true" /> No backend-derived account blockers require action.
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ConsolidatedUserDetailExperience({
   user,
   loading,
@@ -8256,17 +8384,17 @@ function ConsolidatedUserDetailExperience({
       />
     );
 
-  const resolveProjectedAction = (target: AdminCustomerActionTarget) =>
-    resolveCustomerComplianceAction(user.id, target);
   const openProjectedAction = (
+    actionId: string,
     target: AdminCustomerActionTarget | undefined,
     fallbackTab: string,
   ) => {
-    if (!target) {
-      setTab(fallbackTab);
+    if (target) {
+      if (resolveCustomerComplianceAction(user.id, target).search)
+        openComplianceAction(user.id, target);
       return;
     }
-    if (resolveProjectedAction(target).search) openComplianceAction(user.id, target);
+    if (!requiresAuthoritativeComplianceTarget(actionId)) setTab(fallbackTab);
   };
 
   const roles = uniqueRoleAssignments(user.roles);
@@ -8439,89 +8567,14 @@ function ConsolidatedUserDetailExperience({
     </section>
   );
   const renderActionCenter = () => (
-    <section className="admin-account-action-center" aria-label="Account action center">
-      <div className="admin-account-action-center-heading">
-        <div className="admin-account-action-center-status">
-          {user.actionCenter.length ? (
-            <AlertTriangle aria-hidden="true" />
-          ) : (
-            <CheckCircle2 aria-hidden="true" />
-          )}
-          <div>
-            <p className="admin-console-eyebrow">Next required action</p>
-            <h3>{user.recommendedAction?.title ?? "No account action required"}</h3>
-            <span>
-              {user.recommendedAction?.explanation ??
-                "No backend-derived account blocker requires a protected change."}
-            </span>
-          </div>
-        </div>
-        <button
-          type="button"
-          disabled={Boolean(
-            user.recommendedAction?.target &&
-            !resolveProjectedAction(user.recommendedAction.target).search,
-          )}
-          title={
-            user.recommendedAction?.target
-              ? (resolveProjectedAction(user.recommendedAction.target).disabledReason ?? undefined)
-              : undefined
-          }
-          onClick={() => {
-            if (user.recommendedAction)
-              openProjectedAction(user.recommendedAction.target, user.recommendedAction.tab);
-            else setGeneralControl("access");
-          }}
-        >
-          {user.recommendedAction ? "Open control" : "Review access"}{" "}
-          <ArrowRight aria-hidden="true" />
-        </button>
-      </div>
-      {user.recommendedAction?.target &&
-      !resolveProjectedAction(user.recommendedAction.target).search ? (
-        <p className="admin-safe-note" role="status">
-          {resolveProjectedAction(user.recommendedAction.target).disabledReason} Next valid action:{" "}
-          {resolveProjectedAction(user.recommendedAction.target).nextAction}
-        </p>
-      ) : null}
-      {user.actionCenter.length ? (
-        <div className="admin-account-action-list">
-          {user.actionCenter.map((item) => {
-            const resolution = item.target ? resolveProjectedAction(item.target) : null;
-            return (
-              <article
-                className={`admin-account-action-item admin-account-action-item--${item.severity.toLowerCase()}`}
-                key={item.id}
-              >
-                <AlertTriangle aria-hidden="true" />
-                <div>
-                  <strong>{item.title}</strong>
-                  <span>{item.explanation}</span>
-                  <small>{item.recommendedAction}</small>
-                  {resolution && !resolution.search ? (
-                    <small role="status">
-                      {resolution.disabledReason} Next valid action: {resolution.nextAction}
-                    </small>
-                  ) : null}
-                </div>
-                <button
-                  type="button"
-                  disabled={Boolean(resolution && !resolution.search)}
-                  title={resolution?.disabledReason ?? undefined}
-                  onClick={() => openProjectedAction(item.target, item.tab)}
-                >
-                  Review <ArrowRight aria-hidden="true" />
-                </button>
-              </article>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="admin-account-action-clear">
-          <CheckCircle2 aria-hidden="true" /> No backend-derived account blockers require action.
-        </div>
-      )}
-    </section>
+    <AdminCustomerActionCenter
+      userId={user.id}
+      actions={user.actionCenter}
+      recommendedAction={user.recommendedAction}
+      openComplianceAction={openComplianceAction}
+      openLegacyAction={setTab}
+      reviewAccess={() => setGeneralControl("access")}
+    />
   );
   const renderCommandRail = () => {
     const urgentBlockers = user.actionCenter.filter((item) => item.severity !== "ATTENTION");
@@ -8553,7 +8606,26 @@ function ConsolidatedUserDetailExperience({
         {user.recommendedAction ? (
           <section className="admin-account-detail-rail-card admin-account-detail-rail-card--next">
             <AdminPanelHeading title="Recommended action" />
-            <button type="button" onClick={() => setTab(user.recommendedAction!.tab)}>
+            <button
+              type="button"
+              disabled={Boolean(
+                requiresAuthoritativeComplianceTarget(user.recommendedAction.id) &&
+                !user.recommendedAction.target,
+              )}
+              title={
+                requiresAuthoritativeComplianceTarget(user.recommendedAction.id) &&
+                !user.recommendedAction.target
+                  ? "No authoritative compliance control is linked to this action."
+                  : undefined
+              }
+              onClick={() =>
+                openProjectedAction(
+                  user.recommendedAction!.id,
+                  user.recommendedAction!.target,
+                  user.recommendedAction!.tab,
+                )
+              }
+            >
               <strong>{user.recommendedAction.title}</strong>
               <span>{user.recommendedAction.explanation}</span>
               <small>
@@ -11009,7 +11081,7 @@ function UserDetail({
   );
 }
 
-function ComplianceWorkspace({
+export function ComplianceWorkspace({
   cases,
   loading,
   failed,
@@ -11059,6 +11131,7 @@ function ComplianceWorkspace({
   const customerControlOpen =
     Boolean(selectedRecord) &&
     ["customer-compliance", "phone-verification"].includes(selectedRecordType ?? "");
+  const complianceCaseOpen = Boolean(selectedRecord) && selectedRecordType === "compliance-case";
   const phoneFocus = selectedRecordType === "phone-verification";
   const phoneBlockers =
     customer?.capabilitySummary.filter(
@@ -11303,108 +11376,110 @@ function ComplianceWorkspace({
             </div>
           )}
         </AdminRecordDrawer>
-      ) : detailLoading ? (
-        <AdminState
-          title="Loading case detail"
-          detail="Reading normalized provider and restriction history."
-        />
-      ) : detailFailed ? (
-        <AdminState
-          title="Case detail unavailable"
-          detail="The case detail could not be loaded safely."
-        />
-      ) : detail ? (
+      ) : complianceCaseOpen ? (
         <AdminRecordDrawer
-          title={detail.user.displayName}
-          subtitle="Verification, compliance, restrictions, permitted actions, and immutable decision history."
+          title={detail?.user.displayName ?? "Compliance case review"}
+          subtitle={`Selected case ${selectedRecord}. Verification, restrictions, permitted actions, and immutable decision history.`}
           onClose={closeDetail}
         >
-          <section className="admin-panel">
-            <AdminPanelHeading
-              title={detail.user.displayName}
-              action="Close detail"
-              onClick={closeDetail}
+          {detailLoading ? (
+            <AdminState
+              title="Loading selected compliance case"
+              detail="Reading normalized provider and restriction history."
             />
-            <div className="admin-kpi-grid admin-kpi-grid--compact">
-              <AdminKpi
-                icon={ShieldCheck}
-                label="Provider status"
-                value={sentence(detail.providerStatus)}
+          ) : detailFailed || !detail ? (
+            <AdminState
+              title="Selected compliance case unavailable"
+              detail="The exact selected case could not be loaded safely. Return to the queue and choose an available case."
+            />
+          ) : (
+            <section className="admin-panel">
+              <AdminPanelHeading
+                title={detail.user.displayName}
+                action="Close detail"
+                onClick={closeDetail}
               />
-              <AdminKpi
-                icon={ShieldCheck}
-                label="Identity"
-                value={sentence(detail.identity?.state ?? detail.status)}
-              />
-              <AdminKpi
-                icon={AlertTriangle}
-                label="Risk review"
-                value={sentence(detail.riskReview?.status ?? "Not reported")}
-              />
-              <AdminKpi
-                icon={Users}
-                label="Payout readiness"
-                value={
-                  detail.connectPayoutReadiness?.[0]
-                    ? sentence(detail.connectPayoutReadiness[0].status)
-                    : "Not started"
-                }
-              />
-              <AdminKpi icon={AlertTriangle} label="Decisions" value={detail.decisions.length} />
-              <AdminKpi icon={Users} label="Restrictions" value={detail.restrictions.length} />
-              <AdminKpi icon={FileClock} label="Audit events" value={detail.audit.length} />
-            </div>
-            <div className="admin-record-list">
-              <article className="admin-record">
-                <div className="min-w-0">
-                  <strong>Summary</strong>
-                  <small>
-                    {sentence(detail.type)} · {sentence(detail.status)} · {detail.provider} ·
-                    updated {date(detail.updatedAt)}
-                  </small>
-                </div>
-              </article>
-              <article className="admin-record">
-                <div className="min-w-0">
-                  <strong>Provider status</strong>
-                  <small>
-                    {detail.providerStatus === "Unknown"
-                      ? "Provider information is temporarily unavailable."
-                      : `Normalized provider state: ${sentence(detail.providerStatus)}`}
-                  </small>
-                </div>
-              </article>
-              {detail.restrictions.map((restriction) => (
-                <article
-                  className="admin-record"
-                  key={`${restriction.createdAt}-${restriction.scope}`}
-                >
+              <div className="admin-kpi-grid admin-kpi-grid--compact">
+                <AdminKpi
+                  icon={ShieldCheck}
+                  label="Provider status"
+                  value={sentence(detail.providerStatus)}
+                />
+                <AdminKpi
+                  icon={ShieldCheck}
+                  label="Identity"
+                  value={sentence(detail.identity?.state ?? detail.status)}
+                />
+                <AdminKpi
+                  icon={AlertTriangle}
+                  label="Risk review"
+                  value={sentence(detail.riskReview?.status ?? "Not reported")}
+                />
+                <AdminKpi
+                  icon={Users}
+                  label="Payout readiness"
+                  value={
+                    detail.connectPayoutReadiness?.[0]
+                      ? sentence(detail.connectPayoutReadiness[0].status)
+                      : "Not started"
+                  }
+                />
+                <AdminKpi icon={AlertTriangle} label="Decisions" value={detail.decisions.length} />
+                <AdminKpi icon={Users} label="Restrictions" value={detail.restrictions.length} />
+                <AdminKpi icon={FileClock} label="Audit events" value={detail.audit.length} />
+              </div>
+              <div className="admin-record-list">
+                <article className="admin-record">
                   <div className="min-w-0">
-                    <strong>Restriction · {sentence(restriction.scope)}</strong>
+                    <strong>Summary</strong>
                     <small>
-                      {sentence(restriction.status)} · {restriction.reasonCode} · source{" "}
-                      {restriction.source} · {date(restriction.createdAt)}
+                      {sentence(detail.type)} · {sentence(detail.status)} · {detail.provider} ·
+                      updated {date(detail.updatedAt)}
                     </small>
                   </div>
                 </article>
-              ))}
-              {detail.decisions.map((decision) => (
-                <article
-                  className="admin-record"
-                  key={`${decision.createdAt}-${decision.reasonCode}`}
-                >
+                <article className="admin-record">
                   <div className="min-w-0">
-                    <strong>Decision · {sentence(decision.status)}</strong>
+                    <strong>Provider status</strong>
                     <small>
-                      {decision.reasonCode} · actor{" "}
-                      {decision.actorUserId ? shortId(decision.actorUserId) : "System"} ·{" "}
-                      {date(decision.createdAt)}
+                      {detail.providerStatus === "Unknown"
+                        ? "Provider information is temporarily unavailable."
+                        : `Normalized provider state: ${sentence(detail.providerStatus)}`}
                     </small>
                   </div>
                 </article>
-              ))}
-            </div>
-          </section>
+                {detail.restrictions.map((restriction) => (
+                  <article
+                    className="admin-record"
+                    key={`${restriction.createdAt}-${restriction.scope}`}
+                  >
+                    <div className="min-w-0">
+                      <strong>Restriction · {sentence(restriction.scope)}</strong>
+                      <small>
+                        {sentence(restriction.status)} · {restriction.reasonCode} · source{" "}
+                        {restriction.source} · {date(restriction.createdAt)}
+                      </small>
+                    </div>
+                  </article>
+                ))}
+                {detail.decisions.map((decision) => (
+                  <article
+                    className="admin-record"
+                    key={`${decision.createdAt}-${decision.reasonCode}`}
+                  >
+                    <div className="min-w-0">
+                      <strong>Decision · {sentence(decision.status)}</strong>
+                      <small>
+                        {decision.reasonCode} · actor{" "}
+                        {decision.actorUserId ? shortId(decision.actorUserId) : "System"} ·{" "}
+                        {date(decision.createdAt)}
+                      </small>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
         </AdminRecordDrawer>
       ) : null}
     </AdminPageSection>

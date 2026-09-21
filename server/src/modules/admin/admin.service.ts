@@ -8946,6 +8946,7 @@ export class AdminService {
       actionCenter,
       recommendedAction: actionCenter[0]
         ? {
+            id: actionCenter[0].id,
             title: actionCenter[0].recommendedAction,
             explanation: actionCenter[0].explanation,
             tab: actionCenter[0].tab,
